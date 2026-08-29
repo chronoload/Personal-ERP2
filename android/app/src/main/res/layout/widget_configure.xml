@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小组件配置页：添加小组件时选择主题（浅色/深色） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="小组件设置"
+        android:textColor="#1F2430"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="主题"
+        android:textColor="#4A5260"
+        android:textSize="14sp" />
+
+    <RadioGroup
+        android:id="@+id/cfg_theme"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp">
+
+        <RadioButton
+            android:id="@+id/cfg_theme_light"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="浅色（默认）"
+            android:textColor="#1F2430" />
+
+        <RadioButton
+            android:id="@+id/cfg_theme_dark"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="深色"
+            android:textColor="#1F2430" />
+    </RadioGroup>
+
+    <Button
+        android:id="@+id/cfg_save"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="保存" />
+
+</LinearLayout>

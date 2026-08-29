@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 商品快速消费小组件：桌面一键购买，无需打开主程序（广播直改数据） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_goods_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_goods_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="快速消费"
+            android:textColor="#202631"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_goods_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="暂无商品 · 去应用里创建"
+        android:textColor="#9AA3B2"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/widget_goods_row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#1F2430"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/widget_goods_row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#1F2430"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/widget_goods_row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#1F2430"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/widget_goods_row4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#1F2430"
+        android:textSize="12sp" />
+
+</LinearLayout>

@@ -1,0 +1,13 @@
+{
+ "plan": {
+  "id": "20260824_最佳实践加固-批量新建",
+  "title": "最佳实践加固+批量新建",
+  "goal": "P0备份encoding修复/P0启动请求通知权限/P1全局错误边界+环形日志/P1渲染隔离/P2 schemaVersion迁移链/P2 precommit门禁/P3签名密码出库/新功能批量新建(dayGuide acts步泛化)",
+  "arch": "",
+  "stack": "",
+  "global_constraints": "",
+  "status": "open",
+  "created_at": "2026-08-24 23:50:05"
+ },
+ "tasks": []
+}

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+echo "[pre-commit] 运行 npm test ..."
+if ! npm test; then
+    echo "[pre-commit] 提交被拒绝：npm test 未通过，请先修复测试。" >&2
+    exit 1
+fi
+
+echo "[pre-commit] 运行 npm run build ..."
+if ! npm run build; then
+    echo "[pre-commit] 提交被拒绝：npm run build 构建失败，请先修复构建错误。" >&2
+    exit 1
+fi
+
+echo "[pre-commit] 检查通过。"
+exit 0

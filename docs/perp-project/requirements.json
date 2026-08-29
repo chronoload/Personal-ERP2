@@ -1,0 +1,11 @@
+[
+ {
+  "id": 1,
+  "kind": "spec",
+  "name": "activity-event-automation",
+  "detail": "# Spec：活动事件自动化（对照 Android 时间驱动语义）\n\n> 状态：待用户审核 ｜ 日期：2026-08-24\n> 决策记录：范围=询问式自动开始+四项自动化；不新增实体字段；一切状态变更经 engine.*\n\n## 目的\n\n让活动五态状态机（Planned→Started→Completed→Reviewed→Archived）具备**时间事件驱动**的流转辅助，\n对齐 Android 原生「AlarmManager 触达 + 回前台对账」语义，让工作流更流畅、更稳健。\n\n## F1 到点询问式自动开始\n\n- 判定源：纯函数 `scanDueEvents(db, now)`（新模块 `src/domain/schedule.js`）。\n  Planned 且 `planned_start ≤ now` 且当日内（catch-up 窗口）→「到期待确认」。\n- 排除：弹性活动（无 planned_start 或 planned_minutes≤0）；\n  存在 Planned 且窗口仍重叠的捆绑对手（conflicts）；anyPlanBlocked 预算耗尽。后两类仅出提示不询问。\n- 交互：前台**非阻塞**底部确认条「⏰ 「标题」已到计划时间 [开始] [忽略]」；\n  多条到期聚合为一个列表弹窗（回前台 catch-up 场景）。\n- 点击「开始」→ 走 `App.startAct(id)`（保留捆绑冲突三选一仲裁入口）；点击「忽略」→ 当日不再询问\n  （localStorage 登记 dismissal，键按 activityId+日期）。\n- 计时器全屏 overlay 打开时本轮跳过询问（下个 tick 重现，未 dismissal 不丢）。\n\n## F2 到点前提醒通知\n\n- `planned_start − remindBeforeMin`（Prefs 新字段，默认 15 分钟）调度系统通知；\n  复用 Notifications.schedule 幂等 tracked-diff 模式（参照 syncValueflowNotifs）。\n- 通知 id 命名空间：3000 段（价值流占用 2000 段），id = 3000 + 活动数字 id。\n- 活动被删除 / 已开始 / 已过期后，对应通知在 sync diff 时自动撤销。\n- web 端维持现有回退行为（无法调度未来通知则跳过）。\n\n## F3 超时未完成提醒\n\n- Started 且 `actual_start + planned_minutes×60000 < now` → 顶部提示条「「标题」已超计划 X 分钟」。\n- 无 planned_minutes 的 Started 不算超时；与 F4 同时命中时合并为一条提示（F4 文案优先）。\n\n## F4 结束时刻提示\n\n- Started 且 `planned_end < now` → 提示条「该收尾了：「标题」 [去完成] [顺延]」。\n- 「去完成」→ `App.overview.openCompleteModal(id)`；「顺延」→ 平移窗口至当前时刻\n  （start=now，end=now+时长），并经 applyAtomicity 重检撞车（撞车自动顺延既有逻辑）。\n\n## F5 新建表单预填当前时间\n\n- `openActModal` 新建且无 presetStart 时：planned_start 预填 **now 向上取整到 5 分钟**；\n  编辑入口与日历快捷新建（presetStart）语义不变。\n\n## 全局约束（验收红线）\n\n1. 一切状态变更必须经 `engine.*` 返回 `{ok,error}`——UI 直改禁令不变。\n2. 心跳三通道：`setInterval` 30s + `System.onResume` 回调 + boot 首扫；判定唯一来源是纯函数\n   `scanDueEvents(db, now)`，node --test 全覆盖（TDD 先红后绿）。\n3. App 被杀期间 JS 无法执行：F2 系统通知是唯一触达手段（Android 对照：精确闹钟触达 + 回前台对账补偿）。\n4. 不新增实体字段、不动 ACTIVITY_TRANSITIONS 五态表（决策 8C 保持冻结）。\n5. 提示条/确认条为非阻塞元素，不得遮挡或劫持输入焦点。\n6. 测试基座沿用 freshDB()=seedDB()；UI 冒烟走 Playwright（预填值断言 + 确认条出现/点击转态）。\n\n## 失效边界\n\n- 澎湃 HyperOS 激进冻结后台 → interval 停摆，靠 onResume 补跑兜底（已有 visibilitychange 模式）。\n- 用户改系统时间/跨天使用 → catch-up 仅限当日，隔天到期活动不再询问（留历史事实）。\n- 通知权限被拒 → F2 静默降级（现有 Notifications 行为），不影响 F1/F3/F4。\n",
+  "source": "cli",
+  "status": "open",
+  "created_at": "2026-08-24 14:55:39"
+ }
+]

@@ -1,0 +1,13 @@
+{
+ "plan": {
+  "id": "20260824_活动事件自动化",
+  "title": "活动事件自动化",
+  "goal": "对照Android时间驱动语义：F1到点询问自动开始/F2到点前通知/F3超时提醒/F4结束提示/F5新建预填当前时间；spec见docs/perp-project/REQUIREMENTS.md",
+  "arch": "",
+  "stack": "",
+  "global_constraints": "",
+  "status": "open",
+  "created_at": "2026-08-24 23:03:53"
+ },
+ "tasks": []
+}

@@ -1,0 +1,31 @@
+node_modules/
+dist/
+.shots/
+*.log
+.DS_Store
+
+# agent checkpoint / 运行延续数据（不入库）
+.git_disabled/
+.omo/
+.codegraph/
+graphflow-out/
+
+# 规划工具生成的数据库 / CSV（易变，不入库）
+docs/perp-project/*.db
+docs/perp-project/*.csv
+
+# 构建产物与签名（签名密钥勿入库）
+app-debug.apk
+app-release.apk
+android/personal-erp.keystore
+android/app/build/
+android/build/
+android/.gradle/
+android/app/.cxx/
+android/local.properties
+
+# 数据抢救产物（含个人数据，不入库）
+tests/_recovered_*
+tests/_restored_*.json
+
+.superpowers/

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小组件卡片背景：浅色圆角（无 stroke，减少 RemoteViews 解析负担） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+  <corners android:radius="18dp" />
+  <solid android:color="#F5F7FA" />
+</shape>

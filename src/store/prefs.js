@@ -1,0 +1,25 @@
+// ============================================================
+// store/prefs.js
+// 轻量偏好记忆：记住用户上次的输入习惯，用于「按语境预填」，
+// 让新建/完成时只需快速调整。
+// ============================================================
+const KEY = 'personal_erp_prefs';
+// 缺省值：未设置过的偏好按此回退（存储值覆盖同名缺省）
+const DEFAULTS = {
+  remindBeforeMin: 15, failGraceMin: 30,
+  reportRemind: true, // 周/月报通知提醒开关
+  reportModules: { activity: true, ledger: true, plan: true, balance: true, vf: true }, // 报告模块配置
+  hudEnabled: false, // HUD 侧边栏开关（目标→计划→活动 层级树）
+  nightTheme: 'auto', // 界面夜间模式：auto 跟随系统 / light 浅色 / dark 深色
+};
+
+export const Prefs = {
+  load() {
+    try { return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; } catch (e) { return { ...DEFAULTS }; }
+  },
+  set(patch) {
+    const p = this.load();
+    Object.assign(p, patch);
+    try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {}
+  },
+};

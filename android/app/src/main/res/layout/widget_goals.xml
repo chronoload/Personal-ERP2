@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 目标与计划小组件：浅色圆角卡片 + 内边距（无分隔线/无 margin） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_goals_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/widget_goals_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="目标与计划"
+        android:textColor="#202631"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_goals_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="暂无目标"
+        android:textColor="#9AA3B2"
+        android:textSize="12sp" />
+
+    <ProgressBar
+        android:id="@+id/widget_goals_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:max="100"
+        android:progress="0" />
+
+    <TextView
+        android:id="@+id/widget_goals_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#9AA3B2"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/widget_goals_row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#1F2430"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/widget_goals_row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#1F2430"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/widget_goals_row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#1F2430"
+        android:textSize="12sp" />
+
+</LinearLayout>

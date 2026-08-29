@@ -1,0 +1,76 @@
+apply plugin: 'com.android.application'
+
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (!localPropsFile.exists()) {
+    throw new GradleException("缺少 android/local.properties：请在 android/local.properties 中填入 KEYSTORE_STORE_PASSWORD、KEYSTORE_KEY_ALIAS、KEYSTORE_KEY_PASSWORD（签名密钥不再存于 build.gradle）。")
+}
+localPropsFile.withInputStream { localProps.load(it) }
+def keystoreStorePassword = localProps.getProperty('KEYSTORE_STORE_PASSWORD')
+def keystoreKeyAlias = localProps.getProperty('KEYSTORE_KEY_ALIAS')
+def keystoreKeyPassword = localProps.getProperty('KEYSTORE_KEY_PASSWORD')
+if (!keystoreStorePassword || !keystoreKeyAlias || !keystoreKeyPassword) {
+    throw new GradleException("android/local.properties 缺少签名配置项：需要 KEYSTORE_STORE_PASSWORD / KEYSTORE_KEY_ALIAS / KEYSTORE_KEY_PASSWORD 三个键，请补齐后重试。")
+}
+
+android {
+    namespace = "com.personal.erp"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.personal.erp"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            storeFile file('../personal-erp.keystore')
+            storePassword keystoreStorePassword
+            keyAlias keystoreKeyAlias
+            keyPassword keystoreKeyPassword
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

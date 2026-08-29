@@ -1,0 +1,11 @@
+{
+  "appId": "com.personal.erp",
+  "appName": "Personal ERP",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

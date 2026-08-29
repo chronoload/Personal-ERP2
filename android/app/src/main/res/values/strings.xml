@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Personal ERP</string>
+    <string name="title_activity_main">Personal ERP</string>
+    <string name="package_name">com.personal.erp</string>
+    <string name="custom_url_scheme">com.personal.erp</string>
+    <string name="widget_today_desc">当日日程 · 今日前 4 项活动</string>
+    <string name="widget_resources_desc">资源状态 · 余额一览</string>
+    <string name="widget_goals_desc">目标与计划 · 进度概览</string>
+</resources>
