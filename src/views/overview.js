@@ -687,6 +687,14 @@ export function openCompleteModal(activityId) {
       : (active[0] ? active[0].id : ''));
   const resOpts = (sel) => active
     .map((r) => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}（余额 ${fmtNum(App.engine.balanceOf(db, r.id))}）</option>`).join('');
+  // 多资源收支行（与预设收支/改账同构）：资源 + 金额 + 备注 + 移除
+  const cRow = (sel, amt, note) => `
+    <div class="preset-row" style="display:grid;grid-template-columns:1fr 84px 1fr auto;gap:6px;align-items:center;margin:4px 0">
+      <select class="pr-res">${resOpts(sel)}</select>
+      <input class="pr-amt" type="number" min="0" step="0.01" value="${esc(amt ?? '')}" placeholder="金额">
+      <input class="pr-note" value="${esc(note || '')}" placeholder="备注">
+      <button type="button" class="btn sm pr-del" title="移除">✕</button>
+    </div>`;
   // 语境提速：收入金额/产出标题/tags 按上次或活动语境预填，用户只需微调
   const defIncomeAmt = prefs.lastIncomeAmount || '';
   const defExpenseAmt = tracked > 0 ? tracked : (prefs.lastExpenseAmount || '');
@@ -701,18 +709,10 @@ export function openCompleteModal(activityId) {
     bodyHTML: `
       <div class="callout warn">「${esc(a.title)}」进入 Completed 需登记 <b>支出/收入</b> 至少一笔，并挂 <b>产出</b>。可同时填收支两栏。</div>
       ${tracked > 0 ? `<div class="callout">⏱ 已按任务计时 <b>${tracked}</b> 分钟，支出金额已预填，可按需调整。</div>` : ''}
-      <div class="step-divider step-1">① 支出（消耗 · 可空）</div>
-      <div class="grid2">
-        <div class="field"><label>资源</label><select id="f-ce_res">${resOpts(defExpenseRes)}</select></div>
-        <div class="field"><label>金额 &gt; 0</label><input id="f-ce_amt" type="number" min="0" step="0.01" value="${tracked > 0 ? tracked : defExpenseAmt}"></div>
-      </div>
-      <div class="field"><label>备注</label><input id="f-ce_note" placeholder="例：写作消耗"></div>
-      <div class="step-divider step-1">② 收入（获得 · 可空）</div>
-      <div class="grid2">
-        <div class="field"><label>资源</label><select id="f-ci_res">${resOpts(prefs.lastIncomeRes)}</select></div>
-        <div class="field"><label>金额 &gt; 0</label><input id="f-ci_amt" type="number" min="0" step="0.01" value="${defIncomeAmt}"></div>
-      </div>
-      <div class="field"><label>备注</label><input id="f-ci_note" placeholder="例：收到认可回充"></div>
+      <div class="step-divider step-1">① 支出（消耗 · 可空）<button type="button" class="btn sm" id="c-e-add">＋ 添加</button></div>
+      <div id="c-e-rows">${cRow(defExpenseRes, tracked > 0 ? tracked : defExpenseAmt, '')}</div>
+      <div class="step-divider step-1">② 收入（获得 · 可空）<button type="button" class="btn sm" id="c-i-add">＋ 添加</button></div>
+      <div id="c-i-rows">${cRow(prefs.lastIncomeRes, defIncomeAmt, '')}</div>
       <div class="step-divider step-2">③ 产出（10B / 11B 自由标签）</div>
       <div class="field"><label>产出标题 *</label><input id="f-cout" value="${esc(defOutTitle)}"></div>
       <div class="field"><label>产出 tags（逗号分隔）</label><input id="f-ctags" value="${esc(defTags)}" placeholder="写作,交付">
@@ -729,22 +729,37 @@ export function openCompleteModal(activityId) {
       if (!cur.includes(c.dataset.tag)) { cur.push(c.dataset.tag); inp.value = cur.join(','); }
     };
   });
+  // 多资源收支行：＋添加 / 移除（与改账弹窗同构）
+  const bindRowBox = (boxId, addId) => {
+    const box = m.q('#' + boxId);
+    const add = m.q('#' + addId);
+    if (box) box.addEventListener('click', (e) => { const d = e.target.closest('.pr-del'); if (d) d.closest('.preset-row').remove(); });
+    if (add) add.onclick = () => { box.insertAdjacentHTML('beforeend', cRow('', '', '')); };
+  };
+  bindRowBox('c-e-rows', 'c-e-add');
+  bindRowBox('c-i-rows', 'c-i-add');
+  const readRowBox = (boxId) => [...m.q('#' + boxId).querySelectorAll('.preset-row')].map((row) => ({
+    resource_id: row.querySelector('.pr-res').value,
+    amount: row.querySelector('.pr-amt').value,
+    note: row.querySelector('.pr-note').value,
+  }));
   m.q('[data-save]').onclick = () => {
     const tags = m.q('#f-ctags').value.split(',').map((s) => s.trim()).filter(Boolean);
-    const eAmt = Number(m.q('#f-ce_amt').value);
-    const iAmt = Number(m.q('#f-ci_amt').value);
+    const expenses = readRowBox('c-e-rows');
+    const incomes = readRowBox('c-i-rows');
     const r = App.engine.completeActivity(App.db, activityId, {
-      expense: eAmt > 0 ? { resource_id: m.q('#f-ce_res').value, amount: eAmt, note: m.q('#f-ce_note').value } : null,
-      income: iAmt > 0 ? { resource_id: m.q('#f-ci_res').value, amount: iAmt, note: m.q('#f-ci_note').value } : null,
+      expenses, incomes,
       output_title: m.q('#f-cout').value, output_tags: tags,
     });
     if (!r.ok) return toast(r.error, 'err');
-    // 记住收支资源/金额与产出 tags 偏好，下次按语境预填
+    // 记住收支资源/金额与产出 tags 偏好，下次按语境预填（取首行有效值）
+    const e1 = expenses.find((e) => Number(e.amount) > 0);
+    const i1 = incomes.find((i) => Number(i.amount) > 0);
     Prefs.set({
-      lastExpenseRes: m.q('#f-ce_res').value,
-      lastExpenseAmount: eAmt > 0 ? String(eAmt) : '',
-      lastIncomeRes: m.q('#f-ci_res').value,
-      lastIncomeAmount: iAmt > 0 ? String(iAmt) : '',
+      lastExpenseRes: e1 ? e1.resource_id : (expenses[0] ? expenses[0].resource_id : ''),
+      lastExpenseAmount: e1 ? String(Number(e1.amount)) : '',
+      lastIncomeRes: i1 ? i1.resource_id : (incomes[0] ? incomes[0].resource_id : ''),
+      lastIncomeAmount: i1 ? String(Number(i1.amount)) : '',
       lastOutputTags: tags.join(','),
     });
     m.close(); App.refresh(); toast('活动已完成，收支与产出已入账', 'ok');
