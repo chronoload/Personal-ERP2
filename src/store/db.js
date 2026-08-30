@@ -149,12 +149,21 @@ export function normalizeDB(db) {
       p.default_incomes = toArr(p.default_incomes ?? p.default_income);
       delete p.default_expense; delete p.default_income;
     }
+    // 目标轻态机（Active → Completed → Archived）：旧库目标补默认 Active
+    for (const g of db.goals) {
+      if (!g || typeof g !== 'object') continue;
+      if (!g.status) g.status = 'Active';
+    }
     for (const a of db.activities) {
       if (!a || typeof a !== 'object') continue;
       a.preset_expenses = toArr(a.preset_expenses ?? a.preset_expense);
       a.preset_incomes = toArr(a.preset_incomes ?? a.preset_income);
       delete a.preset_expense; delete a.preset_income;
     }
+  }
+  // 幂等补齐（不依赖版本号）：目标 status 缺省回落 Active（v3 旧库同样可能缺该字段）
+  for (const g of db.goals) {
+    if (g && typeof g === 'object' && !g.status) g.status = 'Active';
   }
   db.schemaVersion = SCHEMA_VERSION;
 }

@@ -1,12 +1,20 @@
 // ============================================================
 // views/calendar.js
 // 日历板块（内嵌于「活动」页，第二顺位）：
-//   月份网格 + 当日日程表（按计划开始时间排序，可开始/完成/编辑）
+//   月视图：月份网格 + 当日日程表
+//   周视图：时间网格（7 列 × 小时行，时间定位色块）+ 当日日程表
+// 循环系列在两种视图都展开 occurrences[]：当前期=活卡，其余=未来期次/已办/跳过
 // ============================================================
 import { esc, badge, empty } from '../ui/helpers.js';
 import { activityWindow } from '../domain/engine.js';
 
 let calYear, calMonth, calSelected = null;
+let calMode = 'month'; // 'month' | 'week'
+
+// 周视图时间轴可见范围与行高
+const WK_START = 6;   // 6:00 起
+const WK_END = 23;    // 23:00 止
+const WK_HOUR = 40;   // 每小时 40px
 
 // 内联事件参数转义（同 overview.js）：\ 与 ' 按 JS 转义，" 转 \x22 防止属性提前闭合
 function jsStr(s) {
@@ -27,6 +35,7 @@ function padDateKey(k) {
   const [y, m, d] = String(k).split('-').map(Number);
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
+function pad2(n) { return String(n).padStart(2, '0'); }
 function timeOf(ps) { const m = String(ps || '').match(/T(\d{1,2}):(\d{1,2})/); return m ? `${m[1]}:${m[2]}` : null; }
 function timeToMin(t) { if (!t) return null; const [h, m] = String(t).split(':').map(Number); return h * 60 + m; }
 function fmtDay(k) {
@@ -48,6 +57,35 @@ function actDate(a) {
 }
 // 窗口重叠判定（与引擎 windowsOverlap 同语义：w1.start < w2.end && w2.start < w1.end）
 function overlapWin(w1, w2) { return !!(w1 && w2) && w1.start < w2.end && w2.start < w1.end; }
+
+// 按日分组；循环系列展开 occurrences[] 为每日独立条目：
+//   当前期（=planned_date）→ 非虚拟（活卡，可开始/完成）；其余期次 → 虚拟条目（已办/跳过标记 or 未来待做）
+function buildByDay(db) {
+  const byDay = {};
+  for (const a of db.activities) {
+    if (a.repeat && Array.isArray(a.occurrences) && a.occurrences.length) {
+      const cur = a.planned_date ? normDate(a.planned_date) : null;
+      for (const o of a.occurrences) {
+        const k = o.date ? normDate(o.date) : null;
+        if (k) (byDay[k] = byDay[k] || []).push({ a, occ: o, virtual: !(cur && cur === k) });
+      }
+    } else {
+      const k = actDate(a);
+      if (k) (byDay[normDate(k)] = byDay[normDate(k)] || []).push({ a, occ: null, virtual: false });
+    }
+  }
+  return byDay;
+}
+
+// 周一为一周起点
+function weekStartOf(k) {
+  const [y, m, d] = String(k).split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = (dt.getDay() + 6) % 7; // 周一=0
+  dt.setDate(dt.getDate() - dow);
+  return dt;
+}
+function fmtDateKey(dt) { return `${dt.getFullYear()}-${dt.getMonth() + 1}-${dt.getDate()}`; }
 
 function agendaRow(App, a, t, occ, virtual) {
   const { db } = App;
@@ -105,30 +143,57 @@ function agendaRow(App, a, t, occ, virtual) {
     </div>`;
 }
 
-// 渲染内嵌日历卡片到 host 元素（每次渲染重建，事件用事件委托）
-export function renderSection(App, host) {
-  if (calYear === undefined) { const d = new Date(); calYear = d.getFullYear(); calMonth = d.getMonth(); calSelected = dayKey(d); }
-  const { db } = App;
-  // 按日分组；循环系列展开 occurrences[] 为每日独立条目：
-  //   当前期（=planned_date）→ 非虚拟（活卡，可开始/完成）；其余期次 → 虚拟条目（已办/跳过标记 or 未来待做）
-  const byDay = {};
-  for (const a of db.activities) {
-    if (a.repeat && Array.isArray(a.occurrences) && a.occurrences.length) {
-      const cur = a.planned_date ? normDate(a.planned_date) : null;
-      for (const o of a.occurrences) {
-        const k = o.date ? normDate(o.date) : null;
-        if (k) (byDay[k] = byDay[k] || []).push({ a, occ: o, virtual: !(cur && cur === k) });
-      }
-    } else {
-      const k = actDate(a);
-      if (k) (byDay[normDate(k)] = byDay[normDate(k)] || []).push({ a, occ: null, virtual: false });
+// 当日日程表 HTML（月/周视图共用；绑定逻辑见 bindAgenda）
+function agendaHTML(App, byDay, k) {
+  const dayActs = (byDay[k] || [])
+    .map((it) => ({ a: it.a, t: timeOf(it.a.planned_start), occ: it.occ, virtual: it.virtual }))
+    .sort((x, y) => (timeToMin(x.t) ?? Infinity) - (timeToMin(y.t) ?? Infinity));
+  const totalMin = dayActs.reduce((s, x) => s + (x.a.planned_minutes || 0), 0);
+  return `
+    <div class="cal-agenda">
+      <div class="agenda-head">
+        <span>${fmtDay(k)}<span class="muted"> · ${dayActs.length} 项${totalMin ? ` · 预计 ${totalMin} 分钟` : ''}</span></span>
+        <button class="btn sm" title="为 ${fmtDay(k)} 快速添加待办" onclick="App.overview.openActModal(null,null,'${padDateKey(k)}T09:00')">＋</button>
+      </div>
+      ${dayActs.length ? dayActs.map((x) => agendaRow(App, x.a, x.t, x.occ, x.virtual)).join('') : empty('当天无安排', '＋ 点击此处，为该日快速添加待办')}
+    </div>`;
+}
+function bindAgenda(App, host, byDay, k, resync) {
+  const agenda = host.querySelector('.cal-agenda');
+  if (!agenda) return;
+  agenda.onclick = (e) => {
+    const rowEl = e.target.closest('.agenda-row.clickable');
+    if (rowEl) {
+      if (e.target.closest('button, a, input, select, textarea')) return;
+      App.overview.openActModal(rowEl.dataset.edit);
+      return;
     }
-  }
+    if (e.target.closest('.agenda-row, button, input, select, textarea')) return;
+    App.overview.openActModal(null, null, `${padDateKey(k)}T09:00`);
+  };
+}
 
+// 模式切换按钮（月/周共用）
+function modeToggleHTML() {
+  return `
+    <button class="btn sm ${calMode === 'month' ? 'primary' : ''}" data-cal="mode-month">月</button>
+    <button class="btn sm ${calMode === 'week' ? 'primary' : ''}" data-cal="mode-week">周</button>`;
+}
+function bindModeToggle(App, host, resync) {
+  host.querySelectorAll('[data-cal="mode-month"]').forEach((b) => {
+    b.onclick = () => { calMode = 'month'; renderSection(App, host); resync(); };
+  });
+  host.querySelectorAll('[data-cal="mode-week"]').forEach((b) => {
+    b.onclick = () => { calMode = 'week'; renderSection(App, host); resync(); };
+  });
+}
+
+// ---------- 月视图 ----------
+function renderMonth(App, host, byDay, todayK, resync) {
+  const { db } = App;
   const first = new Date(calYear, calMonth, 1);
   let start = first.getDay(); start = (start + 6) % 7; // 周一为 0
   const dim = new Date(calYear, calMonth + 1, 0).getDate();
-  const todayK = dayKey(new Date());
 
   let grid = ['一', '二', '三', '四', '五', '六', '日'].map((d) => `<div class="cal-dow">${d}</div>`).join('');
   for (let i = 0; i < start; i++) grid += '<div class="cal-day empty"></div>';
@@ -147,17 +212,12 @@ export function renderSection(App, host) {
   const rem = (start + dim) % 7;
   if (rem) for (let i = 0; i < 7 - rem; i++) grid += '<div class="cal-day empty"></div>';
 
-  // 当日日程：按计划开始时间排序（无时间的「全天」排在最后）
-  const dayActs = (byDay[calSelected] || [])
-    .map((it) => ({ a: it.a, t: timeOf(it.a.planned_start), occ: it.occ, virtual: it.virtual }))
-    .sort((x, y) => (timeToMin(x.t) ?? Infinity) - (timeToMin(y.t) ?? Infinity));
-  const totalMin = dayActs.reduce((s, x) => s + (x.a.planned_minutes || 0), 0);
-
   host.innerHTML = `
     <div class="card">
       <div class="card-head">
-        <h3>日历 · 当日日程</h3>
+        <h3>日历</h3>
         <div class="row-gap">
+          ${modeToggleHTML()}
           <button class="btn sm" data-cal="prev">‹ 上月</button>
           <button class="btn sm" data-cal="today">今天</button>
           <button class="btn sm" data-cal="next">下月 ›</button>
@@ -165,36 +225,132 @@ export function renderSection(App, host) {
       </div>
       <div class="cal-wrap">
         <div class="cal-grid">${grid}</div>
-        <div class="cal-agenda">
-        <div class="agenda-head">
-          <span>${fmtDay(calSelected)}<span class="muted"> · ${dayActs.length} 项${totalMin ? ` · 预计 ${totalMin} 分钟` : ''}</span></span>
-          <button class="btn sm" title="为 ${fmtDay(calSelected)} 快速添加待办" onclick="App.overview.openActModal(null,null,'${padDateKey(calSelected)}T09:00')">＋</button>
-        </div>
-        ${dayActs.length ? dayActs.map((x) => agendaRow(App, x.a, x.t, x.occ, x.virtual)).join('') : empty('当天无安排', '＋ 点击此处，为该日快速添加待办')}
-      </div>
+        ${agendaHTML(App, byDay, calSelected)}
       </div>
     </div>
   `;
 
-  // 事件绑定（就地重渲染后重算轮播高度，不重置页码）
-  const resync = () => App.overview.refreshPagerHeight();
   host.querySelector('[data-cal="prev"]').onclick = () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } calSelected = null; renderSection(App, host); resync(); };
   host.querySelector('[data-cal="today"]').onclick = () => { const t = new Date(); calYear = t.getFullYear(); calMonth = t.getMonth(); calSelected = dayKey(t); renderSection(App, host); resync(); };
   host.querySelector('[data-cal="next"]').onclick = () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } calSelected = null; renderSection(App, host); resync(); };
   host.querySelectorAll('.cal-day[data-k]').forEach((el) => {
     el.onclick = () => { calSelected = el.dataset.k; renderSection(App, host); resync(); };
   });
-  // 点击日程空白处 → 为选中日快速新建活动（行/按钮除外）
-  const agenda = host.querySelector('.cal-agenda');
-  if (agenda) agenda.onclick = (e) => {
-    // 点击日程行卡片 → 编辑该活动（按钮/链接除外）
-    const rowEl = e.target.closest('.agenda-row.clickable');
-    if (rowEl) {
-      if (e.target.closest('button, a, input, select, textarea')) return;
-      App.overview.openActModal(rowEl.dataset.edit);
-      return;
+  bindModeToggle(App, host, resync);
+  bindAgenda(App, host, byDay, calSelected, resync);
+}
+
+// ---------- 周视图（时间网格） ----------
+function renderWeek(App, host, byDay, todayK, resync) {
+  const { db } = App;
+  const anchor = calSelected || todayK;
+  const ws = weekStartOf(anchor);
+  const rangeMin = WK_START * 60, rangeEndMin = WK_END * 60;
+  const canvasH = (WK_END - WK_START) * WK_HOUR;
+
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(ws); dt.setDate(dt.getDate() + i);
+    const key = fmtDateKey(dt);
+    days.push({ key, dow: ['一', '二', '三', '四', '五', '六', '日'][i], d: dt.getDate(), today: key === todayK, sel: key === calSelected });
+  }
+
+  // 组装每列：全天/弹性条 + 时间定位色块
+  const cols = days.map((dy) => {
+    const allDay = [];
+    const blocks = [];
+    for (const it of byDay[dy.key] || []) {
+      const a = it.a;
+      const w = activityWindow(a);
+      const hasTime = !!(w && a.planned_start && Number(a.planned_minutes) > 0);
+      const s = w ? new Date(w.start) : null;
+      const smin = s ? s.getHours() * 60 + s.getMinutes() : null;
+      const durMin = w ? Math.max(20, (w.end - w.start) / 60000) : 20;
+      const cls = it.occ && it.occ.status === 'done' ? ' done' : (it.occ && it.occ.status === 'skipped' ? ' skipped' : (it.virtual ? ' future' : ''));
+      const lbl = `${esc(a.title)}${a.planned_minutes ? ` · ${a.planned_minutes}m` : ''}`;
+      if (!hasTime || smin === null) {
+        allDay.push(`<button type="button" class="week-all-item${cls}" style="--chip:${planColor(db, a.plan_ids)}" data-edit="${jsStr(a.id)}" title="点击编辑">${lbl}</button>`);
+        continue;
+      }
+      if (smin >= rangeEndMin) continue; // 起点超出可见范围（跨深夜/夜里）略过
+      const top = Math.max(0, (smin - rangeMin) / 60 * WK_HOUR);
+      const h = Math.max(18, Math.min(durMin / 60 * WK_HOUR, canvasH - top));
+      blocks.push(`<button type="button" class="week-block${cls}" style="top:${top}px;height:${h}px;--chip:${planColor(db, a.plan_ids)}" data-edit="${jsStr(a.id)}" title="点击编辑">${lbl}</button>`);
     }
-    if (e.target.closest('.agenda-row, button, input, select, textarea')) return;
-    App.overview.openActModal(null, null, `${padDateKey(calSelected)}T09:00`);
-  };
+    return { ...dy, allDay, blocks };
+  });
+  const allH = Math.max(...cols.map((c) => c.allDay.length)) * 26; // 全天条统一高度，保证列对齐
+
+  const axis = [];
+  for (let h = WK_START; h < WK_END; h++) {
+    axis.push(`<div class="week-hour" style="top:${allH + (h - WK_START) * WK_HOUR}px">${h}:00</div>`);
+  }
+
+  host.innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <h3>日历 · 周视图</h3>
+        <div class="row-gap">
+          ${modeToggleHTML()}
+          <button class="btn sm" data-cal="wprev">‹ 上周</button>
+          <button class="btn sm" data-cal="wtoday">今天</button>
+          <button class="btn sm" data-cal="wnext">下周 ›</button>
+        </div>
+      </div>
+      <div class="week-head">
+        <div class="week-head-spacer"></div>
+        ${cols.map((dy) => `<div class="week-head-day ${dy.today ? 'today' : ''} ${dy.sel ? 'selected' : ''}" data-k="${dy.key}"><b>${dy.dow}</b><span>${dy.d}</span></div>`).join('')}
+      </div>
+      <div class="week-grid" style="--allH:${allH}px;--canvasH:${canvasH}px">
+        <div class="week-axis">${axis.join('')}</div>
+        <div class="week-cols">
+          ${cols.map((dy) => `
+            <div class="week-col" data-k="${dy.key}">
+              <div class="week-all">${dy.allDay.join('') || ''}</div>
+              <div class="week-canvas">${dy.blocks.join('')}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="muted" style="margin:6px 0 10px;font-size:11px">点击时间格 = 该日该钟点新建；点击色块 = 编辑；上方为全天/弹性活动</div>
+      ${agendaHTML(App, byDay, calSelected || todayK)}
+    </div>
+  `;
+
+  host.querySelector('[data-cal="wprev"]').onclick = () => { const d = weekStartOf(calSelected || todayK); d.setDate(d.getDate() - 7); calSelected = fmtDateKey(d); renderSection(App, host); resync(); };
+  host.querySelector('[data-cal="wtoday"]').onclick = () => { calSelected = todayK; renderSection(App, host); resync(); };
+  host.querySelector('[data-cal="wnext"]').onclick = () => { const d = weekStartOf(calSelected || todayK); d.setDate(d.getDate() + 7); calSelected = fmtDateKey(d); renderSection(App, host); resync(); };
+  // 点表头/列 = 选中该日（周视图内停留）
+  host.querySelectorAll('.week-head-day[data-k]').forEach((el) => {
+    el.onclick = () => { calSelected = el.dataset.k; renderSection(App, host); resync(); };
+  });
+  // 点色块 = 编辑；点空白时间格 = 该日该钟点新建
+  host.querySelectorAll('.week-block[data-edit], .week-all-item[data-edit]').forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); App.overview.openActModal(el.dataset.edit); };
+  });
+  host.querySelectorAll('.week-canvas').forEach((canvas) => {
+    canvas.onclick = (e) => {
+      if (e.target.closest('.week-block')) return;
+      const col = canvas.closest('.week-col');
+      const k = col.dataset.k;
+      const rect = canvas.getBoundingClientRect();
+      const rel = e.clientY - rect.top;
+      const hour = Math.max(WK_START, Math.min(WK_END - 1, WK_START + Math.floor(rel / WK_HOUR)));
+      calSelected = k;
+      App.overview.openActModal(null, null, `${padDateKey(k)}T${pad2(hour)}:00`);
+    };
+  });
+  bindModeToggle(App, host, resync);
+  bindAgenda(App, host, byDay, calSelected || todayK, resync);
+}
+
+// 渲染内嵌日历卡片到 host 元素（每次渲染重建，事件用事件委托）
+export function renderSection(App, host) {
+  if (calYear === undefined) { const d = new Date(); calYear = d.getFullYear(); calMonth = d.getMonth(); calSelected = dayKey(d); }
+  const db = App.db;
+  const byDay = buildByDay(db);
+  const todayK = dayKey(new Date());
+  // 就地重渲染后重算轮播高度，不重置页码
+  const resync = () => App.overview.refreshPagerHeight();
+  if (calMode === 'week') return renderWeek(App, host, byDay, todayK, resync);
+  return renderMonth(App, host, byDay, todayK, resync);
 }

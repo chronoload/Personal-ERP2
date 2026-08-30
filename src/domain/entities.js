@@ -38,6 +38,14 @@ export const PLAN_TRANSITIONS = {
   Paused: ['Active', 'Completed', 'Archived'],
 };
 
+// ---- 目标 (Goal) -----------------------------------------------------
+// 战略层轻态机：Active → Completed → Archived（归档即从主视图退场，保持列表精简）
+export const GOAL_STATES = ['Active', 'Completed', 'Archived'];
+export const GOAL_TRANSITIONS = {
+  Active: ['Completed', 'Archived'],
+  Completed: ['Archived'],
+};
+
 // ---- 产出 (Output) ---------------------------------------------------
 // 决策 12B：独立生命周期
 export const OUTPUT_STATES = ['Draft', 'Published', 'Archived'];
@@ -115,7 +123,7 @@ export function newPlan({ goal_id, title, budget = null, color = null }) {
 }
 
 export function newGoal({ title, desc = '' }) {
-  return { title, desc, created: Date.now() };
+  return { title, desc, status: 'Active', created: Date.now() };
 }
 
 export function newResource({ name, unit = '', initial = 0, color = null }) {

@@ -492,6 +492,7 @@ export function render(App, el) {
       <div class="row-gap">
         <button class="btn primary" onclick="App.backup.export(App.db)">⬇ 导出备份 (JSON)</button>
         <button class="btn" onclick="App.backup.importFromFile((db)=>App.stats.doImport(db))">⬆ 导入</button>
+        <button class="btn" onclick="App.ics.export(App.db)">📅 导出日历 (ICS)</button>
         <button class="btn danger" onclick="App.reset()">♻ 清空并重新初始化</button>
       </div>
       <div class="muted" style="margin-top:8px">导入可选择「增量合并（同名资源复用账户）」或「全量替换」。</div>

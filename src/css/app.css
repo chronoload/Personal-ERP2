@@ -287,6 +287,8 @@ h1, h2, h3 { margin: 0; }
 /* 计划下活动列表（同一计划聚类分组展示） */
 .plan-acts { margin: 8px 0 2px; border: 1px solid #eef1f5; border-radius: 9px; overflow: hidden; }
 .plan-acts-head { display: flex; justify-content: space-between; padding: 5px 10px; font-size: 11px; font-weight: 800; color: #4a5260; background: #f7f9fc; border-bottom: 1px solid #eef1f5; }
+.plan-acts-more { padding: 6px 10px; font-size: 11px; font-weight: 700; color: var(--blue); cursor: pointer; text-align: center; background: #fbfcfe; border-top: 1px solid #eef1f5; }
+.plan-acts-more:hover { background: #f2f5fa; }
 .plan-act { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12.5px; border-bottom: 1px solid #f2f4f7; cursor: pointer; transition: background .12s; }
 .plan-act:last-child { border-bottom: none; }
 .plan-act:hover { background: #f4f6fa; }
@@ -396,6 +398,34 @@ h1, h2, h3 { margin: 0; }
 .agenda-title { font-size: 13px; font-weight: 600; }
 .agenda-title .plan-chip { margin-right: 5px; }
 .agenda-note { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* ---------------- 周视图（时间网格） ---------------- */
+.week-head { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 12px 12px 0 0; overflow: hidden; background: #f7f9fc; }
+.week-head-spacer { width: 46px; flex-shrink: 0; }
+.week-head-day { flex: 1; min-width: 0; text-align: center; padding: 8px 2px 6px; cursor: pointer; border-left: 1px solid var(--border); transition: background .12s; }
+.week-head-day:hover { background: #eef3fb; }
+.week-head-day b { display: block; font-size: 11px; color: var(--muted); }
+.week-head-day span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-weight: 800; font-size: 12px; margin-top: 2px; }
+.week-head-day:last-child b, .week-head-day:nth-child(7) b { color: var(--red); } /* 周六/日标题标红 */
+.week-head-day.today span { background: var(--ink); color: #fff; }
+.week-head-day.selected { background: #e6ecf7; }
+.week-head-day.selected span { background: var(--primary); color: #fff; }
+
+.week-grid { display: flex; border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; overflow: hidden; background: #fff; }
+.week-axis { width: 46px; flex-shrink: 0; position: relative; background: #f7f9fc; }
+.week-hour { position: absolute; right: 4px; transform: translateY(-50%); font-size: 9.5px; color: var(--muted); font-weight: 700; }
+.week-cols { flex: 1; display: flex; min-width: 0; }
+.week-col { flex: 1; min-width: 0; position: relative; border-left: 1px solid #eef1f5; }
+.week-all { min-height: var(--allH, 0); display: flex; flex-direction: column; gap: 3px; padding: 4px 3px; border-bottom: 1px solid #eef1f5; background: #fafbfc; }
+.week-all-item { border: 1px solid #e6e9ef; background: #fff; border-radius: 6px; padding: 2px 4px; font-size: 9.5px; text-align: left; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid var(--chip, #999); }
+.week-all-item:hover { background: #f2f5fa; }
+.week-canvas { position: relative; height: var(--canvasH, 0); background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--wkH, 40px) - 1px), #eef1f5 calc(var(--wkH, 40px) - 1px), #eef1f5 var(--wkH, 40px)); }
+.week-block { position: absolute; left: 2px; right: 2px; border: 1px solid rgba(16, 24, 40, .07); border-left: 3px solid var(--chip, #999); background: rgba(255, 255, 255, .94); border-radius: 6px; padding: 2px 4px; font-size: 9.5px; line-height: 1.25; text-align: left; color: var(--text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; box-shadow: 0 1px 2px rgba(16, 24, 40, .08); }
+.week-block:hover { filter: brightness(.97); }
+.week-block.future { opacity: .6; border-style: dashed; }
+.week-block.done { opacity: .55; background: #eef7f1; color: #2f6b4a; }
+.week-block.skipped { opacity: .5; background: #f2f3f5; color: #8a93a0; text-decoration: line-through; }
+
 
 /* 当日日程 + 活动看板：轮播（transform 平移 + 高度过渡），桌面端堆叠 */
 .dash-pager { position: relative; overflow: hidden; transition: height .22s ease; }
@@ -701,6 +731,8 @@ html[data-theme="dark"] .kc-out { background: #202839; border-color: #2c3549; }
 html[data-theme="dark"] .kc-meta .badge { opacity: .92; }
 html[data-theme="dark"] .plan-act:hover { background: #232b3d; }
 html[data-theme="dark"] .plan-acts-head { background: #202839; border-color: #2c3549; color: #aab4c8; }
+html[data-theme="dark"] .plan-acts-more { background: #1b2130; color: #7fa8d8; border-color: #2a3245; }
+html[data-theme="dark"] .plan-acts-more:hover { background: #232b3d; }
 html[data-theme="dark"] .goal-head { background: #181e2c; }
 html[data-theme="dark"] .kanban-add:hover, html[data-theme="dark"] .plan-add:hover { background: #2c3549; color: #c6cddb; border-color: #3a4a66; }
 
@@ -721,6 +753,19 @@ html[data-theme="dark"] .cal-agenda { background: #181e2c; }
 html[data-theme="dark"] .agenda-row:hover { background: #202839; }
 html[data-theme="dark"] .agenda-row.clickable:hover { background: #1f2738; }
 html[data-theme="dark"] .agenda-time { background: #202839; border-color: #2e3850; }
+html[data-theme="dark"] .week-head { background: #1b2130; }
+html[data-theme="dark"] .week-head-day:hover { background: #232b3d; }
+html[data-theme="dark"] .week-head-day.selected { background: #222a3d; }
+html[data-theme="dark"] .week-grid { background: #1b2130; }
+html[data-theme="dark"] .week-axis { background: #181e2c; }
+html[data-theme="dark"] .week-col { border-left-color: #2a3245; }
+html[data-theme="dark"] .week-all { background: #171c29; border-bottom-color: #2a3245; }
+html[data-theme="dark"] .week-all-item { background: #232b3d; border-color: #2e3850; color: var(--text); }
+html[data-theme="dark"] .week-all-item:hover { background: #2c3549; }
+html[data-theme="dark"] .week-canvas { background: repeating-linear-gradient(to bottom, transparent 0, transparent 39px, #2a3245 39px, #2a3245 40px); }
+html[data-theme="dark"] .week-block { background: rgba(27, 33, 48, .95); border-color: #2e3850; color: var(--text); box-shadow: none; }
+html[data-theme="dark"] .week-block.done { background: #1d3a2b; color: #4cc284; }
+html[data-theme="dark"] .week-block.skipped { background: #232b3d; color: #8b95a8; }
 
 /* 表单 / 反馈 */
 html[data-theme="dark"] .callout { background: #1c2434; border-color: #2a3550; }

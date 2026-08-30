@@ -209,3 +209,112 @@ test('S10 探针：清空计划时间不产生「无当前期」悬空态', () =
   E.updateActivity(db, b.id, { title: '单次', plan_ids: [], planned_start: '' });
   assert.equal(b.planned_date, null);
 });
+
+// ---- S12：周期编辑三态 updateSeries（全部 / 此期及后续 / 仅此期）----
+test('S12 三态-all：整系列整体更新（=updateActivity）', () => {
+  const db = freshDB();
+  E.createActivity(db, { title: '每日', planned_start: '2026-8-10T07:30', planned_minutes: 30, repeat: 'daily', repeat_until: '2026-8-12' });
+  const a = db.activities[0];
+  const r = E.updateSeries(db, a.id, 'all', { title: '每日改', plan_ids: [], planned_start: '2026-8-11T08:00', planned_minutes: 45 });
+  assert.equal(r.ok, true);
+  assert.equal(a.title, '每日改');
+  assert.equal(a.planned_date, '2026-8-11');
+  assert.equal(a.planned_minutes, 45);
+  assert.equal(a.occurrences.length, 3); // 期次数量不变
+  assert.equal(a.occurrences[0].date, '2026-8-10');
+  assert.equal(a.occurrences[2].date, '2026-8-12');
+});
+
+test('S12 三态-following：当期与其后期次整体平移，之前不动', () => {
+  const db = freshDB();
+  E.createActivity(db, { title: '每日', planned_start: '2026-8-10T07:30', planned_minutes: 30, repeat: 'daily' }); // 无 until → 30 期
+  const a = db.activities[0];
+  // 把当期 8-10 → 8-15（平移 +5 天），其后全部期次跟着平移、保持每日间隔
+  const r = E.updateSeries(db, a.id, 'following', { title: '每日', plan_ids: [], planned_start: '2026-8-15T07:30', planned_minutes: 30 });
+  assert.equal(r.ok, true);
+  assert.equal(r.shifted_dates, 5);
+  assert.equal(a.planned_date, '2026-8-15');
+  assert.equal(a.occurrences.length, 30);
+  assert.equal(a.occurrences[0].date, '2026-8-15');
+  assert.equal(a.occurrences[1].date, '2026-8-16');
+  assert.equal(a.occurrences[2].date, '2026-8-17');
+  // 只改时间不改日期 → 不平移
+  const r2 = E.updateSeries(db, a.id, 'following', { title: '每日', plan_ids: [], planned_start: '2026-8-15T09:00', planned_minutes: 30 });
+  assert.equal(r2.ok, true);
+  assert.equal(r2.shifted_dates, 0);
+  assert.deepEqual([a.occurrences[0].date, a.occurrences[1].date], ['2026-8-15', '2026-8-16']);
+  assert.equal(a.planned_start, '2026-8-15T09:00');
+});
+
+test('S12 三态-following：平移超越 repeat_until 的期次被截断', () => {
+  const db = freshDB();
+  E.createActivity(db, { title: '每日', planned_start: '2026-8-10T07:30', planned_minutes: 30, repeat: 'daily', repeat_until: '2026-8-12' });
+  const a = db.activities[0];
+  // 平移 +5 天 → 8-11 变 8-16、8-12 变 8-17，均越过 until(8-12) → 截断只剩当期
+  const r = E.updateSeries(db, a.id, 'following', { title: '每日', plan_ids: [], planned_start: '2026-8-15T07:30', planned_minutes: 30 });
+  assert.equal(r.ok, true);
+  assert.deepEqual(a.occurrences.map((o) => o.date), ['2026-8-15']);
+});
+
+test('S12 三态-only：当期摘出为独立单次活动，系列保留其余期次', () => {
+  const db = freshDB();
+  E.createActivity(db, { title: '每日', planned_start: '2026-8-10T07:30', planned_minutes: 30, repeat: 'daily', repeat_until: '2026-8-12', preset_expenses: [{ resource_id: 'r1', amount: 2 }] });
+  const a = db.activities[0];
+  const r = E.updateSeries(db, a.id, 'only', { title: '今天的例外', plan_ids: [], planned_start: '2026-8-15T10:00', planned_minutes: 60, preset_expenses: [] });
+  assert.equal(r.ok, true);
+  assert.equal(r.split, true);
+  // 系列：2 条活动（系列 + 例外）
+  assert.equal(db.activities.length, 2);
+  // 系列保留 8-11 / 8-12 两期，当前期回落到 8-11
+  assert.equal(a.occurrences.length, 2);
+  assert.equal(a.occurrences[0].date, '2026-8-11');
+  assert.equal(a.planned_date, '2026-8-11');
+  assert.equal(a.repeat, 'daily');
+  // 例外：独立单次，日期 8-15，字段来自表单快照
+  const ex = db.activities.find((x) => x.id === r.exception_id);
+  assert.equal(ex.title, '今天的例外');
+  assert.equal(ex.repeat, null);
+  assert.equal(ex.planned_date, '2026-8-15');
+  assert.equal(ex.planned_minutes, 60);
+});
+
+test('S12 三态守卫：非循环拒绝 / Started 拒绝 / 已完成当期拒绝', () => {
+  const db = freshDB();
+  E.createActivity(db, { title: '单次', planned_date: '2026-8-10' });
+  let r = E.updateSeries(db, db.activities[0].id, 'only', { title: 'x', plan_ids: [] });
+  assert.equal(r.ok, false); // 非循环
+
+  E.createActivity(db, { title: '每日', planned_start: '2026-8-10T07:30', planned_minutes: 30, repeat: 'daily', repeat_until: '2026-8-12' });
+  const a = db.activities[1];
+  // Started 的当期拒绝 only/following
+  E.startActivity(db, a.id);
+  r = E.updateSeries(db, a.id, 'only', { title: 'x', plan_ids: [] });
+  assert.equal(r.ok, false);
+  r = E.updateSeries(db, a.id, 'following', { title: 'x', plan_ids: [] });
+  assert.equal(r.ok, false);
+  // 全部模式不受 Started 限制
+  r = E.updateSeries(db, a.id, 'all', { title: '每日改', plan_ids: [] });
+  assert.equal(r.ok, true);
+  // 全部期次完成后的当期（done）→ only 拒绝
+  const db2 = freshDB();
+  E.createActivity(db2, { title: '单期', planned_start: '2026-8-10T07:30', planned_minutes: 30, repeat: 'daily', repeat_until: '2026-8-10' });
+  const b = db2.activities[0];
+  E.startActivity(db2, b.id);
+  E.completeActivity(db2, b.id, { expense: { resource_id: 'r1', amount: 1 }, output_title: 'o' });
+  r = E.updateSeries(db2, b.id, 'only', { title: 'x', plan_ids: [] });
+  assert.equal(r.ok, false);
+});
+
+test('S12 三态-only：摘空最后剩余期次 → 系列退化为非循环空壳', () => {
+  const db = freshDB();
+  E.createActivity(db, { title: '每日', planned_start: '2026-8-10T07:30', planned_minutes: 30, repeat: 'daily', repeat_until: '2026-8-10' });
+  const a = db.activities[0];
+  assert.equal(a.occurrences.length, 1);
+  const r = E.updateSeries(db, a.id, 'only', { title: '就一次', plan_ids: [], planned_start: '2026-8-20T09:00', planned_minutes: 30 });
+  assert.equal(r.ok, true);
+  // 系列期次被摘空 → 退化：repeat=null、occurrences=[]、planned_date=null（无悬空）
+  assert.equal(a.repeat, null);
+  assert.equal(a.occurrences.length, 0);
+  assert.equal(a.planned_date, null);
+  assert.equal(db.activities.length, 2); // 空壳 + 例外
+});

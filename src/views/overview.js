@@ -498,6 +498,15 @@ export function openActModal(editId, prePlanId, presetStart) {
         </select></div>
         <div class="field"><label>循环结束日（留空 = 一直）</label><input id="f-arepuntil" type="date" value="${esc(a?.repeat_until || '')}"></div>
       </div>
+      ${a && a.repeat ? `
+      <div class="field"><label>编辑范围（循环）</label>
+        <div class="row-gap" id="series-scope">
+          <button type="button" class="btn sm primary" data-scope="all">全部</button>
+          <button type="button" class="btn sm" data-scope="following">此期及后续</button>
+          <button type="button" class="btn sm" data-scope="only">仅此期</button>
+        </div>
+        <div class="muted" style="margin-top:4px">仅此期 = 把当期拆成独立活动；此期及后续 = 当期与其后全部期次日期整体平移</div>
+      </div>` : ''}
       <label class="chk" style="margin:0 0 4px"><input type="checkbox" id="f-haspreset" ${hasPreset ? 'checked' : ''}> ⚡ 预设收支（完成后一键入账，可空 · 多资源）</label>
       <div id="preset-rows" class="preset-rows" style="${hasPreset ? '' : 'display:none'}">
         <div class="step-divider">预设支出（消耗 · 可空）<button type="button" class="btn sm" id="pe-add">＋ 添加</button></div>
@@ -605,6 +614,19 @@ export function openActModal(editId, prePlanId, presetStart) {
   m.q('#f-ps').addEventListener('input', previewAtomic);
   m.q('#f-apmin').addEventListener('input', previewAtomic);
   previewAtomic();
+  // 周期编辑三态（仅循环活动编辑态显示）：全部 / 此期及后续 / 仅此期
+  let seriesScope = 'all';
+  const scopeRow = m.q('#series-scope');
+  if (scopeRow) {
+    const setScope = (s) => {
+      seriesScope = s;
+      scopeRow.querySelectorAll('[data-scope]').forEach((x) => x.classList.toggle('primary', x.dataset.scope === s));
+    };
+    scopeRow.querySelectorAll('[data-scope]').forEach((b) => {
+      b.onclick = () => setScope(b.dataset.scope);
+      if (a && a.status === 'Started') b.disabled = b.dataset.scope !== 'all'; // 进行中只能整体编辑
+    });
+  }
   m.q('[data-save]').onclick = () => {
     const plan_ids = [...m.qa('#actPlanChips input[type=checkbox]:checked')].map((e) => e.value);
     const presetOn = !!(presetToggle && presetToggle.checked);
@@ -629,7 +651,9 @@ export function openActModal(editId, prePlanId, presetStart) {
       preset_expenses: readPresetRows('pe-rows'),
       preset_incomes: readPresetRows('pi-rows'),
     };
-    const r = a ? engine.updateActivity(db, a.id, payload) : engine.createActivity(db, payload);
+    const r = a
+      ? (a.repeat && seriesScope !== 'all' ? engine.updateSeries(db, a.id, seriesScope, payload) : engine.updateActivity(db, a.id, payload))
+      : engine.createActivity(db, payload);
     if (!r.ok) return toast(r.error, 'err');
     // 记住输入习惯，下次按语境预填
     Prefs.set({
@@ -637,7 +661,9 @@ export function openActModal(editId, prePlanId, presetStart) {
       lastRepeat: payload.repeat || '',
     });
     m.close(); App.refresh();
-    if (r.spawned) toast(`已按循环生成 ${r.spawned} 期后续活动（各期独立管理）`, 'ok');
+    if (r.split) toast('仅此期：已拆为独立活动，系列保留其余期次', 'ok');
+    else if (r.shifted_dates !== undefined) toast(r.shifted_dates !== 0 ? `此期及后续：后续期次已平移 ${r.shifted_dates} 天` : '已保存（仅时间调整）', 'ok');
+    else if (r.spawned) toast(`已按循环生成 ${r.spawned} 期后续活动（各期独立管理）`, 'ok');
     else if (r.shifted) toast(`⏩ 时段冲突，已自动顺延至 ${(r.to || '').replace('T', ' ')}`, 'ok');
     else if (r.bundled) toast('⚠ 已保留时间重叠并与冲突活动捆绑，开始时将仲裁先后', 'ok');
     else toast(a ? '已保存' : '活动已创建，去「开始」吧', 'ok');

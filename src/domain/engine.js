@@ -6,7 +6,7 @@
 // 这是「严格 ERP」与「普通 CRUD」的分水岭。
 // ============================================================
 import {
-  ACTIVITY_TRANSITIONS, PLAN_TRANSITIONS, OUTPUT_TRANSITIONS,
+  ACTIVITY_TRANSITIONS, PLAN_TRANSITIONS, OUTPUT_TRANSITIONS, GOAL_TRANSITIONS,
   nextId, newActivity, newOutput, newPlan, newGoal, newResource, newRule, newGood,
   VF_EXPECT_MS, VF_RECHARGE, DIR_CONSUME,
 } from './entities.js';
@@ -461,6 +461,15 @@ export function setPlanStatus(db, id, next) {
   if (!p) return fail('计划不存在');
   if (!checkTransition(PLAN_TRANSITIONS, p.status, next)) return fail(`非法流转：${p.status} → ${next}`);
   p.status = next;
+  return ok();
+}
+
+// 目标状态机（战略层轻态）：Active → Completed → Archived
+export function setGoalStatus(db, id, next) {
+  const g = db.goals.find((x) => x.id === id);
+  if (!g) return fail('目标不存在');
+  if (!checkTransition(GOAL_TRANSITIONS, g.status || 'Active', next)) return fail(`非法流转：${g.status} → ${next}`);
+  g.status = next;
   return ok();
 }
 
@@ -1039,6 +1048,79 @@ export function skipOccurrence(db, id, date) {
     advanceRecurrence(db, a); // 跳过当前期 → 推进到下一 pending
   }
   return ok({ planned_date: a.planned_date });
+}
+
+// ============================================================
+// 周期编辑三态（对标 Google/Outlook 改循环弹窗）
+//   scope = 'all'（全部=整系列）| 'following'（此期及后续）| 'only'（仅此期）
+// 系列容器是「单记录 + 共享字段」：三态的本质区别在「日期」如何变化——
+//   all       → 整系列整体更新（含日期），即普通 updateActivity
+//   following → 当期与其后所有期次日期整体平移（保持原间隔），字段整系列更新
+//   only      → 把当期从系列摘出，另建独立单次活动（例外，字段快照带入），系列保留其余期次
+// 仅 Planned 的当期可做 following/only（Started 走完成/失败；当期已完成/已跳过只能选「全部」）。
+// ============================================================
+function daysBetween(aKey, bKey) {
+  return Math.round((parseDate(aKey).getTime() - parseDate(bKey).getTime()) / 86400000);
+}
+function addDaysToKey(key, n) {
+  const d = parseDate(key);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+export function updateSeries(db, id, scope, payload) {
+  const a = db.activities.find((x) => x.id === id);
+  if (!a) return fail('活动不存在');
+  if (!a.repeat || !Array.isArray(a.occurrences) || !a.occurrences.length) return fail('仅循环活动支持编辑范围');
+  if (scope === 'all' || !scope) return updateActivity(db, id, payload);
+  const pivot = a.occurrences.find((o) => dateKey(o.date) === dateKey(a.planned_date)) || a.occurrences[0];
+  if (!pivot) return fail('期次不存在');
+  if (pivot.status !== 'pending') return fail('当期已完成/已跳过，编辑范围只能选「全部」');
+  if (a.status === 'Started') return fail('进行中的本期请先「完成/失败」再调整后续期次');
+
+  if (scope === 'only') {
+    // 仅此期：摘出当期 → 独立单次活动（例外），表单字段快照带入；系列回落/保留其余期次
+    const r = createActivity(db, {
+      title: payload.title, note: payload.note, plan_ids: payload.plan_ids || a.plan_ids,
+      planned_date: payload.planned_start ? datePartFromDatetime(payload.planned_start) : (payload.planned_date || pivot.date),
+      planned_start: payload.planned_start || a.planned_start,
+      planned_minutes: payload.planned_minutes !== undefined ? Number(payload.planned_minutes) || 0 : a.planned_minutes,
+      repeat: null, repeat_until: null,
+      theme: payload.theme !== undefined ? payload.theme : a.theme,
+      keep_conflict: payload.keep_conflict,
+      preset_expenses: payload.preset_expenses, preset_incomes: payload.preset_incomes,
+    });
+    if (!r.ok) return r;
+    const ex = db.activities[db.activities.length - 1];
+    a.occurrences = a.occurrences.filter((o) => o !== pivot);
+    if (a.occurrences.length) {
+      a.planned_date = fallbackSeriesDate(a);
+    } else {
+      // 系列期次被摘空 → 退化为单次空壳（非循环，无悬空）
+      a.repeat = null; a.occurrences = []; a.planned_date = null;
+    }
+    return ok({ split: true, exception_id: ex.id, planned_date: a.planned_date });
+  }
+
+  if (scope === 'following') {
+    // 此期及后续：当期与其后全部期次日期整体平移，保持原间隔；字段整系列更新
+    const newPivotDate = payload.planned_start ? datePartFromDatetime(payload.planned_start) : (payload.planned_date || pivot.date);
+    const delta = daysBetween(newPivotDate, pivot.date);
+    const fromIdx = a.occurrences.indexOf(pivot);
+    if (delta !== 0) {
+      a.occurrences = a.occurrences.map((o, i) => (i < fromIdx ? o : { ...o, date: addDaysToKey(o.date, delta) }));
+      // repeat_until 被平移超越则截断（始终保留当期 pivot，避免系列被截空）
+      if (a.repeat_until) {
+        const pivotDate = addDaysToKey(pivot.date, delta); // map 后 pivot 引用已换新，用平移后的当期日期比对
+        a.occurrences = a.occurrences.filter((o) => dateKey(o.date) === dateKey(pivotDate) || dateKey(o.date) <= dateKey(a.repeat_until));
+      }
+    }
+    const r = updateActivity(db, id, payload);
+    if (!r.ok) return r;
+    return ok({ ...r, shifted_dates: delta });
+  }
+
+  return fail('未知编辑范围');
 }
 
 export function failActivity(db, id, reason = '') {

@@ -60,6 +60,19 @@ test('8C：非法流转被拒绝（Started 回退 Planned）', () => {
   assert.equal(E.setActivityStatus(db, db.activities[0].id, 'Planned').ok, false); // 无回退
 });
 
+// ---- 目标状态机（战略层轻态）：Active → Completed → Archived ----
+test('目标状态机：合法流转 / 非法拒绝 / 缺省回落', () => {
+  const db = freshDB();
+  E.createGoal(db, { title: '健康' });
+  const g = db.goals[0];
+  assert.equal(g.status, 'Active'); // 新建默认 Active
+  assert.equal(E.setGoalStatus(db, g.id, 'Completed').ok, true);
+  assert.equal(E.setGoalStatus(db, g.id, 'Archived').ok, true);
+  assert.equal(E.setGoalStatus(db, g.id, 'Active').ok, false); // 归档后不回退
+  assert.equal(E.setGoalStatus(db, g.id, 'Completed').ok, false); // 归档后不能完成
+  assert.equal(E.setGoalStatus(db, 'nonexistent', 'Active').ok, false); // 不存在拒绝
+});
+
 // ---- 不变量2：完成必须流水 + 产出 ----
 test('不变量2：Complete 必带流水与产出，缺一则拒', () => {
   const db = freshDB();

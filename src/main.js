@@ -14,6 +14,7 @@ import { Notifications } from './services/notifications.js';
 import { Backup } from './services/backup.js';
 import { Scheduler } from './services/scheduler.js';
 import { Sync } from './services/sync.js';
+import { ICS } from './services/ics.js';
 import { AutoPilot } from './services/autoPilot.js';
 import { ErrorLog } from './services/errorLog.js';
 import { renderTopbar, renderTabs } from './views/topbar.js';
@@ -66,7 +67,7 @@ const App = {
   engine,
   tab: 'overview',
   // 系统服务接口（预留：小组件 / 系统提示 / 系统通知 / 备份）
-  widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync,
+  widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS,
   // 视图扁平暴露给内联 handler（App.calendar.open() 等）
   overview, goals, stats, calendar, timer, dayGuide, hud,
   setTab(id) { this.tab = id; this.render(true); window.scrollTo({ top: 0 }); },

@@ -63,3 +63,17 @@ test('loadDB：空存储返回种子库且版本为当前版', () => {
   assert.deepEqual(db.resources, []);
   assert.deepEqual(db.txs, []);
 });
+
+// ---- normalizeDB：目标 status 缺省回落 Active（幂等，不依赖版本号）----
+test('normalizeDB：目标无 status 幂等补齐为 Active（含 v3 旧库）', () => {
+  const db = seedDB();
+  db.goals = [{ id: 'g1', title: '旧目标' }, { id: 'g2', title: '新目标', status: 'Archived' }];
+  db.schemaVersion = SCHEMA_VERSION; // v3 旧库（不落后版本）
+  normalizeDB(db);
+  assert.equal(db.goals[0].status, 'Active'); // 缺省回落
+  assert.equal(db.goals[1].status, 'Archived'); // 已有状态不动
+  // 幂等：再跑一次不破坏
+  normalizeDB(db);
+  assert.equal(db.goals[0].status, 'Active');
+  assert.equal(db.goals[1].status, 'Archived');
+});

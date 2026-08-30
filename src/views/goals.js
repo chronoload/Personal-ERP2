@@ -10,6 +10,8 @@ import { Prefs } from '../store/prefs.js';
 // 折叠状态（目标/计划可收起展开，跨会话记忆）
 const collapsedGoals = new Set(Prefs.load().collapsedGoals || []);
 const collapsedPlans = new Set(Prefs.load().collapsedPlans || []);
+const expandedPlans = new Set(); // 计划内活动列表「展开更多」（会话内记忆）
+let archivedExpanded = false; // 「已归档」折叠组（会话内记忆，默认收起）
 // 内联 onclick 字符串参数转义：反斜杠/单引号按 JS 转义，双引号按 HTML 属性转义
 function jsStr(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -31,6 +33,16 @@ export function toggleGoal(id) {
 export function togglePlan(id) {
   collapsedPlans.has(id) ? collapsedPlans.delete(id) : collapsedPlans.add(id);
   persistCollapsed(); App.refresh();
+}
+// 归档折叠组展开/收起（仅会话内记忆，默认收起保持主视图精简）
+export function toggleArchived() {
+  archivedExpanded = !archivedExpanded;
+  App.refresh();
+}
+// 计划内活动列表展开/收起（超 20 条时）
+export function togglePlanActs(pid) {
+  expandedPlans.has(pid) ? expandedPlans.delete(pid) : expandedPlans.add(pid);
+  App.refresh();
 }
 export function openGoalModal(editId) {
   const g = editId ? App.db.goals.find((x) => x.id === editId) : null;
@@ -155,6 +167,13 @@ export function setPlanStatus(pid, status) {
   App.refresh();
 }
 
+// 目标状态：Active → Completed → Archived（归档即从主视图退场，可展开查看历史）
+export function setGoalStatus(gid, status) {
+  const r = App.engine.setGoalStatus(App.db, gid, status);
+  if (!r.ok) return toast(r.error, 'err');
+  App.refresh();
+}
+
 function planCard(App, p) {
   const { engine } = App;
   const cost = engine.planCost(App.db, p.id);
@@ -162,6 +181,18 @@ function planCard(App, p) {
   const pct = p.budget !== null ? Math.min(100, (cost / p.budget) * 100) : 0;
   const acts = App.db.activities.filter((a) => (a.plan_ids || []).includes(p.id));
   const collapsed = collapsedPlans.has(p.id);
+  // 活动列表防撑爆：默认最多展示 PLAN_ACT_LIMIT 条，超出收起（视图瘦身）
+  const LIMIT = 20;
+  const shown = expandedPlans.has(p.id) ? acts : acts.slice(0, LIMIT);
+  const more = acts.length > LIMIT && !expandedPlans.has(p.id);
+  const actRows = shown.map((a) => `
+    <div class="plan-act" onclick="event.stopPropagation();App.overview.openActModal('${jsStr(a.id)}')" title="点击编辑">
+      <span class="grow">
+        ${esc(a.title)}${a.planned_minutes ? ` <span class="muted">· ${a.planned_minutes}m</span>` : ''}
+        ${a.note ? `<div class="plan-act-note">📝 ${esc(a.note)}</div>` : ''}
+      </span>
+      ${badge(a.status)}
+    </div>`).join('');
   return `
     <div class="plan-card ${collapsed ? 'collapsed' : ''}" style="border-left:4px solid ${safeColor(p.color) || '#e5e8ee'}">
       <div class="plan-head" onclick="App.goals.togglePlan('${jsStr(p.id)}')" title="点击收起 / 展开">
@@ -180,14 +211,8 @@ function planCard(App, p) {
       ${acts.length ? `
       <div class="plan-acts">
         <div class="plan-acts-head"><span>活动（${acts.length}）</span><span class="muted">点击可编辑</span></div>
-        ${acts.map((a) => `
-          <div class="plan-act" onclick="event.stopPropagation();App.overview.openActModal('${jsStr(a.id)}')" title="点击编辑">
-            <span class="grow">
-              ${esc(a.title)}${a.planned_minutes ? ` <span class="muted">· ${a.planned_minutes}m</span>` : ''}
-              ${a.note ? `<div class="plan-act-note">📝 ${esc(a.note)}</div>` : ''}
-            </span>
-            ${badge(a.status)}
-          </div>`).join('')}
+        ${actRows}
+        ${more ? `<div class="plan-acts-more" onclick="event.stopPropagation();App.goals.togglePlanActs('${jsStr(p.id)}')">展开剩余 ${acts.length - LIMIT} 条 ▾</div>` : (expandedPlans.has(p.id) ? `<div class="plan-acts-more" onclick="event.stopPropagation();App.goals.togglePlanActs('${jsStr(p.id)}')">收起 ▴</div>` : '')}
       </div>` : ''}
       <div class="row-gap" style="margin-top:8px" onclick="event.stopPropagation()">
         <button class="btn sm primary" onclick="App.overview.openActModal(null,'${jsStr(p.id)}')">＋ 活动</button>
@@ -217,34 +242,57 @@ export function render(App, el) {
       </div>`;
     return;
   }
+  const goalBlock = (g) => {
+    const plans = db.plans.filter((p) => p.goal_id === g.id);
+    const gcoll = collapsedGoals.has(g.id);
+    const gStatus = g.status || 'Active';
+    return `
+      <div class="goal-block ${gcoll ? 'collapsed' : ''}">
+        <div class="goal-head" onclick="App.goals.toggleGoal('${jsStr(g.id)}')" title="点击收起 / 展开">
+          <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleGoal('${jsStr(g.id)}')" aria-label="收起/展开">${gcoll ? '▸' : '▾'}</button>
+          <div class="grow">
+            <b class="goal-title">${gStatus === 'Archived' ? '📦 ' : '🎯 '}${esc(g.title)}</b>
+            <span class="muted">${esc(g.desc || '')} · ${plans.length} 个计划</span>
+          </div>
+          <div class="row-gap" onclick="event.stopPropagation()">
+            <label class="status-select">状态
+              <select onchange="App.goals.setGoalStatus('${jsStr(g.id)}', this.value)">
+                <option value="Active" ${gStatus === 'Active' ? 'selected' : ''}>进行中</option>
+                <option value="Completed" ${gStatus === 'Completed' ? 'selected' : ''}>已完成</option>
+                <option value="Archived" ${gStatus === 'Archived' ? 'selected' : ''}>已归档</option>
+              </select>
+            </label>
+            <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 计划</button>
+            <button class="btn sm" onclick="App.goals.openGoalModal('${jsStr(g.id)}')">编辑</button>
+            <button class="btn sm danger" onclick="App.goals.delGoal('${jsStr(g.id)}')">删除</button>
+          </div>
+        </div>
+        <div class="goal-plans ${gcoll ? 'hidden' : ''}">
+        ${plans.length ? `<div class="plan-list">${plans.map((p) => planCard(App, p)).join('')}</div>` : `<div class="plan-add" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 点击添加计划</div>`}
+        </div>
+      </div>`;
+  };
+  const active = db.goals.filter((g) => (g.status || 'Active') !== 'Archived');
+  const archived = db.goals.filter((g) => (g.status || 'Active') === 'Archived');
+  // 归档目标收进折叠组：主视图精简，历史随时可展开查看（视图瘦身）
+  const archivedHTML = archived.length ? `
+    <div class="goal-block">
+      <div class="goal-head" onclick="App.goals.toggleArchived()" title="点击展开 / 收起归档目标" style="opacity:.75">
+        <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleArchived()" aria-label="展开/收起">${archivedExpanded ? '▾' : '▸'}</button>
+        <div class="grow"><b class="goal-title">📦 已归档（${archived.length}）</b><span class="muted">目标 · 历史存档，不参与日常视图</span></div>
+      </div>
+      <div class="goal-plans ${archivedExpanded ? '' : 'hidden'}">
+        <div class="plan-list" style="opacity:.8">${archived.map(goalBlock).join('')}</div>
+      </div>
+    </div>` : '';
   el.innerHTML = `
     <div class="card">
       <div class="card-head">
         <h3>目标 Goals <span class="muted">1 : N 计划</span></h3>
         <button class="btn sm" onclick="App.goals.openGoalModal()">＋ 新建目标</button>
       </div>
-      ${db.goals.map((g) => {
-        const plans = db.plans.filter((p) => p.goal_id === g.id);
-        const gcoll = collapsedGoals.has(g.id);
-        return `
-          <div class="goal-block ${gcoll ? 'collapsed' : ''}">
-            <div class="goal-head" onclick="App.goals.toggleGoal('${jsStr(g.id)}')" title="点击收起 / 展开">
-              <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleGoal('${jsStr(g.id)}')" aria-label="收起/展开">${gcoll ? '▸' : '▾'}</button>
-              <div class="grow">
-                <b class="goal-title">🎯 ${esc(g.title)}</b>
-                <span class="muted">${esc(g.desc || '')} · ${plans.length} 个计划</span>
-              </div>
-              <div class="row-gap" onclick="event.stopPropagation()">
-                <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 计划</button>
-                <button class="btn sm" onclick="App.goals.openGoalModal('${jsStr(g.id)}')">编辑</button>
-                <button class="btn sm danger" onclick="App.goals.delGoal('${jsStr(g.id)}')">删除</button>
-              </div>
-            </div>
-            <div class="goal-plans ${gcoll ? 'hidden' : ''}">
-            ${plans.length ? `<div class="plan-list">${plans.map((p) => planCard(App, p)).join('')}</div>` : `<div class="plan-add" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 点击添加计划</div>`}
-            </div>
-          </div>`;
-      }).join('')}
+      ${active.map(goalBlock).join('')}
+      ${archivedHTML}
     </div>
   `;
 }
