@@ -1077,12 +1077,18 @@ export function openOccurrencesModal(id) {
 const COLUMNS = [
   { key: 'Planned', label: '📋 待办', match: (s) => s === 'Planned' },
   { key: 'Started', label: '⚡ 进行中', match: (s) => s === 'Started' },
-  { key: 'Done', label: '✅ 已完成 / 复盘 / 归档', match: (s) => ['Completed', 'Reviewed', 'Archived'].includes(s) },
+  { key: 'Done', label: '✅ 已完成 / 复盘', match: (s) => s === 'Completed' || s === 'Reviewed' },
 ];
 
 // 已完成列防撑爆：默认只显最近完成的 3 条，点按钮展开/收起（内存态，刷新保留）
 const DONE_PREVIEW = 3;
 let doneExpanded = false;
+// 活动级归档 = 隐藏：Archived 活动从五态看板退场，收进「📦 已归档」折叠区（可展开查看历史）
+let archivedShown = false;
+export function toggleArchived() {
+  archivedShown = !archivedShown;
+  renderKanbanRoot(App);
+}
 
 // 看板按计划过滤：'all'=全部 | 'none'=未关联 | planId（内存态，渲染重建保留）
 let kanbanPlanFilter = 'all';
@@ -1143,6 +1149,19 @@ function kanbanHTML(App) {
     if (kanbanPlanFilter === 'none') return !a.plan_ids || !a.plan_ids.length;
     return (a.plan_ids || []).includes(kanbanPlanFilter);
   };
+  // 活动级归档：Archived 不占五态看板，单独收进折叠区（历史存档，随时可展开）
+  const archived = App.db.activities.filter((a) => a.status === 'Archived' && byPlan(a));
+  const archivedHTML = archived.length ? `
+    <div class="kanban-arch">
+      <div class="kanban-arch-head" onclick="App.overview.toggleArchived()">
+        <span class="collapse-btn">${archivedShown ? '▾' : '▸'}</span>
+        <b>📦 已归档（${archived.length}）</b>
+        <span class="muted">活动 · 历史存档，默认从视图隐藏</span>
+      </div>
+      <div class="kanban-arch-body" style="${archivedShown ? '' : 'display:none'}">
+        ${archived.map((a) => activityCard(App, a)).join('') || ''}
+      </div>
+    </div>` : '';
   return COLUMNS.map((col) => {
     let items = App.db.activities.filter((a) => col.match(a.status) && byPlan(a));
     if (col.key === 'Done') {
@@ -1161,7 +1180,7 @@ function kanbanHTML(App) {
         </div>
         <div class="kanban-body">${shown.map((a) => activityCard(App, a)).join('') || '<div class="kanban-add">＋ 点击添加待办</div>'}${more}</div>
       </div>`;
-  }).join('');
+  }).join('') + archivedHTML;
 }
 
 export function toggleDone() {
@@ -1187,6 +1206,7 @@ function setupDrag(App) {
     };
   });
   content.querySelectorAll('.kanban-card').forEach((c) => {
+    if (c.closest('.kanban-arch')) { c.draggable = false; return; } // 归档区卡片只读，禁止拖回看板
     c.ondragstart = () => { dragId = c.dataset.id; wasDragging = true; c.classList.add('dragging'); };
     c.ondragend = () => { c.classList.remove('dragging'); dragId = null; wasDragging = false; content.querySelectorAll('.kanban-col').forEach((x) => x.classList.remove('drag-over')); };
   });

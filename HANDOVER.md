@@ -125,7 +125,11 @@ cd android && gradlew assembleRelease  # 签名发布包 → app/release/app-rel
 - **周期编辑三态（新，2026-08-30，对标 Google/Outlook）**：循环活动编辑弹窗新增「编辑范围」——全部 / 此期及后续 / 仅此期。engine `updateSeries`：`all`=普通整系列更新；`following`=当期与其后全部期次日期整体平移（保持原间隔，repeat_until 超越则截断但保留当期）；`only`=当期摘出为独立单次活动（例外），系列保留其余期次，摘空则退化为非循环空壳。守卫：非循环拒绝 / Started 只允许 all / 当期 done 只允许 all。S12 测试 6 条。
 - **周视图时间网格（新，2026-08-30）**：日历卡片月/周切换（`calMode`）。周视图 = 7 列 × 6:00~23:00 时间轴（40px/h），时间定位色块（计划色左边条；done=绿淡/skipped=灰删除线/future=虚线半透明），全天/弹性活动收顶部条区；点表头选日、点空白时间格 = 该日该钟点新建（预填 HH:00）、点色块 = 编辑；下方保留当日日程表。深色主题同步覆盖。
 - **ICS 导出（新，2026-08-30，仅导出）**：`src/services/ics.js` `buildICS` 纯函数 + `ICS.export`。循环系列展开 occurrences[] 为多 VEVENT（保留历史），Planned→TENTATIVE / done→CONFIRMED / skipped·Failed→CANCELLED；有时间为本地浮时（DTSTART/DTEND），无时间为全天（次日 DTEND）；SUMMARY/DESCRIPTION/CATEGORIES 转义；75 字节行折叠。统计页「数据管理」新增「📅 导出日历 (ICS)」：native 存 Documents/exports，web 触发下载。单机闭环不回导（往返丢账本字段）。
-- **视图瘦身 + 目标归档（2026-08-30）**：目标新增轻态机 `GOAL_STATES/GOAL_TRANSITIONS`（Active → Completed → Archived，`setGoalStatus`）；旧库 status 幂等回落 Active（不依赖版本号）。「目标与计划」Tab：Archived 目标收进「📦 已归档（N）」折叠组（默认收起，会话记忆），主视图只留 Active/Completed；目标卡片加状态选择器；计划内活动列表默认前 20 条 + 「展开剩余 N 条 ▾」（会话记忆）。
+- **视图瘦身 + 三级归档降级（2026-08-30）**：归档 = 从主视图降级，收进「已归档」折叠区，三级统一：
+  - 活动（Activity）Archived → 看板 Done 列移除，收进「📦 已归档」折叠区（只读不可拖回）；日历 byDay 跳过；计划内活动列表过滤 + 「📦 已归档（N）」折叠区
+  - 计划（Plan）Archived → 目标下收进「📦 已归档计划（N）」折叠区（默认收起）
+  - 目标（Goal）Archived → 收进「📦 已归档（N）」目标折叠组（默认收起）；状态菜单收进目标卡片「⋯」弹窗（不挤占卡片位置，含 状态/归档/恢复）；目标轻态机 Active→Completed→Archived（`setGoalStatus`），旧库 status 幂等回落 Active
+  - 计划内活动列表默认前 20 条 + 「展开剩余 N 条 ▾」（防撑爆）
 - **预设收支一键完成（新，2026-08-29，多资源版）**：活动可预设 `preset_expenses/preset_incomes`（多资源数组，同 Goods.costs[]），计划可设 `default_expenses/default_incomes`（新建该计划下活动自动继承，快照式）；
   有预设的 Started 活动点「完成」= 一键入账（产出标题=活动名，不变量2 天然满足），入账后弹轻确认条「已入账 支出X/收入Y [有要改的吗][关闭]」；
   「有要改的吗」→ 改账弹窗（多行多资源）→ `amendActivityLedger` 走冲正语义重记（不变量5，审计留痕）。无预设活动走原表单，零回归。

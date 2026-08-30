@@ -464,7 +464,7 @@ export function setPlanStatus(db, id, next) {
   return ok();
 }
 
-// 目标状态机（战略层轻态）：Active → Completed → Archived
+// 目标状态机（三级归档统一降级语义）：Active → Completed → Archived
 export function setGoalStatus(db, id, next) {
   const g = db.goals.find((x) => x.id === id);
   if (!g) return fail('目标不存在');

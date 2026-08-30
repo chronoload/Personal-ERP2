@@ -39,7 +39,7 @@ export const PLAN_TRANSITIONS = {
 };
 
 // ---- 目标 (Goal) -----------------------------------------------------
-// 战略层轻态机：Active → Completed → Archived（归档即从主视图退场，保持列表精简）
+// 三级归档（目标/计划/活动）统一降级语义：归档 = 从主视图退场，收进「已归档」折叠区
 export const GOAL_STATES = ['Active', 'Completed', 'Archived'];
 export const GOAL_TRANSITIONS = {
   Active: ['Completed', 'Archived'],

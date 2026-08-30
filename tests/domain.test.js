@@ -60,7 +60,7 @@ test('8C：非法流转被拒绝（Started 回退 Planned）', () => {
   assert.equal(E.setActivityStatus(db, db.activities[0].id, 'Planned').ok, false); // 无回退
 });
 
-// ---- 目标状态机（战略层轻态）：Active → Completed → Archived ----
+// ---- 目标状态机（三级归档）：Active → Completed → Archived ----
 test('目标状态机：合法流转 / 非法拒绝 / 缺省回落', () => {
   const db = freshDB();
   E.createGoal(db, { title: '健康' });

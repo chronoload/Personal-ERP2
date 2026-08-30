@@ -60,9 +60,11 @@ function overlapWin(w1, w2) { return !!(w1 && w2) && w1.start < w2.end && w2.sta
 
 // 按日分组；循环系列展开 occurrences[] 为每日独立条目：
 //   当前期（=planned_date）→ 非虚拟（活卡，可开始/完成）；其余期次 → 虚拟条目（已办/跳过标记 or 未来待做）
+// 活动级归档 = 隐藏：Archived 活动（含其系列全部期次）不进日历
 function buildByDay(db) {
   const byDay = {};
   for (const a of db.activities) {
+    if (a.status === 'Archived') continue; // 已归档 → 日历退场（历史存档）
     if (a.repeat && Array.isArray(a.occurrences) && a.occurrences.length) {
       const cur = a.planned_date ? normDate(a.planned_date) : null;
       for (const o of a.occurrences) {

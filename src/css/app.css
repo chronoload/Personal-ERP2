@@ -195,6 +195,11 @@ h1, h2, h3 { margin: 0; }
 .kanban-head { font-size: 12.5px; font-weight: 800; color: #4a5260; display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 10px; }
 .kanban-head .cnt { background: #e6e9ef; border-radius: 999px; padding: 1px 9px; font-size: 11px; }
 .kanban-body { display: flex; flex-direction: column; gap: 8px; }
+.kanban-arch { margin-top: 12px; border: 1px dashed #cdd3dd; border-radius: 10px; overflow: hidden; }
+.kanban-arch-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; background: #f7f8fa; font-size: 12.5px; }
+.kanban-arch-head:hover { background: #f0f1f6; }
+.kanban-arch-body { display: flex; flex-direction: column; gap: 8px; padding: 10px; opacity: .8; }
+.kanban-arch-body .kanban-card { cursor: default; }
 .kanban-add { border: 1px dashed #cdd3dd; border-radius: 8px; padding: 16px 8px; text-align: center; color: var(--muted); font-size: 12px; cursor: pointer; }
 .kanban-add:hover { background: #eef1f6; color: #4a5260; border-color: #a9b1bf; }
 .kanban-card {
@@ -289,6 +294,10 @@ h1, h2, h3 { margin: 0; }
 .plan-acts-head { display: flex; justify-content: space-between; padding: 5px 10px; font-size: 11px; font-weight: 800; color: #4a5260; background: #f7f9fc; border-bottom: 1px solid #eef1f5; }
 .plan-acts-more { padding: 6px 10px; font-size: 11px; font-weight: 700; color: var(--blue); cursor: pointer; text-align: center; background: #fbfcfe; border-top: 1px solid #eef1f5; }
 .plan-acts-more:hover { background: #f2f5fa; }
+.plan-arch { margin: 8px 0 2px; border: 1px dashed #d5dbe4; border-radius: 9px; overflow: hidden; }
+.plan-arch-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 11.5px; font-weight: 800; color: #57626f; cursor: pointer; background: #f7f9fc; }
+.plan-arch-head:hover { background: #f0f1f6; }
+.plan-arch-body { opacity: .8; }
 .plan-act { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12.5px; border-bottom: 1px solid #f2f4f7; cursor: pointer; transition: background .12s; }
 .plan-act:last-child { border-bottom: none; }
 .plan-act:hover { background: #f4f6fa; }
@@ -727,12 +736,18 @@ html[data-theme="dark"] .modal-box,
 html[data-theme="dark"] .act-menu { background: #1b2130; }
 html[data-theme="dark"] .kanban-col { background: #181e2c; }
 html[data-theme="dark"] .kanban-col.drag-over { background: #20293c; }
+html[data-theme="dark"] .kanban-arch { border-color: #2e3850; }
+html[data-theme="dark"] .kanban-arch-head { background: #1b2130; }
+html[data-theme="dark"] .kanban-arch-head:hover { background: #232b3d; }
 html[data-theme="dark"] .kc-out { background: #202839; border-color: #2c3549; }
 html[data-theme="dark"] .kc-meta .badge { opacity: .92; }
 html[data-theme="dark"] .plan-act:hover { background: #232b3d; }
 html[data-theme="dark"] .plan-acts-head { background: #202839; border-color: #2c3549; color: #aab4c8; }
 html[data-theme="dark"] .plan-acts-more { background: #1b2130; color: #7fa8d8; border-color: #2a3245; }
 html[data-theme="dark"] .plan-acts-more:hover { background: #232b3d; }
+html[data-theme="dark"] .plan-arch { border-color: #2e3850; }
+html[data-theme="dark"] .plan-arch-head { background: #1b2130; color: #aab4c8; }
+html[data-theme="dark"] .plan-arch-head:hover { background: #232b3d; }
 html[data-theme="dark"] .goal-head { background: #181e2c; }
 html[data-theme="dark"] .kanban-add:hover, html[data-theme="dark"] .plan-add:hover { background: #2c3549; color: #c6cddb; border-color: #3a4a66; }
 

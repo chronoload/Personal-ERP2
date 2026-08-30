@@ -11,7 +11,9 @@ import { Prefs } from '../store/prefs.js';
 const collapsedGoals = new Set(Prefs.load().collapsedGoals || []);
 const collapsedPlans = new Set(Prefs.load().collapsedPlans || []);
 const expandedPlans = new Set(); // 计划内活动列表「展开更多」（会话内记忆）
-let archivedExpanded = false; // 「已归档」折叠组（会话内记忆，默认收起）
+const planArchOpen = new Set();  // 计划内「已归档活动」折叠区（会话内记忆，默认收起）
+const archPlansOpen = new Set(); // 目标下「已归档计划」折叠区（会话内记忆，默认收起）
+let archivedExpanded = false;    // 「已归档目标」折叠组（会话内记忆，默认收起）
 // 内联 onclick 字符串参数转义：反斜杠/单引号按 JS 转义，双引号按 HTML 属性转义
 function jsStr(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -34,15 +36,57 @@ export function togglePlan(id) {
   collapsedPlans.has(id) ? collapsedPlans.delete(id) : collapsedPlans.add(id);
   persistCollapsed(); App.refresh();
 }
-// 归档折叠组展开/收起（仅会话内记忆，默认收起保持主视图精简）
-export function toggleArchived() {
-  archivedExpanded = !archivedExpanded;
-  App.refresh();
-}
 // 计划内活动列表展开/收起（超 20 条时）
 export function togglePlanActs(pid) {
   expandedPlans.has(pid) ? expandedPlans.delete(pid) : expandedPlans.add(pid);
   App.refresh();
+}
+// 计划内「已归档活动」折叠区展开/收起（活动级归档 = 隐藏，历史随时可展开）
+export function togglePlanArch(pid) {
+  planArchOpen.has(pid) ? planArchOpen.delete(pid) : planArchOpen.add(pid);
+  App.refresh();
+}
+// 目标下「已归档计划」折叠区展开/收起（计划级归档 = 降级，历史随时可展开）
+export function toggleArchPlans(gid) {
+  archPlansOpen.has(gid) ? archPlansOpen.delete(gid) : archPlansOpen.add(gid);
+  App.refresh();
+}
+// 「已归档目标」折叠组展开/收起（默认收起保持主视图精简）
+export function toggleArchived() {
+  archivedExpanded = !archivedExpanded;
+  App.refresh();
+}
+// 目标状态切换（状态菜单收进「⋯」弹窗，不挤占卡片位置）
+export function setGoalStatus(gid, status) {
+  const r = App.engine.setGoalStatus(App.db, gid, status);
+  if (!r.ok) return toast(r.error, 'err');
+  App.refresh();
+}
+// 「⋯」菜单：状态切换 + 归档/恢复 + 删除（紧凑入口，包裹状态菜单）
+export function openGoalMenu(gid) {
+  const g = App.db.goals.find((x) => x.id === gid);
+  if (!g) return;
+  const st = g.status || 'Active';
+  const m = openModal({
+    title: `目标 · ${esc(g.title)}`,
+    bodyHTML: `
+      <div class="field"><label>状态</label>
+        <select id="f-gstatus">
+          <option value="Active" ${st === 'Active' ? 'selected' : ''}>进行中</option>
+          <option value="Completed" ${st === 'Completed' ? 'selected' : ''}>已完成</option>
+          <option value="Archived" ${st === 'Archived' ? 'selected' : ''}>已归档</option>
+        </select>
+      </div>
+      <div class="muted" style="margin-top:6px">归档 = 目标从主视图降级，收进「📦 已归档」折叠区；恢复即重新参与日常视图。</div>`,
+    footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>应用</button>`,
+  });
+  m.q('[data-cancel]').onclick = () => m.close();
+  m.q('[data-save]').onclick = () => {
+    const next = m.q('#f-gstatus').value;
+    m.close();
+    if (next === st) return;
+    setGoalStatus(gid, next);
+  };
 }
 export function openGoalModal(editId) {
   const g = editId ? App.db.goals.find((x) => x.id === editId) : null;
@@ -167,32 +211,38 @@ export function setPlanStatus(pid, status) {
   App.refresh();
 }
 
-// 目标状态：Active → Completed → Archived（归档即从主视图退场，可展开查看历史）
-export function setGoalStatus(gid, status) {
-  const r = App.engine.setGoalStatus(App.db, gid, status);
-  if (!r.ok) return toast(r.error, 'err');
-  App.refresh();
-}
-
 function planCard(App, p) {
   const { engine } = App;
   const cost = engine.planCost(App.db, p.id);
   const blocked = engine.isPlanBlocked(App.db, p.id);
   const pct = p.budget !== null ? Math.min(100, (cost / p.budget) * 100) : 0;
-  const acts = App.db.activities.filter((a) => (a.plan_ids || []).includes(p.id));
+  const allActs = App.db.activities.filter((a) => (a.plan_ids || []).includes(p.id));
+  // 活动级归档 = 隐藏：Archived 活动默认不进活动列表，收进「已归档」折叠区（历史存档）
+  const acts = allActs.filter((a) => a.status !== 'Archived');
+  const archActs = allActs.filter((a) => a.status === 'Archived');
   const collapsed = collapsedPlans.has(p.id);
-  // 活动列表防撑爆：默认最多展示 PLAN_ACT_LIMIT 条，超出收起（视图瘦身）
+  const archOpen = planArchOpen.has(p.id);
+  // 活动列表防撑爆：默认最多展示 LIMIT 条，超出收起（视图瘦身）
   const LIMIT = 20;
   const shown = expandedPlans.has(p.id) ? acts : acts.slice(0, LIMIT);
   const more = acts.length > LIMIT && !expandedPlans.has(p.id);
-  const actRows = shown.map((a) => `
+  const actRow = (a) => `
     <div class="plan-act" onclick="event.stopPropagation();App.overview.openActModal('${jsStr(a.id)}')" title="点击编辑">
       <span class="grow">
         ${esc(a.title)}${a.planned_minutes ? ` <span class="muted">· ${a.planned_minutes}m</span>` : ''}
         ${a.note ? `<div class="plan-act-note">📝 ${esc(a.note)}</div>` : ''}
       </span>
       ${badge(a.status)}
-    </div>`).join('');
+    </div>`;
+  const actRows = shown.map(actRow).join('');
+  const archHTML = archActs.length ? `
+    <div class="plan-arch">
+      <div class="plan-arch-head" onclick="event.stopPropagation();App.goals.togglePlanArch('${jsStr(p.id)}')">
+        <span class="collapse-btn">${archOpen ? '▾' : '▸'}</span>
+        <b>📦 已归档（${archActs.length}）</b>
+      </div>
+      <div class="plan-arch-body" style="${archOpen ? '' : 'display:none'}">${archActs.map(actRow).join('')}</div>
+    </div>` : '';
   return `
     <div class="plan-card ${collapsed ? 'collapsed' : ''}" style="border-left:4px solid ${safeColor(p.color) || '#e5e8ee'}">
       <div class="plan-head" onclick="App.goals.togglePlan('${jsStr(p.id)}')" title="点击收起 / 展开">
@@ -200,7 +250,7 @@ function planCard(App, p) {
         <div class="grow">
           <span class="plan-chip" style="background:${safeColor(p.color) || '#e5e8ee'}"></span>
           <b>${esc(p.title)}</b> ${badge(p.status)}
-          <span class="muted">${acts.length} 活动</span>
+          <span class="muted">${acts.length} 活动${archActs.length ? ` · ${archActs.length} 归档` : ''}</span>
         </div>
         <span class="muted">预算 ${p.budget === null ? '∞' : fmtNum(p.budget)} · 已耗 ${fmtNum(cost)}${p.budget !== null ? ` · ${pct.toFixed(0)}%` : ''}</span>
       </div>
@@ -214,6 +264,7 @@ function planCard(App, p) {
         ${actRows}
         ${more ? `<div class="plan-acts-more" onclick="event.stopPropagation();App.goals.togglePlanActs('${jsStr(p.id)}')">展开剩余 ${acts.length - LIMIT} 条 ▾</div>` : (expandedPlans.has(p.id) ? `<div class="plan-acts-more" onclick="event.stopPropagation();App.goals.togglePlanActs('${jsStr(p.id)}')">收起 ▴</div>` : '')}
       </div>` : ''}
+      ${archHTML}
       <div class="row-gap" style="margin-top:8px" onclick="event.stopPropagation()">
         <button class="btn sm primary" onclick="App.overview.openActModal(null,'${jsStr(p.id)}')">＋ 活动</button>
         <label class="status-select">状态
@@ -243,46 +294,53 @@ export function render(App, el) {
     return;
   }
   const goalBlock = (g) => {
-    const plans = db.plans.filter((p) => p.goal_id === g.id);
+    const allPlans = db.plans.filter((p) => p.goal_id === g.id);
+    // 计划级归档 = 降级：Archived 计划收进「📦 已归档计划」折叠区（默认收起）
+    const plans = allPlans.filter((p) => p.status !== 'Archived');
+    const archPlans = allPlans.filter((p) => p.status === 'Archived');
     const gcoll = collapsedGoals.has(g.id);
-    const gStatus = g.status || 'Active';
+    const apOpen = archPlansOpen.has(g.id);
+    const archPlansHTML = archPlans.length ? `
+      <div class="plan-arch">
+        <div class="plan-arch-head" onclick="event.stopPropagation();App.goals.toggleArchPlans('${jsStr(g.id)}')">
+          <span class="collapse-btn">${apOpen ? '▾' : '▸'}</span>
+          <b>📦 已归档计划（${archPlans.length}）</b>
+        </div>
+        <div class="plan-arch-body" style="${apOpen ? '' : 'display:none'}">
+          <div class="plan-list">${archPlans.map((p) => planCard(App, p)).join('')}</div>
+        </div>
+      </div>` : '';
     return `
       <div class="goal-block ${gcoll ? 'collapsed' : ''}">
         <div class="goal-head" onclick="App.goals.toggleGoal('${jsStr(g.id)}')" title="点击收起 / 展开">
           <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleGoal('${jsStr(g.id)}')" aria-label="收起/展开">${gcoll ? '▸' : '▾'}</button>
           <div class="grow">
-            <b class="goal-title">${gStatus === 'Archived' ? '📦 ' : '🎯 '}${esc(g.title)}</b>
-            <span class="muted">${esc(g.desc || '')} · ${plans.length} 个计划</span>
+            <b class="goal-title">🎯 ${esc(g.title)}</b>
+            <span class="muted">${esc(g.desc || '')} · ${plans.length} 个计划${archPlans.length ? ` · ${archPlans.length} 归档` : ''}</span>
           </div>
           <div class="row-gap" onclick="event.stopPropagation()">
-            <label class="status-select">状态
-              <select onchange="App.goals.setGoalStatus('${jsStr(g.id)}', this.value)">
-                <option value="Active" ${gStatus === 'Active' ? 'selected' : ''}>进行中</option>
-                <option value="Completed" ${gStatus === 'Completed' ? 'selected' : ''}>已完成</option>
-                <option value="Archived" ${gStatus === 'Archived' ? 'selected' : ''}>已归档</option>
-              </select>
-            </label>
             <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 计划</button>
             <button class="btn sm" onclick="App.goals.openGoalModal('${jsStr(g.id)}')">编辑</button>
-            <button class="btn sm danger" onclick="App.goals.delGoal('${jsStr(g.id)}')">删除</button>
+            <button class="btn sm" onclick="App.goals.openGoalMenu('${jsStr(g.id)}')" title="状态 / 归档 / 删除">⋯</button>
           </div>
         </div>
         <div class="goal-plans ${gcoll ? 'hidden' : ''}">
-        ${plans.length ? `<div class="plan-list">${plans.map((p) => planCard(App, p)).join('')}</div>` : `<div class="plan-add" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 点击添加计划</div>`}
+        ${plans.length ? `<div class="plan-list">${plans.map((p) => planCard(App, p)).join('')}</div>` : (archPlans.length ? '' : `<div class="plan-add" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 点击添加计划</div>`)}
+        ${archPlansHTML}
         </div>
       </div>`;
   };
-  const active = db.goals.filter((g) => (g.status || 'Active') !== 'Archived');
-  const archived = db.goals.filter((g) => (g.status || 'Active') === 'Archived');
-  // 归档目标收进折叠组：主视图精简，历史随时可展开查看（视图瘦身）
-  const archivedHTML = archived.length ? `
+  // 目标级归档 = 降级：Archived 目标收进「📦 已归档」折叠组（默认收起，历史随时可展开）
+  const activeGoals = db.goals.filter((g) => (g.status || 'Active') !== 'Archived');
+  const archivedGoals = db.goals.filter((g) => (g.status || 'Active') === 'Archived');
+  const archivedHTML = archivedGoals.length ? `
     <div class="goal-block">
       <div class="goal-head" onclick="App.goals.toggleArchived()" title="点击展开 / 收起归档目标" style="opacity:.75">
         <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleArchived()" aria-label="展开/收起">${archivedExpanded ? '▾' : '▸'}</button>
-        <div class="grow"><b class="goal-title">📦 已归档（${archived.length}）</b><span class="muted">目标 · 历史存档，不参与日常视图</span></div>
+        <div class="grow"><b class="goal-title">📦 已归档（${archivedGoals.length}）</b><span class="muted">目标 · 历史存档，默认从主视图隐藏</span></div>
       </div>
       <div class="goal-plans ${archivedExpanded ? '' : 'hidden'}">
-        <div class="plan-list" style="opacity:.8">${archived.map(goalBlock).join('')}</div>
+        <div class="plan-list" style="opacity:.8">${archivedGoals.map(goalBlock).join('')}</div>
       </div>
     </div>` : '';
   el.innerHTML = `
@@ -291,7 +349,7 @@ export function render(App, el) {
         <h3>目标 Goals <span class="muted">1 : N 计划</span></h3>
         <button class="btn sm" onclick="App.goals.openGoalModal()">＋ 新建目标</button>
       </div>
-      ${active.map(goalBlock).join('')}
+      ${activeGoals.map(goalBlock).join('')}
       ${archivedHTML}
     </div>
   `;
