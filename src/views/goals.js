@@ -252,9 +252,9 @@ function planCard(App, p) {
           <b>${esc(p.title)}</b> ${badge(p.status)}
           <span class="muted">${acts.length} 活动${archActs.length ? ` · ${archActs.length} 归档` : ''}</span>
         </div>
-        <span class="muted">预算 ${p.budget === null ? '∞' : fmtNum(p.budget)} · 已耗 ${fmtNum(cost)}${p.budget !== null ? ` · ${pct.toFixed(0)}%` : ''}</span>
       </div>
       <div class="plan-details ${collapsed ? 'hidden' : ''}">
+      <div class="muted" style="margin-bottom:6px">预算 ${p.budget === null ? '∞' : fmtNum(p.budget)} · 已耗 ${fmtNum(cost)}${p.budget !== null ? ` · ${pct.toFixed(0)}%` : ''}</div>
       ${p.budget !== null ? `
         <div class="progress"><i class="bar ${blocked ? 'danger' : pct >= 70 ? 'warn' : ''}" style="width:${pct}%"></i></div>
         ${blocked ? '<div class="muted warn">⛔ 硬约束触发：禁止新活动开始/完成</div>' : ''}` : ''}
@@ -318,15 +318,15 @@ export function render(App, el) {
             <b class="goal-title">🎯 ${esc(g.title)}</b>
             <span class="muted">${esc(g.desc || '')} · ${plans.length} 个计划${archPlans.length ? ` · ${archPlans.length} 归档` : ''}</span>
           </div>
-          <div class="row-gap" onclick="event.stopPropagation()">
-            <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 计划</button>
-            <button class="btn sm" onclick="App.goals.openGoalModal('${jsStr(g.id)}')">编辑</button>
-            <button class="btn sm" onclick="App.goals.openGoalMenu('${jsStr(g.id)}')" title="状态 / 归档 / 删除">⋯</button>
-          </div>
         </div>
         <div class="goal-plans ${gcoll ? 'hidden' : ''}">
         ${plans.length ? `<div class="plan-list">${plans.map((p) => planCard(App, p)).join('')}</div>` : (archPlans.length ? '' : `<div class="plan-add" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 点击添加计划</div>`)}
         ${archPlansHTML}
+        <div class="row-gap" style="margin-top:10px" onclick="event.stopPropagation()">
+          <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 计划</button>
+          <button class="btn sm" onclick="App.goals.openGoalModal('${jsStr(g.id)}')">编辑</button>
+          <button class="btn sm" onclick="App.goals.openGoalMenu('${jsStr(g.id)}')" title="状态 / 归档 / 删除">⋯</button>
+        </div>
         </div>
       </div>`;
   };
