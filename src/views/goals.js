@@ -312,7 +312,7 @@ export function render(App, el) {
       </div>` : '';
     return `
       <div class="goal-block ${gcoll ? 'collapsed' : ''}">
-        <div class="goal-head" onclick="App.goals.toggleGoal('${jsStr(g.id)}')" title="点击收起 / 展开">
+        <div class="goal-head" data-gid="${jsStr(g.id)}" title="点击收起 / 展开 · 长按 状态 / 归档">
           <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleGoal('${jsStr(g.id)}')" aria-label="收起/展开">${gcoll ? '▸' : '▾'}</button>
           <div class="grow">
             <b class="goal-title">🎯 ${esc(g.title)}</b>
@@ -321,7 +321,6 @@ export function render(App, el) {
           <div class="row-gap" onclick="event.stopPropagation()">
             <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 计划</button>
             <button class="btn sm" onclick="App.goals.openGoalModal('${jsStr(g.id)}')">编辑</button>
-            <button class="btn sm" onclick="App.goals.openGoalMenu('${jsStr(g.id)}')" title="状态 / 归档">⋯</button>
             <button class="btn sm danger" onclick="App.goals.delGoal('${jsStr(g.id)}')">删除</button>
           </div>
         </div>
@@ -354,4 +353,29 @@ export function render(App, el) {
       ${archivedHTML}
     </div>
   `;
+  // 目标卡片：短按收起/展开，长按（500ms）弹状态/归档菜单（替代 ⋯ 按钮，头部保持精简）
+  const LONG_PRESS = 500;
+  el.querySelectorAll('.goal-head[data-gid]').forEach((head) => {
+    const gid = head.dataset.gid;
+    let timer = null, sx = 0, sy = 0, moved = false;
+    head.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button, select, input')) return; // 按钮区不触发长按/点击折叠
+      moved = false; sx = e.clientX; sy = e.clientY;
+      timer = setTimeout(() => { timer = null; openGoalMenu(gid); }, LONG_PRESS);
+    });
+    head.addEventListener('pointermove', (e) => {
+      if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) {
+        moved = true;
+        if (timer) { clearTimeout(timer); timer = null; } // 发生移动（滚动）→ 取消长按，避免误弹
+      }
+    });
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    head.addEventListener('pointerup', (e) => {
+      if (e.target.closest('button, select, input')) return;
+      if (timer) { clearTimeout(timer); timer = null; if (!moved) toggleGoal(gid); }
+      else if (e.target.closest('.collapse-btn')) { /* collapse 按钮自带 toggle */ }
+    });
+    head.addEventListener('pointercancel', cancel);
+    head.addEventListener('pointerleave', cancel);
+  });
 }
