@@ -797,3 +797,93 @@ html[data-theme="dark"] .dash-nav-item { background: #1b2130; }
 /* HUD 面板本就深色，略调文字对比 */
 html[data-theme="dark"] #hud-root { background: rgba(12, 15, 22, .96); }
 /* 夜间模式由 JS 解析偏好（auto 跟随 prefers-color-scheme）后写入 <html data-theme>：dark / light */
+
+/* ============================================================
+   UI 质感增强（enriched · 2026-08-30）
+   行式收支区 / 输入光晕 / 分区线 / 提醒条 / 弹窗层次
+   ============================================================ */
+/* 输入控件：placeholder 柔化 + hover 边框 + 蓝色焦点光晕 */
+.field input::placeholder, .field textarea::placeholder,
+.pr-amt::placeholder, .pr-note::placeholder { color: #a6afbd; }
+.field input:hover, .field select:hover, .field textarea:hover { border-color: #c6cedb; }
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--blue); box-shadow: 0 0 0 3px rgba(74, 127, 191, .16);
+}
+/* 多资源收支行（完成 / 预设 / 改账共用）：轻卡片底 + hover 高亮 */
+.preset-row {
+  background: #f7f9fc; border: 1px solid #e8ecf3; border-radius: 10px;
+  padding: 6px 8px; transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.preset-row:hover { background: #fff; border-color: #d8dfe9; box-shadow: 0 2px 8px rgba(16, 24, 40, .06); }
+.preset-row select, .preset-row input {
+  border: 1px solid #dfe5ee; border-radius: 7px; background: #fff;
+  padding: 6px 8px; font-size: 12.5px; color: var(--text);
+  outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.preset-row select:focus, .preset-row input:focus {
+  border-color: var(--blue); box-shadow: 0 0 0 3px rgba(74, 127, 191, .16);
+}
+.preset-row .pr-del {
+  width: 24px; height: 24px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; line-height: 1; font-size: 11px;
+  color: #9aa3b0; background: transparent; border-color: transparent; transition: all .15s;
+}
+.preset-row .pr-del:hover { color: var(--red); background: #fdf2f3; border-color: #eccfd2; }
+/* 分区标题：编号左置 + 添加按钮右对齐 + 虚线分隔 */
+.step-divider {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  margin: 18px 0 10px; padding-bottom: 7px; border-bottom: 1px dashed #dfe5ee;
+  font-weight: 800; font-size: 12.5px; letter-spacing: .3px; color: var(--text);
+}
+/* 提醒条：左侧强调色条 + 柔和渐变底 */
+.callout {
+  border: 1px solid #dde5f0; border-left: 3px solid var(--blue); border-radius: 10px;
+  background: linear-gradient(180deg, #f6f9fd, #f2f6fb); padding: 10px 12px;
+  font-size: 12.5px; margin-bottom: 8px;
+}
+.callout.warn {
+  border-color: #f2dcab; border-left: 3px solid var(--amber);
+  background: linear-gradient(180deg, #fffaf0, #fdf6e7); color: #7c5a10;
+}
+.callout.warn b { color: #b45309; }
+/* 弹窗：更圆润 + 层次阴影 + 头尾分隔 */
+.modal-panel {
+  border: 1px solid #eef1f6; border-radius: 18px;
+  box-shadow: 0 30px 70px rgba(16, 24, 40, .28), 0 4px 18px rgba(16, 24, 40, .08);
+}
+.modal-head { padding: 18px 20px 0; }
+.modal-body { padding: 8px 20px 10px; }
+.modal-foot {
+  padding: 14px 20px 18px; margin-top: 6px;
+  background: #fafbfd; border-top: 1px solid #f0f2f6; border-radius: 0 0 18px 18px;
+}
+/* 目标 / 计划卡片头部 hover 微亮 */
+.goal-head { transition: background .15s; }
+.goal-head:hover { background: #f1f3f7; }
+/* 深色同步 */
+html[data-theme="dark"] .field input::placeholder, html[data-theme="dark"] .field textarea::placeholder,
+html[data-theme="dark"] .pr-amt::placeholder, html[data-theme="dark"] .pr-note::placeholder { color: #5a6478; }
+html[data-theme="dark"] .preset-row { background: #161c2a; border-color: #2a3245; }
+html[data-theme="dark"] .preset-row:hover { background: #1b2130; border-color: #3a4a66; box-shadow: none; }
+html[data-theme="dark"] .preset-row select, html[data-theme="dark"] .preset-row input { background: #1b2130; border-color: #2a3245; color: #e6e9f1; }
+html[data-theme="dark"] .preset-row .pr-del:hover { color: #e06a74; background: #2a2330; border-color: #4a2f35; }
+html[data-theme="dark"] .step-divider { border-bottom-color: #2a3245; }
+html[data-theme="dark"] .callout { background: #161c2a; border-color: #2a3245; border-left-color: #6ea2dd; }
+html[data-theme="dark"] .callout.warn { background: #241f12; border-color: #4a3d1e; border-left-color: #e0a94f; color: #d9b45f; }
+html[data-theme="dark"] .modal-panel { border-color: #2a3245; }
+html[data-theme="dark"] .modal-foot { background: #161c2a; border-top-color: #2a3245; }
+html[data-theme="dark"] .goal-head:hover { background: #1c2333; }
+
+/* ===== 打印样式：智能简报 PDF 导出（去身份聚合视图，一页一页分页） ===== */
+@media print {
+  body { background: #fff !important; }
+  body * { visibility: hidden; }
+  #report-print, #report-print * { visibility: visible; }
+  #report-print { position: absolute; left: 0; top: 0; width: 100%; }
+  #report-print .report-slide { page-break-after: always; break-after: page; padding: 24px; }
+  #report-print .report-slide:last-child { page-break-after: auto; break-after: auto; }
+  #report-print .dash-nav, #report-print .dash-nav-item { display: none !important; }
+  #report-print .dash-track { display: block !important; width: auto !important; transform: none !important; transition: none !important; }
+  #report-print .dash-page { flex: none !important; width: auto !important; min-width: 0 !important; padding: 0 !important; }
+  #report-print .dash-pager { height: auto !important; overflow: visible !important; }
+}
