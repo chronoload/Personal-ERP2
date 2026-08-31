@@ -183,7 +183,10 @@ export function recommendNext(candidates, feats, opts = {}) {
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
-// ---- 习惯推导（L3 教练面 · 按历史习惯快速生成新活动，非提醒已有活动）----
+// ---- 顺序推荐（L3 教练面 · 按完成计划的时间顺序 + 历史关联性）----
+// 语义：不是「习惯」（重复性的一般已设成循环活动，不重复推），而是从「已完成活动的时间序列」里
+// 学出计划间的转移关联（做了 A 之后通常接着做 B），推荐「下一个该新建」的计划。
+// 连续相邻相同计划（= 循环连做）不构成转移，自动跳过。
 
 function startHourOf(a) {
   // 兼容时间戳与 'YYYY-M-DTHH:MM' 字符串，取开始时段 "HH:MM"
@@ -198,48 +201,74 @@ function startHourOf(a) {
   return m ? `${String(Number(m[1])).padStart(2, '0')}:${m[2]}` : null;
 }
 
+function aggStats(acts) {
+  // 给定某计划的历史完成活动，聚合平均时长（分钟）+ 最常开始时段 "HH:MM"
+  let totalMin = 0, n = 0;
+  const sc = {};
+  for (const x of acts) {
+    totalMin += x.a.planned_minutes || 0; n++;
+    const hm = startHourOf(x.a);
+    if (hm) sc[hm] = (sc[hm] || 0) + 1;
+  }
+  const mode = Object.entries(sc).sort((a, b) => b[1] - a[1])[0];
+  return {
+    minutes: n ? Math.max(5, Math.round(totalMin / n / 5) * 5) : 0,
+    at: mode ? mode[0] : null,
+  };
+}
+
 /**
- * 从历史已完成活动归纳每个计划的「习惯模板」（频次/平均时长/最常时段/最近完成），
- * 返回「现在最该新建的活动」建议（top 1）。
- * 候选只保留稳定习惯（完成 n ≥ minCount）；排序优先「最近没做」（daysSince 大者前），
- * 兼顾高频（count）。纯函数、仅本地消费、可 node 测试。
+ * 从历史「已完成活动」按完成时间排序得到的计划序列中，学转移关联（prevPlan→nextPlan 计数），
+ * 取「最近完成计划」的最强后继，作为「现在该新建的活动」建议（top 1）。
+ * 连续相邻相同计划跳过（循环连做不构成转移）；转移数 < minTransitions 不强推。
+ * 纯函数、仅本地消费、可 node 测试。
  * @param {object} db { plans, activities }
- * @param {object} opts { now(ms), minCount }
- * @returns {{ planId, title, count, minutes, at, atN, lastDone, daysSince } | null}
+ * @param {object} opts { now(ms), minTransitions }
+ * @returns {{ planId, title, fromPlan, transCount, minutes, at, lastDone, daysSince } | null}
  */
-export function suggestHabitActivity(db, { now = Date.now(), minCount = 2 } = {}) {
+export function suggestNextPlanActivity(db, { now = Date.now(), minTransitions = 2 } = {}) {
   const plans = db.plans || [];
-  const acts = (db.activities || []).filter((a) => a.status === 'Completed' || a.status === 'Reviewed');
   const planTitle = new Map(plans.map((p) => [p.id, p.title]));
-  const stat = new Map(); // planId -> { count, totalMin, startCounts:{HH:MM->n}, lastDone }
-  for (const a of acts) {
-    const am = a.planned_minutes || 0;
-    for (const pid of a.plan_ids || []) {
-      let e = stat.get(pid);
-      if (!e) { e = { count: 0, totalMin: 0, startCounts: {}, lastDone: 0 }; stat.set(pid, e); }
-      e.count++;
-      e.totalMin += am;
-      e.lastDone = Math.max(e.lastDone, a.actual_end || a.created || 0);
-      const hm = startHourOf(a);
-      if (hm) e.startCounts[hm] = (e.startCounts[hm] || 0) + 1;
-    }
+  const acts = (db.activities || [])
+    .filter((a) => (a.status === 'Completed' || a.status === 'Reviewed') && Array.isArray(a.plan_ids) && a.plan_ids.length)
+    .map((a) => ({ t: a.actual_end ?? a.created ?? 0, pid: a.plan_ids[0], a }))
+    .filter((x) => x.t > 0)
+    .sort((a, b) => a.t - b.t); // 完成时间升序 → 时间顺序
+  if (acts.length < 2) return null;
+
+  const trans = new Map(); // "prev->next" -> count
+  const lastDoneByPlan = new Map();
+  for (let i = 0; i < acts.length; i++) {
+    const cur = acts[i];
+    lastDoneByPlan.set(cur.pid, Math.max(lastDoneByPlan.get(cur.pid) || 0, cur.t));
+    if (i === 0) continue;
+    const prev = acts[i - 1];
+    if (prev.pid === cur.pid) continue; // 相邻相同（循环连做）不构成转移
+    const key = prev.pid + '->' + cur.pid;
+    trans.set(key, (trans.get(key) || 0) + 1);
   }
-  const habits = [];
-  for (const [pid, e] of stat) {
-    if (e.count < minCount) continue;
-    const mode = Object.entries(e.startCounts).sort((a, b) => b[1] - a[1])[0];
-    habits.push({
-      planId: pid,
-      title: planTitle.get(pid) || '',
-      count: e.count,
-      minutes: e.count ? Math.max(5, Math.round(e.totalMin / e.count / 5) * 5) : 0,
-      at: mode ? mode[0] : null,
-      atN: mode ? mode[1] : 0,
-      lastDone: e.lastDone,
-      daysSince: e.lastDone ? Math.max(0, Math.floor((now - e.lastDone) / 86400000)) : 0,
-    });
+  const lastPlan = acts[acts.length - 1].pid; // 最近完成的计划
+  const nextCands = [];
+  for (const [key, count] of trans) {
+    const [from, to] = key.split('->');
+    if (from === lastPlan) nextCands.push({ to, count });
   }
-  if (!habits.length) return null;
-  habits.sort((a, b) => (b.daysSince - a.daysSince) || (b.count - a.count));
-  return habits[0];
+  if (!nextCands.length) return null;
+  nextCands.sort((a, b) => b.count - a.count);
+  const top = nextCands[0];
+  if (top.count < minTransitions) return null; // 转移关联太弱不强推
+
+  const hist = acts.filter((x) => x.pid === top.to);
+  const { minutes, at } = aggStats(hist);
+  const lastDone = lastDoneByPlan.get(top.to) || 0;
+  return {
+    planId: top.to,
+    title: planTitle.get(top.to) || '',
+    fromPlan: planTitle.get(lastPlan) || '',
+    transCount: top.count,
+    minutes,
+    at,
+    lastDone,
+    daysSince: lastDone ? Math.max(0, Math.floor((now - lastDone) / 86400000)) : 0,
+  };
 }

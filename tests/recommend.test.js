@@ -2,7 +2,7 @@
 // L3 推荐机：scheduleScore / minRecommendGuarantee / slotIntoFreeTime / recommendNext（TDD）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scheduleScore, minRecommendGuarantee, slotIntoFreeTime, recommendNext, ucbBonus, suggestHabitActivity } from '../src/domain/recommend.js';
+import { scheduleScore, minRecommendGuarantee, slotIntoFreeTime, recommendNext, ucbBonus, suggestNextPlanActivity } from '../src/domain/recommend.js';
 
 function ms(s) {
   const [d, t] = s.split('T');
@@ -114,54 +114,61 @@ test('L3: 空候选幂等 —— 返回空数组不抛', () => {
   assert.deepEqual(minRecommendGuarantee([], 2), []);
 });
 
-// ---- 习惯推导 suggestHabitActivity（按历史习惯快速生成新活动）----
+// ---- 顺序推荐 suggestNextPlanActivity（按完成时间序列 + 历史关联性）----
 
-function habitDB() {
-  return {
-    schemaVersion: 3, resources: [], rules: [], goals: [],
-    plans: [
-      { id: 'p-write', goal_id: 'g', title: '写作', budget: null, status: 'Active', created: 0 },
-      { id: 'p-run', goal_id: 'g', title: '跑步', budget: null, status: 'Active', created: 0 },
-      { id: 'p-new', goal_id: 'g', title: '新计划', budget: null, status: 'Active', created: 0 },
-    ],
-    outputs: [], valueflows: [], txs: [], goods: [], seq: {},
-    // 写作：稳定习惯，3 次，常 09:00，60 分钟，最近 2 天前完成
-    // 跑步：2 次，常 18:30，30 分钟，最近 6 天前完成（更该补）
-    activities: [
-      { id: 'w1', title: '写作', plan_ids: ['p-write'], status: 'Completed', planned_minutes: 60, planned_start: '2026-8-26T09:00', actual_start: ms('2026-8-26T09:00'), actual_end: ms('2026-8-26T10:00'), created: 0 },
-      { id: 'w2', title: '写作', plan_ids: ['p-write'], status: 'Completed', planned_minutes: 60, planned_start: '2026-8-24T09:00', actual_start: ms('2026-8-24T09:00'), actual_end: ms('2026-8-24T10:00'), created: 0 },
-      { id: 'w3', title: '写作', plan_ids: ['p-write'], status: 'Reviewed', planned_minutes: 60, planned_start: '2026-8-28T09:00', actual_start: ms('2026-8-28T09:00'), actual_end: ms('2026-8-28T10:00'), created: 0 },
-      { id: 'r1', title: '跑步', plan_ids: ['p-run'], status: 'Completed', planned_minutes: 30, planned_start: '2026-8-24T18:30', actual_start: ms('2026-8-24T18:30'), actual_end: ms('2026-8-24T19:00'), created: 0 },
-      { id: 'r2', title: '跑步', plan_ids: ['p-run'], status: 'Completed', planned_minutes: 30, planned_start: '2026-8-25T18:30', actual_start: ms('2026-8-25T18:30'), actual_end: ms('2026-8-25T19:00'), created: 0 },
-    ],
-  };
+const P = { w: 'p-w', r: 'p-r', rd: 'p-rd' };
+// mkDB(seqs)：seqs = [[planId, day, hh, mm, minutes], ...] 数组顺序即「完成时间序列」
+function mkDB(seqs) {
+  const plans = [
+    { id: 'p-w', goal_id: 'g', title: '写作', budget: null, status: 'Active', created: 0 },
+    { id: 'p-r', goal_id: 'g', title: '跑步', budget: null, status: 'Active', created: 0 },
+    { id: 'p-rd', goal_id: 'g', title: '阅读', budget: null, status: 'Active', created: 0 },
+  ];
+  const activities = seqs.map(([pid, d, h, m, min], i) => ({
+    id: 'a' + i, title: '活动', plan_ids: [pid], status: 'Completed', planned_minutes: min,
+    planned_start: `2026-8-${d}T${h}:${m}`,
+    actual_start: ms(`2026-8-${d}T${h}:${m}`),
+    actual_end: ms(`2026-8-${d}T${h}:${m}`) + min * 60000, created: 0,
+  }));
+  return { schemaVersion: 3, resources: [], rules: [], goals: [], plans, outputs: [], valueflows: [], txs: [], goods: [], seq: {}, activities };
 }
 
-test('L3: 习惯推导 —— 稳定习惯聚合 频次/时长/时段，优先推荐最近没做的', () => {
-  const db = habitDB();
-  const now = ms('2026-8-30T12:00');
-  const rec = suggestHabitActivity(db, { now });
-  // 跑步最近完成 8-25（now 8-30 → 4 天前）；写作最近 8-28（2 天前）→ 应推荐跑步
-  assert.equal(rec.planId, 'p-run');
-  assert.equal(rec.title, '跑步');
-  assert.equal(rec.count, 2);
-  assert.equal(rec.minutes, 30);
-  assert.equal(rec.at, '18:30');
-  assert.equal(rec.daysSince, 4);
+test('L3: 顺序推荐 —— 最近完成计划无历史后继 → 不强推', () => {
+  // 序列 写作→跑步→阅读（最后完成=阅读，阅读后无历史）
+  const db = mkDB([[P.w, 1, 9, 0, 60], [P.r, 1, 18, 30, 30], [P.rd, 2, 9, 0, 40]]);
+  assert.equal(suggestNextPlanActivity(db, { now: ms('2026-8-4T12:00') }), null);
 });
 
-test('L3: 习惯推导 —— 无完成记录（< minCount）不构成习惯，返回 null', () => {
-  const db = habitDB();
-  db.activities = []; // 无完成历史
-  const rec = suggestHabitActivity(db, { now: ms('2026-8-30T12:00') });
-  assert.equal(rec, null);
+test('L3: 顺序推荐 —— 学转移关联推最强后继', () => {
+  // 序列 写作→跑步→阅读→跑步→阅读→跑步（最后完成=跑步）
+  // 转移：w→r, r→rd, rd→r, r→rd, rd→r；r→rd ×2 → 推荐阅读
+  const db = mkDB([
+    [P.w, 1, 9, 0, 60], [P.r, 1, 18, 30, 30], [P.rd, 2, 9, 0, 40],
+    [P.r, 2, 18, 30, 30], [P.rd, 3, 9, 0, 40], [P.r, 3, 18, 30, 30],
+  ]);
+  const rec = suggestNextPlanActivity(db, { now: ms('2026-8-4T12:00') });
+  assert.equal(rec.planId, 'p-rd');
+  assert.equal(rec.title, '阅读');
+  assert.equal(rec.fromPlan, '跑步');
+  assert.equal(rec.transCount, 2);
+  assert.equal(rec.minutes, 40); // 阅读历史时长均值
+  assert.equal(rec.at, '09:00'); // 阅读两次都在 09:00
+  assert.equal(rec.daysSince, 1); // 最近阅读 8-3，now 8-4
 });
 
-test('L3: 习惯推导 —— 未达 minCount 的计划被排除，只剩稳定习惯', () => {
-  const db = habitDB();
-  // 跑步只有 1 次完成 → minCount=2 下被排除；只剩写作
-  db.activities = db.activities.filter((a) => !(a.plan_ids?.[0] === 'p-run'));
-  const rec = suggestHabitActivity(db, { now: ms('2026-8-30T12:00') });
-  assert.equal(rec.planId, 'p-write');
-  assert.equal(rec.count, 3);
+test('L3: 顺序推荐 —— 循环连做（相邻相同）不计入转移', () => {
+  // 序列 写作→写作→跑步→阅读→跑步→阅读→跑步（开头相邻相同应跳过）
+  // 转移仍 w→r, r→rd, rd→r, r→rd, rd→r；最近完成=跑步 → 推荐阅读（r→rd 2 次不受污染）
+  const db = mkDB([
+    [P.w, 1, 8, 0, 60], [P.w, 1, 9, 0, 60], [P.r, 1, 18, 30, 30], [P.rd, 2, 9, 0, 40],
+    [P.r, 2, 18, 30, 30], [P.rd, 3, 9, 0, 40], [P.r, 3, 18, 30, 30],
+  ]);
+  const rec = suggestNextPlanActivity(db, { now: ms('2026-8-4T12:00') });
+  assert.equal(rec.planId, 'p-rd');
+  assert.equal(rec.transCount, 2);
+});
+
+test('L3: 顺序推荐 —— 无完成历史（<2）返回 null', () => {
+  const db = mkDB([[P.w, 1, 9, 0, 60]]);
+  assert.equal(suggestNextPlanActivity(db, { now: ms('2026-8-4T12:00') }), null);
 });

@@ -13,7 +13,7 @@ import { System } from './system.js';
 import { Notifications } from './notifications.js';
 import { Prefs } from '../store/prefs.js';
 import { scanDueEvents } from '../domain/schedule.js';
-import { suggestHabitActivity } from '../domain/recommend.js';
+import { suggestNextPlanActivity } from '../domain/recommend.js';
 
 const DISMISS_KEY = 'autopilot_dismissed_v1'; // 当天已忽略：actId / 'plan:'+planId -> 'YYYY-M-D'
 const TRACK_KEY = 'autopilot_notifs_v1';      // 已调度通知登记：nid(string) -> actId
@@ -239,11 +239,11 @@ export const AutoPilot = {
     if (bDone) bDone.onclick = () => { if (el) el.remove(); App.overview.openCompleteModal(over.id); };
   },
 
-  // ---- F6 智能推荐（L3 · 按历史习惯快速生成新活动）----
-  // 语义：不是提醒已有活动，而是从已完成历史归纳「习惯模板」（频次/时长/时段），
-  // 推荐「一键新建」今天的同类活动。User 定调：不限次数。
+  // ---- F6 智能推荐（L3 · 按完成时间顺序 + 历史关联性）----
+  // 语义：非「习惯」（重复性的一般已设成循环活动）；而是从已完成活动的时间序列学计划间
+  // 转移关联（做完 A 通常接着做 B），推荐「一键新建」下一个计划的活动。User 定调：不限次数。
   // 时机：无到点确认条/收尾条/计时全屏/弹窗打扰时弹（绝不堆叠）。
-  // 关闭：推荐条「×」当天不再提该计划；「智能推荐」开关（smartRecommend=false）彻底停用。
+  // 关闭：推荐条「×」当天不再建议该计划；「智能推荐」开关（smartRecommend=false）彻底停用。
   _renderRecBar(App) {
     const prefs = Prefs.load();
     if (prefs.smartRecommend === false) return; // 彻底停用
@@ -255,16 +255,16 @@ export const AutoPilot = {
     const el = document.getElementById('ap-rec-bar');
     if (el) el.remove(); // 先清旧条（单实例），再按最新状态重建
 
-    const rec = suggestHabitActivity(App.db, { now: Date.now() });
-    if (!rec) return; // 尚无稳定习惯
-    if (this._isPlanDismissed(rec.planId)) return; // 今天已忽略该计划习惯 → 不再提
+    const rec = suggestNextPlanActivity(App.db, { now: Date.now() });
+    if (!rec) return; // 尚无足够转移关联
+    if (this._isPlanDismissed(rec.planId)) return; // 今天已忽略该计划 → 不再提
 
     const bar = ensureBar('ap-rec-bar', false);
     const when = rec.at ? ` ${rec.at}` : '';
     const dur = rec.minutes ? ` · ${rec.minutes} 分钟` : '';
     const idle = rec.daysSince > 0 ? ` · ${rec.daysSince} 天没做` : '';
     bar.innerHTML =
-      `<span style="flex:1">💡 习惯「${esc(rec.title)}」${when}${dur}（已 ${rec.count} 次${idle}）</span>` +
+      `<span style="flex:1">💡 接下来「${esc(rec.title)}」${when}${dur}（上次完成「${esc(rec.fromPlan)}」后你通常会做 · ${rec.transCount} 次${idle}）</span>` +
       `<button class="btn sm primary" data-ap-rec-create>一键新建</button>` +
       `<button class="btn sm" data-ap-rec-x title="今天不再提醒">×</button>`;
     const bCreate = bar.querySelector('[data-ap-rec-create]');
