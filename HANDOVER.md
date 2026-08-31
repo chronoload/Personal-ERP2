@@ -1,7 +1,23 @@
 # Personal ERP · 项目交接文档
 
-> 更新日期：2026-08-29 ｜ 版本：release 已构建（app-release.apk，签名 personal-erp.keystore）
-> 本档为发布后二次构建：预设收支一键完成 + 自动失败接入 AutoPilot（F5）。
+> 更新日期：2026-08-30 ｜ 版本：release 已构建（app-release.apk，签名 personal-erp.keystore）
+> 本档为发布后迭代：L4.1 agent MCP 适配器 + 目标"三级归档"交互修正 + 完成弹窗多资源收支 + UI 质感增强。
+
+## 〇、本迭代要点（2026-08-30）
+
+- **L4.1 agent MCP 适配器（`src/services/agentMCP.js`，契约 `docs/api/mcp-agent.md`）**：
+  6 只只读工具（report.weekly/monthly / learn.features / recommend.next / recommend.slot / community.matchPatterns），
+  结果信封 `{ok, tool, version, data|error, warnings?}` 永不抛异常；
+  去身份边界（stripIdentity/stripFeatureIdentity/k-匿名）与授权门槛（communityAuth）齐备；
+  存储接缝 `loadDb()/loadPrefs()/loadAnonSpectrum()` 注入式，node 可测。
+  已按契约对齐：recommend.next 的 limit=1~20/k=0~10、recommend.slot 的 freeMinutes **必填**、
+  候选映射含 plannedStart/deadline、community 输出严格遵循 §3.6 `PatternList`
+  （patterns/localSignature/groupProposal/suppressed）并附 k-匿名抑制警告。
+  测试 `tests/agentMCP.test.js` 13 条，全量 200 绿。
+- **目标"三级归档"交互**：目标/计划/活动三级统一「归档 = 从主视图降级」；
+  目标卡片操作外露保留（＋计划/编辑/删除），状态/归档收进**长按目标卡片**弹菜单（500ms，短按仍收起/展开）。
+- **完成弹窗收支多资源化**：支出/收入改为行式列表（资源+金额+备注+移除），与预设收支/改账同构。
+- **UI 质感增强（CSS）**：收支行轻卡片底、输入焦点光晕、分区虚线、提醒条渐变、弹窗层次阴影（含深色同步）。
 
 > ⚠️ 本仓库已功能冻结（2026-08-24）：项目迁移至 TWS2-Eco monorepo
 > （apps/perp-web SolidJS 重写 + packages/perp-core TS + apps/perp-mobile）。
@@ -231,3 +247,141 @@ RemoteViews 颜色值 background 必须用 drawable 引用；WebView localStorag
 2. **双端一致性**：凡是涉及 localStorage 的能力，都要考虑 WebView 存储被 ROM 清理的风险，
    重要状态走原生 SharedPreferences（参考 timer.js 双写模式）。
 3. **打包三步曲别偷懒**：build → sync → gradle，漏一步就是「功能在 dev 有、APK 里没有」。
+
+## 九、下一代蓝图（2026-08-30 立项 · 路线决策 + L1 报告重构蓝图）
+
+> 本仓库已功能冻结并迁移 TWS2-Eco，但以下「智能推荐机」路线作为**前瞻蓝图**记录于此，
+> 供后续在 TWS2-Eco 落地时作规格依据。此处只落决策与契约，不推代码。
+
+### 路线决策（已锁定）
+
+- **A 核心**：在单用户离线本仓内自底向上建 L1→L3（报告塑型 → 学习引擎 → 推荐机），
+  全部**本地、可离线、零后端**。每个接口从第一天起按 **API/MCP 就绪契约**设计，为 L4 预埋接缝。
+- **L4 社交接缝（C 口径）**：社区学习用**匿名化轨迹签名（trajectory signature）**做**模式匹配**，
+  **不做人找人（people-matching）**。隐私姿态：**永不暴露原始账本、余额、身份**；只共享
+  压缩的、归一化、去身份的『目标→计划→产出』价值流模式序列（保序但剥离时间戳与身份）。
+- **唯一遗留产品决策**（非技术）：L4 是「模式匹配（学习）」还是「人匹配（社交）」——现定为前者。
+
+### 四层架构（严格依赖序）
+
+| 层 | 名称 | 内容 | 产出/契约 |
+|----|------|------|-----------|
+| L1 | 报告塑型 | 周/月报重构：新统计量 + 活动级明细 + 幻灯片（App内滑动 + 导出 PPTX/PDF） | report schema v2 + 幻灯片接口 |
+| L2 | 学习引擎 | 从账本/活动历史提取特征信号（完成率、时间偏差、价值产出） | feature vector 契约 |
+| L3 | 推荐机 | 消费 L2 排名 next-action、空槽调度、反馈回 L1（教练闭环） | recommendation I/O 契约 |
+| L4 | 社区接缝 | 匿名轨迹签名 → 模式匹配学习（未来） | signature + 聚合契约（预埋） |
+
+> **完整四层架构蓝图见 `docs/blueprint-L1-L4.md`**（含 2026-08-30 对抗性评审结论：L1 去身份转换 `stripIdentity`、L3 探索/利用平衡、L4 事件序列签名 + k-匿名、MCP 工具 I/O 钉死）。**L1–L4 已全部实现**（见下「L2–L4 落地」），进入对接/演示阶段。
+
+### L1 报告重构蓝图（本期焦点，已确认需求）
+
+**形式**：App 内可滑动的幻灯片 deck **+** 导出 PowerPoint(PPTX)/PDF。
+**新增统计量**（五个全部入选，超出当前 活动汇总/收支/计划投入/余额/价值流 五模块）：
+1. **活动级明细（exact acts level）**：每活动一行——计划分钟 vs 实际分钟、完成/失败、
+   目标贡献、挂账收支（该活动花/得了什么）。「更聪明地管理」的核心明细层。
+2. **时间估计偏差（planned vs actual）**：每计划 实际/计划 分钟比，暴露长期高估/低估
+   排程（→ L3 更聪明地排期）。
+3. **价值流产出（value-flow yield）**：按目标/计划的 产出(Output/ValueFlow) / (投入用时+资源)，
+   「是否值得做这件事」的量化。
+4. **排程健康（conflicts/shifts）**：本期因冲突自动顺延次数、损失/找回的空闲、时间窗守约率。
+5. **预算/资源趋势 vs 计划预算**：各资源余额期初→期末、vs 计划预算超支告警、充/耗比。
+
+**契约预埋**：L1 的 report 输出须同时发出 **feature vector / 轨迹签名** 所需字段（见 L2/L4），
+使后续无需返工。当前 `report.js buildReport` 为纯函数（时间 by 注入，无 DOM/系统时钟），
+L1 重构须延续此纯度；偏移支持已存在（offset 历史期次）。
+
+### 设计约束（沿用本仓纪律）
+- 领域层纯函数 + 测试（`report.js` 同理，先写测试后实现）
+- UI 只调 `App.report.*`，不直改 db；幻灯片交互在视图层
+- 导出走 officecli 能力（PPTX）或打印样式页（PDF），不引入重型依赖
+
+### L1 实施落地（2026-08-30 完成 · 本仓内，供 TWS2-Eco 迁移时对齐）
+
+**domain（`src/domain/report.js`，纯函数，additive 保留 v1 键）**：`buildReport` 新增
+- `actDetail[]`：活动级明细（`planned_minutes`/`actual_minutes`/`biasRatio`/`goal_ids`/
+  `ledgerAttach{debit,credit,n}`/`outputCount`/`vfYield`/`failed`/`retryCount`/`conflictCount`）。
+  实际耗时优先 `time_logs` 求和，回退 `actual_end-actual_start`，无则 0；弹性活动（`planned_minutes=0`）`biasRatio=null`。
+  本期信号 = 实际结束/开始/创建任一在期。
+- `timeBias`：`{byPlan:[{plan_id,title,actsWithActual,totalPlannedMin,totalActualMin,ratio}], overall}`，
+  仅统计 `planned>0 && actual>0` 的活动。
+- `valueYield`：`{byGoal[], byPlan[]}`，每项 `{goal_id|plan_id, outputCount, vfCount, actsEnded, spentMinutes, yieldDensity}`；
+  只计已结束（Completed/Failed）的投入。
+- `schedHealth`：`{actsWithConflict, totalConflicts, timedActs, flexibleActs, adheredActs}`。
+- `budgetTrend`：`{resources:[{id,name,unit,before,after,net,debit,credit,rechargeRatio}], plans:[{plan_id,title,budget,spend,remaining,overspend}], overspend[]}`；
+  资源净额含冲正（t4 反冲）；计划 spend 仅计活动挂账 credit（冲正不计）。
+- `meta`（L2/L4 特征种子，去身份）：`planCompletion`、`timeBiasVector`（归一化数字向量）、`trajectorySignatures`（占位数组）。
+
+**测试**：`tests/report_v2.test.js` 6 项全绿；全套 `167/167` 通过。
+
+**视图（`src/views/reportSlides.js`，浏览器模块，不 import 进 node 测试）**：
+- `openSlidesReport()` 打开 6 页可滑动 deck（①总览②活动明细③时间偏差④价值产出⑤排程健康⑥预算趋势），
+  复用 `.dash-pager/.dash-track/.dash-page/.dash-nav` CSS（窄屏滑动，桌面纵向堆叠）；pager 逻辑自包含于本模块。
+- `exportPDF()`：打印样式（`@media print` 追加至 `app.css`，一页一页 `break-after: page`）。
+- `exportPPTXBuild()`：**纯前端生成真实 .pptx**（见下），安卓 / web 通用，**不依赖 officecli**。
+
+**PPTX 纯前端生成（`src/services/pptx.js`，零依赖）**：
+- **为何不用 officecli**：安卓 webview / 移动端没有桌面 CLI，`officecli` 方案在移动端是死路。
+  故改为浏览器内直接产出 `.pptx`（OOXML 也是 zip）。
+- **实现**：`CompressionStream('deflate-raw')` 手写 ZIP 容器 + CRC32，组装 OOXML 标准 10+ 部件
+  （`[Content_Types].xml`、`_rels/.rels`、`ppt/presentation.xml`、`slideMasters/slideLayouts/theme/slides`）。
+  标题形状带 `p:ph type="title"` 占位符（officecli/PowerPoint 正确识别标题页）。
+- **数据形态**：`reportSlides.buildDeck(r, label)` 把聚合报告翻成 6 页 `{title, lines}` 文本，
+  内容与屏上幻灯片一致，**去身份**（只含计数/比值/时长，无原始流水/余额/身份）。
+- **验证**：officecli 校验输出 6 页、标题全部识别、中文正常。移动端一键下载真 `.pptx`。
+- `scripts/export_report_pptx.js`（桌面 officecli 编译脚本）降级为**可选桌面通道**，非唯一出口。
+
+**接线**：`App.reportSlides` 暴露于 `main.js`；`stats.js` 周报/月报卡片新增「📊 智能简报」按钮。
+
+#### L1 阶段二·去身份转换 + 契约定型（2026-08-30，蓝图批准后补）
+
+- **`stripIdentity(r, {keepIdentity=false})`**（`src/domain/report.js`）：把 `buildReport` 输出转成「纯数字可序列化」导出面——
+  剥离全部 `*_id`/`id`/`title`/`name`/余额绝对值(`before`/`after`)/`meta` 原始计划键，只留计数/比值/时长/净变化(`net`)/单位。
+  任何 导出/API/MCP/社区共享 表面必须经它（防内部原始 id 泄漏，对抗评审 #1）；`keepIdentity:true` 原样返回（本地在设备用）。
+- **契约**：`docs/api/report-v2.md` 钉死 report-v2 每字段 类型/单位/`de-id ✓|✗` 标注 + MCP 工具形状（`report.weekly|monthly({offset,now})`）。
+- **测试**：新增 2 项（去身份无泄漏 + keepIdentity 原样），递归扫描器断言导出面无任何 `*_id`/title/name/before/after。
+- **验证**：全套 `169/169` 通过；`vite build` 成功；导出面 JSON.stringify 幂等无 undefined。
+
+#### L2–L4 落地（2026-08-30，蓝图批准后逐层实现）
+
+**L2 学习引擎（`src/domain/learn.js`）**：
+- `extractFeatures(db)` → `FeatureSet`：`biasModel[{planId, biasK, n}]`（浮点全精度、n 置信、冷启动 biasK=1+n=0、孤儿计划清理）、`completion`、`yield`（`yieldDensityFull` 未取整，精度红线）、`sched`、`budget`。
+- `stripFeatureIdentity(f)` 去身份导出（剥 planId/goalId 键 → 纯计数数组）。
+- 契约 `docs/api/feature-set.md`；MCP `learn.features({weeks})`。
+
+**L3 推荐机（`src/domain/recommend.js`）**：
+- `scheduleScore(cand, feats)` → 0~100（完成率/价值密度/紧迫/冲突 + **UCB 探索加成** `c·√(ln(Σn)/(n+1))`）。
+- `minRecommendGuarantee(scored, k)` 保底浮现低 n 新任务到 ≥60（Blocker #2 防饿死新计划落地）。
+- `recommendNext()`（排序+探索+保底+limit）、`slotIntoFreeTime()`（空闲时段冲突避让）。
+- 契约 `docs/api/recommendation.md`；MCP `recommend.next|slot`。
+
+**L4 社区接缝（`src/domain/signature.js`）**：
+- `encodeTrajectory(db)` → **事件序列签名**（g/p/o/v + wk 相对周，无 `*_id`/title/余额，防反指认）。
+- `similarity(a,b)` 编辑距离相似度 0~1；`kAnonymitySuppress(profiles, k=5)` 抑制低 n 独特签名（Blocker #4）。
+- 契约 `docs/api/trajectory-signature.md`；MCP `community.matchPatterns`（仅模式匹配，非 people-matching）。
+- **独立 opt-in 单元**：L4 后端不在本仓实现，绝不 import 进主离线 bundle。
+
+**产品方向定调（User 2026-08-30，文档已更新，代码不动）**：
+- **推荐 opt-in 弹窗**：适时弹、可关、可降级「仅角标」、可设勿扰/频率上限、可**彻底停用**（L3.3，偏好存 localStorage）。
+- **L4 = 授权制社交广播 / 共同习惯群基础设施**：只有授权用户参与；**先模式匹配，再提议组群**（consented grouping，绝不自动拉群）；群内只广播去身份模式级统计；未授权用户完全单机。仍无 people-matching / 身份互通。
+
+**验证**：全套 `187/187` 通过（169 + 6 learn + 8 recommend + 4 signature）；`vite build` 成功。
+
+**导出“空文件/文件已损坏”根因修复（2026-08-30）**：
+- **症状**：网页端导出 PPTX 尺寸正确但 PowerPoint 报“文件已损坏”；PDF 打印预览空白。
+- **PPTX 根因（3 类 OOXML 规范违例）**：
+  1. `SLIDE_RELS(i)` 让每页 slide 引用 `slideLayout${i+1}.xml`，但只生成了 `slideLayout1.xml`——
+     第 2~6 页引用了不存在的布局，PowerPoint 严格校验必报损坏。改为所有页统一引用 `slideLayout1`。
+  2. `a:rPr sz` 用了错误的单位（`sz="16"`/`sz="28"`，而 DrawingML 是**百分之一磅**，必须 ≥100），
+     改为 `sz="1600"`(16pt)/`sz="2800"`(28pt)。
+  3. `docProps/app.xml` 空 `HeadingPairs`/`TitlesOfParts` 违反 schema（要求含 `vt:vector`），已移除（二者可选）。
+  - 另补 `docProps/core.xml`+`app.xml` 及它们的内容类型与根 rels（缺 core props 也会触发修复提示）；
+  - 形状 `cNvPr id` 由随机改为**自增唯一**（重复 id 也会被 PowerPoint 标记）。
+  - **教训**：officecli 旧 `view/get/query` 解析宽容，读得动但**未做 schema 校验**，因此漏报；
+    需用 `officecli validate <file>`（完整 OOXML schema）或自写“每条 .rels Target 必须解析到真实部件”的严格检查。
+- **PDF 根因**：旧打印样式用 `visibility:hidden` 遮罩 + `#report-print{position:absolute; inset:0}` ——
+  遮罩不释放版面导致大量空白页，absolute+inset:0 把内容裁成单页。改为 `body>*:not(#report-print){display:none}` 隔离 +
+  wrapper/每页 `position:static` 流入文档流，`page-break-after` 自然分页，无空白页。
+- **验证**：`officecli validate` + 自写严格校验器均 **0 错误**；真实无头 Chromium 驱动 UI 导出
+  `.pptx`（11.6KB）与 `Page.printToPDF` 渲染的 PDF（399KB）均非空；`node --test` 167/167 绿。
+
+**契约预埋已兑现**：`meta` 含 L2 feature vector（`timeBiasVector`）与 L4 `trajectorySignatures` 占位（仅聚合，去身份）。

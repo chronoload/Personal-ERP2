@@ -86,21 +86,23 @@ export function createAgentMCP(ctx) {
     }),
 
     'recommend.next': (p = {}) => runTool('recommend.next', () => {
-      const limit = intRange(p.limit, 'limit', 1, 50, 5);
-      const k = intRange(p.k, 'k', 0, 50, 2);
+      const limit = intRange(p.limit, 'limit', 1, 20, 5);
+      const k = intRange(p.k, 'k', 0, 10, 2);
       const db = ctx.loadDb();
       const feats = extractFeatures(db);
       const acts = db.activities || [];
       const plans = db.plans || [];
-      // 候选：未完成/待办活动（Planned/Started），合并其计划级偏置
+      // 候选：未完成/待办活动（Planned/Started），合并其计划级偏置与截止
       const candidates = acts
         .filter((a) => a.status === 'Planned' || a.status === 'Started')
         .map((a) => {
+          const plan = plans.find((x) => x.id === (a.plan_ids?.[0] ?? null));
           const bias = feats.biasModel.find((e) => e.planId === (a.plan_ids?.[0] ?? null));
           return {
             activityId: a.id,
             planId: a.plan_ids?.[0] ?? null,
-            deadline: null, // MCP 层不假设截止；由上层/启发填充
+            plannedStart: a.planned_start ?? null,
+            deadline: plan?.deadline ?? null, // 关联计划的截止（缺失则无紧迫度）
             plannedMinutes: a.planned_minutes || 0,
             n: bias?.n ?? 0,
             conflictsCount: Array.isArray(a.conflicts) ? a.conflicts.length : 0,
@@ -112,8 +114,9 @@ export function createAgentMCP(ctx) {
     }),
 
     'recommend.slot': (p = {}) => runTool('recommend.slot', () => {
-      const freeMinutes = intRange(p.freeMinutes, 'freeMinutes', 1, 24 * 60, 30);
-      const limit = intRange(p.limit, 'limit', 1, 50, 5);
+      const freeMinutes = intRange(p.freeMinutes, 'freeMinutes', 1, 1440, null); // 必填：未给即 null → 校验拒绝
+      if (freeMinutes == null) { const e = new Error('freeMinutes 必填（>0 且 ≤1440 的整数）'); e.code = ERR.VALIDATION; throw e; }
+      const limit = intRange(p.limit, 'limit', 1, 20, 5);
       const now = nowOf();
       const db = ctx.loadDb();
       const feats = extractFeatures(db);
@@ -122,51 +125,84 @@ export function createAgentMCP(ctx) {
       let start = now;
       if (p.freeFrom != null) { const t = new Date(p.freeFrom).getTime(); if (Number.isNaN(t)) throw Object.assign(new Error('freeFrom 无效日期'), { code: ERR.VALIDATION }); start = t; }
       const slots = [{ start, end: start + freeMinutes * 60000 }];
-      const candidates = acts.slice(0, 50).map((a) => {
+      // 契约：先全量评分（limit 99 保证候选不被截断），再按时长写入空闲槽
+      const candidates = acts.map((a) => {
         const bias = feats.biasModel.find((e) => e.planId === (a.plan_ids?.[0] ?? null));
-        const dur = (a.planned_minutes || 30) * (bias?.biasK ?? 1); // biasK 校正
-        return { activityId: a.id, duration: Math.max(5, Math.round(dur / 5) * 5), score: 0 };
+        return {
+          activityId: a.id,
+          planId: a.plan_ids?.[0] ?? null,
+          plannedStart: a.planned_start ?? null,
+          plannedMinutes: a.planned_minutes || 0,
+          n: bias?.n ?? 0,
+          conflictsCount: Array.isArray(a.conflicts) ? a.conflicts.length : 0,
+        };
       });
-      return slotIntoFreeTime(slots, candidates, { now }).slice(0, limit);
+      const scored = recommendNext(candidates, feats, { now, limit: 99, k: 0 }); // 全量评分，保底不参与槽位分配
+      const slotCands = scored.map((r) => {
+        const bias = feats.biasModel.find((e) => e.planId === r.planId);
+        const dur = (r.estMinutes || 30) * (bias?.biasK ?? 1); // biasK 校正时长
+        return { activityId: r.activityId, duration: Math.max(5, Math.round(dur / 5) * 5), score: r.score };
+      });
+      return slotIntoFreeTime(slots, slotCands, { now }).slice(0, limit);
     }),
 
-    'community.matchPatterns': (p = {}) => runTool('community.matchPatterns', () => {
-      // ---- 授权门槛（核心）：未授权一律拒绝 ----
+    'community.matchPatterns': (p = {}) => runTool('community.matchPatterns', (warnings) => {
+      // ---- 授权门槛（核心，契约 §4）：未授权一律拒绝 ----
       if (loadPrefs().communityAuth !== true) {
-        const e = new Error('社区功能未授权：请先在设置中开启「允许匿名参与共同习惯群」');
+        const e = new Error('社区匹配功能需要授权。请在设置中开启「社区参与」选项后重试。');
         e.code = ERR.AUTH_DENIED;
         throw e;
       }
-      const k = intRange(p.k, 'k', 2, 100, 5);
+      const k = intRange(p.k, 'k', 2, 50, 5);
       const db = ctx.loadDb();
       const localSig = encodeTrajectory(db);
-      const spectrum = (typeof ctx.getAnonymousSpectrum === 'function' ? ctx.getAnonymousSpectrum() : p.spectrum) || [];
-      // k-匿名抑制：任何共享前先抑制低 n 独特签名（防反指认）
-      const { shared, suppressed } = kAnonymitySuppress(spectrum.map((s) => ({ sig: s })), k);
-      // 与本机签名比对，取相似样板
-      const matches = shared
-        .map((s) => ({ similarity: similarity(localSig, s.sig), pattern: s.sig }))
+      // 匿名签名谱注入（契约 §3.6 接缝名 loadAnonSpectrum；兼容旧 getAnonymousSpectrum）
+      const anonSpectrum = (typeof ctx.loadAnonSpectrum === 'function' ? ctx.loadAnonSpectrum()
+        : typeof ctx.getAnonymousSpectrum === 'function' ? ctx.getAnonymousSpectrum()
+        : (Array.isArray(p.spectrum) ? p.spectrum : [])) || [];
+      // k-匿名抑制（双重护栏之一）：任何共享前先抑制低 n 独特签名（防反指认）
+      const profiles = anonSpectrum.map((s) => (s && s.sig ? s : { sig: s }));
+      const { shared, suppressed } = kAnonymitySuppress(profiles, k);
+      // 按组聚合：每个 groupKey/签名 → 一条样板（含 sampleCount，仅匿名计数）
+      const groupOf = (s) => s.groupKey ?? JSON.stringify((s.sig?.events || []).map((e) => e.k));
+      const groupCnt = new Map();
+      for (const s of shared) groupCnt.set(groupOf(s), (groupCnt.get(groupOf(s)) || 0) + 1);
+      const groups = [];
+      for (const s of shared) {
+        const gk = groupOf(s);
+        if (groupCnt.get(gk) >= k && !groups.some((g) => g.key === gk)) groups.push({ key: gk, sig: s.sig, sampleCount: groupCnt.get(gk) });
+      }
+      // 与本机签名比对，取相似样板（pattern-matching）
+      const matches = groups
+        .map((g) => ({ similarity: similarity(localSig, g.sig), group: g }))
         .filter((m) => m.similarity >= (p.minSimilarity ?? 0.5))
         .sort((a, b) => b.similarity - a.similarity);
-      // 回传去身份的顶层概貌：仅相似度 + 匿名计数，无任何身份
-      const top = matches.slice(0, 5).map((m) => ({
-        similarity: m.similarity,
-        eventsLen: m.pattern?.events?.length ?? 0,
-        counts: m.pattern?.counts ?? { g: 0, p: 0, o: 0, v: 0 },
+      // 回传去身份样板：仅相似度 + 事件序列 + 匿名计数，无任何身份
+      const patterns = matches.slice(0, 5).map((m) => ({
+        similarity: Math.round(m.similarity * 100) / 100,
+        eventSequence: (m.group.sig?.events || []).map((e) => e.k).join(''),
+        groupKey: m.group.key,
+        sampleCount: m.group.sampleCount,
       }));
-      // 提议组群（consented grouping）：存在 ≥m 相似时仅「提议」，绝不自动组
-      const groupable = matches.length >= (p.minGroup ?? 1) && matches.length >= 1;
+      // 提议组群（consented grouping 契约 §4）：存在 ≥m 相似时仅「提议」，绝不自动组
+      const threshold = p.minGroup ?? 1;
+      const groupProposal = matches.length >= threshold ? {
+        candidatePatterns: matches.length,
+        threshold,
+        consentRequired: true, // 永远为 true；组群需单独写入工具 + 显式 groupConsent
+      } : null;
       const data = {
-        authorized: true,
-        localEvents: localSig.len,
-        suppressedProfiles: suppressed,
-        patterns: top,
-        groupProposal: groupable ? {
-          consentRequired: true,
-          matched: matches.length,
-          note: '检测到相似模式的共同习惯群候选。你必须显式确认（groupConsent:true）才可能组群；本层绝不自动加入或广播。',
-        } : null,
+        patterns,
+        localSignature: {
+          v: localSig.v,
+          len: localSig.len,
+          counts: localSig.counts || { g: 0, p: 0, o: 0, v: 0 },
+          eventSequence: (localSig.events || []).map((e) => e.k).join(''),
+        },
+        groupProposal,
+        suppressed,
       };
+      if (suppressed > 0) warnings.push(`${suppressed} 个模式因 k-匿名阈值不足被抑制`); // 契约 §6c 示例警告
       return data;
     }),
   };

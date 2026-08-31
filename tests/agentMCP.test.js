@@ -3,6 +3,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAgentMCP } from '../src/services/agentMCP.js';
+import { encodeTrajectory } from '../src/domain/signature.js';
+
+// 能编码出 g,p,o,v 各一条轨迹的账本（用于触发本地签名 = 谱中签名）
+function mkSigDB() {
+  return {
+    schemaVersion: 3, resources: [], rules: [],
+    goals: [{ id: 'g1', title: '目标', desc: '', status: 'Active', created: 0 }],
+    plans: [{ id: 'p1', goal_id: 'g1', title: '写论文', budget: 100, status: 'Active', created: 2000 }],
+    activities: [{ id: 'a1', title: '写', plan_ids: ['p1'], status: 'Completed', planned_minutes: 60, planned_start: null, actual_start: 1000, conflicts: [], retryCount: 0, created: 0 }],
+    outputs: [{ id: 'o1', title: '稿', activity_id: 'a1', tags: ['x'], created: 3000, status: 'Closed' }],
+    valueflows: [{ id: 'v1', output_id: 'o1', status: 'Closed', created: 4000, closedAt: 4000 }],
+    txs: [], goods: [], seq: {},
+  };
+}
 
 function mkDB() {
   return {
@@ -19,7 +33,7 @@ function mkCtx(opts = {}) {
   return {
     loadDb: () => opts.db ?? mkDB(),
     loadPrefs: () => ({ communityAuth: opts.communityAuth ?? false, reportRemind: true }),
-    getAnonymousSpectrum: opts.getAnonymousSpectrum ?? (() => []),
+    loadAnonSpectrum: opts.loadAnonSpectrum ?? (() => []), // 契约 §3.6 接缝名
     now: opts.now ?? 1700000000000,
   };
 }
@@ -85,6 +99,26 @@ test('agentMCP: recommend.slot 返回时段插入', () => {
   const r = call('recommend.slot', { freeMinutes: 30 });
   assert.equal(r.ok, true);
   assert.ok(Array.isArray(r.data));
+  // 契约 §3.5：输出形状 { activityId, slotStart(ms), score }
+  for (const s of r.data) {
+    assert.ok(s.activityId != null);
+    assert.equal(typeof s.slotStart, 'number');
+    assert.equal(typeof s.score, 'number');
+  }
+});
+
+test('agentMCP: recommend.slot — 缺 freeMinutes（必填）返回 ERR_VALIDATION', () => {
+  const { call } = createAgentMCP(mkCtx());
+  const r = call('recommend.slot', {});
+  assert.equal(r.ok, false);
+  assert.equal(r.error?.code, 'ERR_VALIDATION');
+});
+
+test('agentMCP: recommend.next — limit/k 越界返回 ERR_VALIDATION（契约范围）', () => {
+  const { call } = createAgentMCP(mkCtx());
+  assert.equal(call('recommend.next', { limit: 0 }).error?.code, 'ERR_VALIDATION');
+  assert.equal(call('recommend.next', { limit: 21 }).error?.code, 'ERR_VALIDATION');
+  assert.equal(call('recommend.next', { k: 11 }).error?.code, 'ERR_VALIDATION');
 });
 
 test('agentMCP: 授权门槛 — 未授权 community.matchPatterns 返回 ERR_AUTH_DENIED', () => {
@@ -95,26 +129,56 @@ test('agentMCP: 授权门槛 — 未授权 community.matchPatterns 返回 ERR_AU
   assert.equal(r.error?.code, 'ERR_AUTH_DENIED');
 });
 
-test('agentMCP: 授权门槛 — 已授权 community.matchPatterns 返回 pattern-list + 保底提议', () => {
-  // 构造一个匿名谱（与本地轨迹相似）以触发匹配
-  const localSig = { v: 1, t0Week: 0, len: 4, events: [{ k: 'g' }, { k: 'p' }, { k: 'o' }, { k: 'v' }], counts: { g: 1, p: 1, o: 1, v: 1 } };
+test('agentMCP: 授权门槛 — 已授权 community.matchPatterns 返回 PatternList(契约 §3.6)', () => {
+  // 用能编码出签名（g,p,o,v）的账本：本机签名与谱中签名一致 → similarity=1，触发匹配
+  const db = mkSigDB();
+  const localSig = encodeTrajectory(db);
   const spectrum = Array.from({ length: 6 }, () => ({ sig: localSig, groupKey: 'sim' }));
-  const ctx = mkCtx({ communityAuth: true, getAnonymousSpectrum: () => spectrum });
+  const ctx = mkCtx({ communityAuth: true, db, loadAnonSpectrum: () => spectrum });
   const { call } = createAgentMCP(ctx);
   const r = call('community.matchPatterns', {});
   assert.equal(r.ok, true);
-  assert.ok(r.data.authorized === true);
-  assert.ok(r.data.suppressedProfiles >= 0);
-  assert.ok(Array.isArray(r.data.patterns));
-  // 相似谱 ≥ minGroup → 出现组群提议，且 consentRequired:true
-  assert.ok(r.data.groupProposal != null, '已授权且有相似谱时应出现组群提议');
+  // 契约 §3.6 PatternList：patterns/localSignature/groupProposal/suppressed
+  assert.ok(Array.isArray(r.data.patterns) && r.data.patterns.length > 0, '相似谱应产出 ≥1 条样板');
+  const p0 = r.data.patterns[0];
+  assert.equal(typeof p0.similarity, 'number');
+  assert.equal(p0.eventSequence, 'gpov'); // 事件类型序（k 拼接）
+  assert.equal(p0.groupKey, 'sim');
+  assert.equal(p0.sampleCount, 6); // k-匿名保留组 n=6≥5
+  // localSignature：v/len/counts/eventSequence
+  assert.equal(r.data.localSignature.v, 1);
+  assert.equal(r.data.localSignature.len, localSig.len);
+  assert.deepEqual(r.data.localSignature.counts, { g: 1, p: 1, o: 1, v: 1 });
+  assert.equal(r.data.localSignature.eventSequence, 'gpov');
+  // 组群提议：候选 ≥ 阈值 → 出现，且 consentRequired 永远为 true
+  assert.ok(r.data.groupProposal != null);
   assert.equal(r.data.groupProposal.consentRequired, true);
+  assert.equal(typeof r.data.groupProposal.candidatePatterns, 'number');
+  assert.equal(typeof r.data.groupProposal.threshold, 'number');
+  assert.equal(typeof r.data.suppressed, 'number');
 });
 
 test('agentMCP: 授权已开启但无相似谱时不应出现组群提议', () => {
-  const ctx = mkCtx({ communityAuth: true, getAnonymousSpectrum: () => [] });
+  const ctx = mkCtx({ communityAuth: true, loadAnonSpectrum: () => [] });
   const { call } = createAgentMCP(ctx);
   const r = call('community.matchPatterns', {});
   assert.equal(r.ok, true);
+  assert.deepEqual(r.data.patterns, []);
   assert.equal(r.data.groupProposal, null, '无相似谱时不应出现组群提议');
+  assert.equal(r.data.suppressed, 0);
+});
+
+test('agentMCP: 授权开启 + k-匿名触发 → 添加抑制 warning（契约 §6c）', () => {
+  // 2 个独一无二的轨迹（n=2 < k=5）→ 全部抑制，patterns 空，warning 提示
+  const unique1 = { v: 1, len: 1, events: [{ k: 'g' }], counts: { g: 1, p: 0, o: 0, v: 0 } };
+  const unique2 = { v: 1, len: 1, events: [{ k: 'p' }], counts: { g: 0, p: 1, o: 0, v: 0 } };
+  const ctx = mkCtx({ communityAuth: true, loadAnonSpectrum: () => [
+    { sig: unique1, groupKey: 'u1' }, { sig: unique2, groupKey: 'u2' },
+  ] });
+  const { call } = createAgentMCP(ctx);
+  const r = call('community.matchPatterns', { k: 5 });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.data.patterns, []);
+  assert.equal(r.data.suppressed, 2);
+  assert.ok(r.warnings.some((w) => w.includes('k-匿名')), '应有 k-匿名抑制警告');
 });
