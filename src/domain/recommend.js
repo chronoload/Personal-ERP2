@@ -219,14 +219,14 @@ function aggStats(acts) {
 
 /**
  * 从历史「已完成活动」按完成时间排序得到的计划序列中，学转移关联（prevPlan→nextPlan 计数），
- * 取「最近完成计划」的最强后继，作为「现在该新建的活动」建议（top 1）。
- * 连续相邻相同计划跳过（循环连做不构成转移）；转移数 < minTransitions 不强推。
+ * 以「最近完成计划」为起点，返回前 k 个最强后继，作为「现在该新建的活动」候选（按转移关联降序）。
+ * 连续相邻相同计划跳过（循环连做不构成转移）；转移数 < minTransitions 的弱关联不强推。
  * 纯函数、仅本地消费、可 node 测试。
  * @param {object} db { plans, activities }
- * @param {object} opts { now(ms), minTransitions }
- * @returns {{ planId, title, fromPlan, transCount, minutes, at, lastDone, daysSince } | null}
+ * @param {object} opts { now(ms), k(候选数), minTransitions }
+ * @returns {Array<{ planId, title, fromPlan, transCount, minutes, at, lastDone, daysSince }>}
  */
-export function suggestNextPlanActivity(db, { now = Date.now(), minTransitions = 2 } = {}) {
+export function suggestNextPlans(db, { now = Date.now(), k = 3, minTransitions = 2 } = {}) {
   const plans = db.plans || [];
   const planTitle = new Map(plans.map((p) => [p.id, p.title]));
   const acts = (db.activities || [])
@@ -234,7 +234,7 @@ export function suggestNextPlanActivity(db, { now = Date.now(), minTransitions =
     .map((a) => ({ t: a.actual_end ?? a.created ?? 0, pid: a.plan_ids[0], a }))
     .filter((x) => x.t > 0)
     .sort((a, b) => a.t - b.t); // 完成时间升序 → 时间顺序
-  if (acts.length < 2) return null;
+  if (acts.length < 2) return [];
 
   const trans = new Map(); // "prev->next" -> count
   const lastDoneByPlan = new Map();
@@ -253,22 +253,31 @@ export function suggestNextPlanActivity(db, { now = Date.now(), minTransitions =
     const [from, to] = key.split('->');
     if (from === lastPlan) nextCands.push({ to, count });
   }
-  if (!nextCands.length) return null;
-  nextCands.sort((a, b) => b.count - a.count);
-  const top = nextCands[0];
-  if (top.count < minTransitions) return null; // 转移关联太弱不强推
+  // 排序：转移关联强优先；同级按「更久没做」（lastDone 更小）优先
+  nextCands.sort((a, b) => (b.count - a.count) || ((lastDoneByPlan.get(a.to) || 0) - (lastDoneByPlan.get(b.to) || 0)));
 
-  const hist = acts.filter((x) => x.pid === top.to);
-  const { minutes, at } = aggStats(hist);
-  const lastDone = lastDoneByPlan.get(top.to) || 0;
-  return {
-    planId: top.to,
-    title: planTitle.get(top.to) || '',
-    fromPlan: planTitle.get(lastPlan) || '',
-    transCount: top.count,
-    minutes,
-    at,
-    lastDone,
-    daysSince: lastDone ? Math.max(0, Math.floor((now - lastDone) / 86400000)) : 0,
-  };
+  const out = [];
+  for (const c of nextCands) {
+    if (out.length >= k) break;
+    if (c.count < minTransitions) break; // 已按计数降序，后续更弱，直接停
+    const hist = acts.filter((x) => x.pid === c.to);
+    const { minutes, at } = aggStats(hist);
+    const lastDone = lastDoneByPlan.get(c.to) || 0;
+    out.push({
+      planId: c.to,
+      title: planTitle.get(c.to) || '',
+      fromPlan: planTitle.get(lastPlan) || '',
+      transCount: c.count,
+      minutes,
+      at,
+      lastDone,
+      daysSince: lastDone ? Math.max(0, Math.floor((now - lastDone) / 86400000)) : 0,
+    });
+  }
+  return out;
+}
+
+/** 便捷：取 top1（无候选返回 null） */
+export function suggestNextPlanActivity(db, opts = {}) {
+  return suggestNextPlans(db, { ...opts, k: 1 })[0] ?? null;
 }

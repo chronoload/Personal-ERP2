@@ -2,7 +2,7 @@
 // L3 推荐机：scheduleScore / minRecommendGuarantee / slotIntoFreeTime / recommendNext（TDD）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scheduleScore, minRecommendGuarantee, slotIntoFreeTime, recommendNext, ucbBonus, suggestNextPlanActivity } from '../src/domain/recommend.js';
+import { scheduleScore, minRecommendGuarantee, slotIntoFreeTime, recommendNext, ucbBonus, suggestNextPlanActivity, suggestNextPlans } from '../src/domain/recommend.js';
 
 function ms(s) {
   const [d, t] = s.split('T');
@@ -171,4 +171,35 @@ test('L3: 顺序推荐 —— 循环连做（相邻相同）不计入转移', ()
 test('L3: 顺序推荐 —— 无完成历史（<2）返回 null', () => {
   const db = mkDB([[P.w, 1, 9, 0, 60]]);
   assert.equal(suggestNextPlanActivity(db, { now: ms('2026-8-4T12:00') }), null);
+});
+
+test('L3: top-k —— 多个后继按转移关联降序返回前 k', () => {
+  // 序列 跑步→阅读→跑步→写作→跑步→阅读→跑步→写作→跑步
+  // 转移：r→rd, rd→r, r→w, w→r, r→rd, rd→r, r→w, w→r
+  // 最近完成=跑步；从跑步出发：r→rd ×2、r→w ×2 → 应返回 [阅读, 写作]
+  const db = mkDB([
+    [P.r, 1, 8, 0, 30], [P.rd, 1, 9, 0, 40], [P.r, 1, 18, 0, 30], [P.w, 2, 9, 0, 60],
+    [P.r, 2, 18, 0, 30], [P.rd, 3, 9, 0, 40], [P.r, 3, 18, 0, 30], [P.w, 4, 9, 0, 60],
+    [P.r, 4, 18, 0, 30],
+  ]);
+  const recs = suggestNextPlans(db, { now: ms('2026-8-5T12:00'), k: 3 });
+  assert.equal(recs.length, 2); // 两个后继都 ≥2 次
+  assert.equal(recs[0].planId, 'p-rd'); // 阅读：转移 2 次
+  assert.equal(recs[0].transCount, 2);
+  assert.equal(recs[1].planId, 'p-w'); // 写作：转移 2 次
+  assert.equal(recs[1].transCount, 2);
+});
+
+test('L3: top-k —— k 截断 & 弱关联剔除', () => {
+  // 序列 跑步→阅读 重复 3 轮，最后一条=跑步 → r→rd ×3；k=1 → 只返回阅读
+  const db = mkDB([
+    [P.r, 1, 8, 0, 30], [P.rd, 1, 9, 0, 40],
+    [P.r, 2, 8, 0, 30], [P.rd, 2, 9, 0, 40],
+    [P.r, 3, 8, 0, 30], [P.rd, 3, 9, 0, 40],
+    [P.r, 4, 18, 0, 30], // 最近完成=跑步
+  ]);
+  const recs = suggestNextPlans(db, { now: ms('2026-8-5T12:00'), k: 1 });
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].planId, 'p-rd');
+  assert.equal(recs[0].transCount, 3);
 });

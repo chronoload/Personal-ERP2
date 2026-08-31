@@ -13,7 +13,7 @@ import { System } from './system.js';
 import { Notifications } from './notifications.js';
 import { Prefs } from '../store/prefs.js';
 import { scanDueEvents } from '../domain/schedule.js';
-import { suggestNextPlanActivity } from '../domain/recommend.js';
+import { suggestNextPlans } from '../domain/recommend.js';
 
 const DISMISS_KEY = 'autopilot_dismissed_v1'; // 当天已忽略：actId / 'plan:'+planId -> 'YYYY-M-D'
 const TRACK_KEY = 'autopilot_notifs_v1';      // 已调度通知登记：nid(string) -> actId
@@ -23,6 +23,8 @@ const FIRST_TICK_DELAY = 1500;                // 启动后首次巡检延迟
 
 let started = false;
 const skippedToasted = new Set(); // `${actId}:${dateKey}` 每活动每天至多 toast 一次
+let recPool = [];                 // F6 当前候选池（top-k，已过滤当天忽略）
+let recIdx = 0;                   // F6 当前展示下标（「换一个」轮换）
 
 function todayKey() {
   const d = new Date();
@@ -239,10 +241,10 @@ export const AutoPilot = {
     if (bDone) bDone.onclick = () => { if (el) el.remove(); App.overview.openCompleteModal(over.id); };
   },
 
-  // ---- F6 智能推荐（L3 · 按完成时间顺序 + 历史关联性）----
+  // ---- F6 智能推荐（L3 · 按完成时间顺序 + 历史关联性，top-k）----
   // 语义：非「习惯」（重复性的一般已设成循环活动）；而是从已完成活动的时间序列学计划间
-  // 转移关联（做完 A 通常接着做 B），推荐「一键新建」下一个计划的活动。User 定调：不限次数。
-  // 时机：无到点确认条/收尾条/计时全屏/弹窗打扰时弹（绝不堆叠）。
+  // 转移关联（做完 A 通常接着做 B），推荐 top-k 个「一键新建」候选，可「换一个」轮换。
+  // User 定调：不限次数。时机：无到点确认条/收尾条/计时全屏/弹窗打扰时弹（绝不堆叠）。
   // 关闭：推荐条「×」当天不再建议该计划；「智能推荐」开关（smartRecommend=false）彻底停用。
   _renderRecBar(App) {
     const prefs = Prefs.load();
@@ -255,19 +257,29 @@ export const AutoPilot = {
     const el = document.getElementById('ap-rec-bar');
     if (el) el.remove(); // 先清旧条（单实例），再按最新状态重建
 
-    const rec = suggestNextPlanActivity(App.db, { now: Date.now() });
-    if (!rec) return; // 尚无足够转移关联
-    if (this._isPlanDismissed(rec.planId)) return; // 今天已忽略该计划 → 不再提
+    // top-k 候选池（过滤当天已忽略的计划）
+    recPool = suggestNextPlans(App.db, { now: Date.now(), k: 3 })
+      .filter((r) => !this._isPlanDismissed(r.planId));
+    if (!recPool.length) return; // 尚无足够转移关联
+    if (recIdx >= recPool.length) recIdx = 0;
+    this._renderRecItem(App, recPool[recIdx]);
+  },
 
+  // 渲染当前候选；「换一个」在池内轮换（top-k 都可达）
+  _renderRecItem(App, rec) {
     const bar = ensureBar('ap-rec-bar', false);
     const when = rec.at ? ` ${rec.at}` : '';
     const dur = rec.minutes ? ` · ${rec.minutes} 分钟` : '';
     const idle = rec.daysSince > 0 ? ` · ${rec.daysSince} 天没做` : '';
+    const more = recPool.length > 1
+      ? `<button class="btn sm" data-ap-rec-next title="换一个（${recPool.length} 个候选）">↻ ${recIdx + 1}/${recPool.length}</button>` : '';
     bar.innerHTML =
       `<span style="flex:1">💡 接下来「${esc(rec.title)}」${when}${dur}（上次完成「${esc(rec.fromPlan)}」后你通常会做 · ${rec.transCount} 次${idle}）</span>` +
+      more +
       `<button class="btn sm primary" data-ap-rec-create>一键新建</button>` +
       `<button class="btn sm" data-ap-rec-x title="今天不再提醒">×</button>`;
     const bCreate = bar.querySelector('[data-ap-rec-create]');
+    const bNext = bar.querySelector('[data-ap-rec-next]');
     const bX = bar.querySelector('[data-ap-rec-x]');
     if (bCreate) bCreate.onclick = () => {
       if (bar) bar.remove();
@@ -277,6 +289,11 @@ export const AutoPilot = {
         ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}T${rec.at}`
         : null;
       App.overview.openActModal(null, rec.planId, start, rec.minutes || null);
+    };
+    if (bNext) bNext.onclick = () => {
+      recIdx = (recIdx + 1) % recPool.length;
+      bar.remove();
+      this._renderRecItem(App, recPool[recIdx]);
     };
     if (bX) bX.onclick = () => { this._recordPlanDismiss(rec.planId); if (bar) bar.remove(); };
   },
