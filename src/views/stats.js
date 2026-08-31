@@ -480,7 +480,7 @@ export function render(App, el) {
         </div>
       </div>
       <div style="margin-top:12px">
-        <label class="chk"><input type="checkbox" id="rec-enable" ${prefs.smartRecommend !== false ? 'checked' : ''}> 智能推荐（到点无活动时提示「下一步做什么」，每周 ${Number(prefs.recommendPerWeek) || 3} 次上限，可随时关闭）</label>
+        <label class="chk"><input type="checkbox" id="rec-enable" ${prefs.smartRecommend !== false ? 'checked' : ''}> 智能推荐（按历史习惯推荐「一键新建」今天的新活动，可随时关闭）</label>
       </div>
     </div>
 

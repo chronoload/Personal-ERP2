@@ -11,8 +11,7 @@ const DEFAULTS = {
   reportModules: { activity: true, ledger: true, plan: true, balance: true, vf: true }, // 报告模块配置
   hudEnabled: false, // HUD 侧边栏开关（目标→计划→活动 层级树）
   nightTheme: 'auto', // 界面夜间模式：auto 跟随系统 / light 浅色 / dark 深色
-  smartRecommend: true, // L3 智能推荐开关：到点无活动时推荐「下一步做什么」（可彻底关闭）
-  recommendPerWeek: 3,  // 每周推荐次数上限（勿扰：超过后本周不再打扰）
+  smartRecommend: true, // L3 智能推荐开关：按历史习惯推荐「一键新建」新活动（可彻底关闭）
 };
 
 export const Prefs = {

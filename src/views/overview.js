@@ -413,7 +413,7 @@ export async function delGood(id) {
 
 // ---------------- 活动：新建 / 编辑 / 完成弹窗 ----------------
 // prePlanId：从「目标与计划」Tab 进来时预选该计划；presetStart：日历快捷新建预填该日
-export function openActModal(editId, prePlanId, presetStart) {
+export function openActModal(editId, prePlanId, presetStart, presetMinutes) {
   const { db, engine } = App;
   const a = editId ? db.activities.find((x) => x.id === editId) : null;
   const selected = new Set(a ? a.plan_ids : (prePlanId ? [prePlanId] : []));
@@ -422,7 +422,7 @@ export function openActModal(editId, prePlanId, presetStart) {
   const plan = prePlanId ? db.plans.find((p) => p.id === prePlanId) : null;
   const defTitle = a ? a.title : (plan ? suggestTitle(plan.title) : '');
   const defStart = a ? (a.planned_start || (toDateInput(a.planned_date) + 'T09:00')) : (presetStart || defaultStartPrefill(Date.now()));
-  const defMin = a && a.planned_minutes ? a.planned_minutes : (prefs.lastMinutes ?? 60);
+  const defMin = a && a.planned_minutes ? a.planned_minutes : (presetMinutes ?? prefs.lastMinutes ?? 60);
   const defRepeat = a ? a.repeat : (prefs.lastRepeat ?? '');
   let chosenTheme = a && a.theme ? safeTheme(a.theme) : null;
   // 预设收支（多资源，同 Goods.costs）：编辑 → 活动自身预设；新建 → 预填首个关联计划的默认（可再改，保存即快照）
