@@ -429,6 +429,7 @@ export function render(App, el) {
       <div class="row-gap" style="flex-wrap:wrap;margin-top:8px">
         <label class="chk"><input type="checkbox" id="rp-remind" ${prefs.reportRemind !== false ? 'checked' : ''}> 通知提醒（每周日 / 每月末 20:00）</label>
         <button class="btn primary" onclick="App.stats.openReport()">📄 查看报告</button>
+        <button class="btn primary" onclick="App.reportSlides.openSlidesReport()">📊 智能简报</button>
       </div>
     </div>
 
@@ -477,6 +478,9 @@ export function render(App, el) {
           <button class="btn sm ${nightMode === 'dark' ? 'primary' : ''}" data-night="dark">深色</button>
           <span class="muted">跟随系统时自动匹配设备深浅色</span>
         </div>
+      </div>
+      <div style="margin-top:12px">
+        <label class="chk"><input type="checkbox" id="rec-enable" ${prefs.smartRecommend !== false ? 'checked' : ''}> 智能推荐（到点无活动时提示「下一步做什么」，每周 ${Number(prefs.recommendPerWeek) || 3} 次上限，可随时关闭）</label>
       </div>
     </div>
 
@@ -623,5 +627,12 @@ export function render(App, el) {
   if (rpRemind) rpRemind.addEventListener('change', () => {
     Prefs.set({ reportRemind: rpRemind.checked });
     toast(rpRemind.checked ? '已开启周/月报提醒' : '已关闭周/月报提醒', 'ok');
+  });
+
+  // 智能推荐开关（L3）：彻底停用 / 恢复
+  const recEnable = el.querySelector('#rec-enable');
+  if (recEnable) recEnable.addEventListener('change', () => {
+    Prefs.set({ smartRecommend: recEnable.checked });
+    toast(recEnable.checked ? '已开启智能推荐' : '已关闭智能推荐', 'ok');
   });
 }

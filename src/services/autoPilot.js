@@ -13,9 +13,12 @@ import { System } from './system.js';
 import { Notifications } from './notifications.js';
 import { Prefs } from '../store/prefs.js';
 import { scanDueEvents } from '../domain/schedule.js';
+import { extractFeatures } from '../domain/learn.js';
+import { recommendNext } from '../domain/recommend.js';
 
 const DISMISS_KEY = 'autopilot_dismissed_v1'; // 当天已忽略：actId -> 'YYYY-M-D'
 const TRACK_KEY = 'autopilot_notifs_v1';      // 已调度通知登记：nid(string) -> actId
+const REC_WEEK_KEY = 'autopilot_rec_week_v1'; // 每周推荐计数：{ week, count }（勿扰：每周上限）
 const NOTIF_BASE = 3000;                      // 与 scheduler 的 2000 段错开，避免撞通知 id
 const TICK_MS = 30000;                        // 常驻巡检周期
 const FIRST_TICK_DELAY = 1500;                // 启动后首次巡检延迟
@@ -80,6 +83,7 @@ export const AutoPilot = {
       this._toastSkipped(scan.skipped);            // 到点被跳过：每活动每天至多提示一次
       this._renderConfirmBar(App, scan.dueStarts); // F1 到点询问
       this._renderTipBar(App, scan);               // F3+F4 收尾/超时提醒
+      this._renderRecBar(App);                     // F6 智能推荐（L3）：无到点/收尾打扰时提「下一步做什么」
       this._autoFail(App, scan);                   // F5 自动失败：超时超宽限期仍未完成 → failActivity
     } catch (e) { /* 单轮巡检失败静默，下个周期自然重试 */ }
   },
@@ -235,5 +239,89 @@ export const AutoPilot = {
       `<button class="btn sm primary" data-ap-done>去完成</button>`;
     const bDone = el.querySelector('[data-ap-done]');
     if (bDone) bDone.onclick = () => { if (el) el.remove(); App.overview.openCompleteModal(over.id); };
+  },
+
+  // ---- F6 智能推荐（L3，User 定调「适时弹、可关掉、不招人烦」）----
+  // 时机：无到点确认条/收尾条/计时全屏/弹窗打扰时，用 L3 recommendNext 提「下一步做什么」。
+  // 频率：每天每活动至多一次；每周总计 ≤ recommendPerWeek（勿扰超限静默）。
+  // 关闭：推荐条「×」记当天忽略；「智能推荐」开关（smartRecommend=false）彻底停用。
+  _renderRecBar(App) {
+    const prefs = Prefs.load();
+    if (prefs.smartRecommend === false) return; // 彻底停用
+    // 已有时机打扰则本次不推荐（确认条/收尾条/计时/弹窗优先，绝不堆叠）
+    if (document.getElementById('ap-confirm-bar')) return;
+    if (document.getElementById('ap-tip-bar')) return;
+    if (document.querySelector('.timer-overlay')) return;
+    if (document.querySelector('.modal-mask')) return;
+    if (this._recQuotaUsed()) return; // 本周上限已到 → 静默
+    const el = document.getElementById('ap-rec-bar');
+    if (el) { el.remove(); } // 先清旧条（单实例），再按最新状态重建
+
+    const rec = this._nextRecommend(App);
+    if (!rec) return;
+    if (this._isDismissed(rec.id)) return; // 今天已忽略该活动 → 不再提
+    const bar = ensureBar('ap-rec-bar', false);
+    const reason = rec.reasons?.[0] ? ` · ${rec.reasons[0]}` : '';
+    bar.innerHTML =
+      `<span style="flex:1">💡 下一步：「${esc(rec.title)}」<span class="muted" style="color:#9aa7c0">${esc(reason)}</span></span>` +
+      `<button class="btn sm primary" data-ap-rec-start>开始</button>` +
+      `<button class="btn sm" data-ap-rec-skip>忽略</button>` +
+      `<button class="btn sm" data-ap-rec-x title="今天不再提醒">×</button>`;
+    const bStart = bar.querySelector('[data-ap-rec-start]');
+    const bSkip = bar.querySelector('[data-ap-rec-skip]');
+    const bX = bar.querySelector('[data-ap-rec-x]');
+    if (bStart) bStart.onclick = () => { if (bar) bar.remove(); this._bumpRecQuota(); App.startAct(rec.id); };
+    if (bSkip) bSkip.onclick = () => { this._recordDismiss(rec.id); if (bar) bar.remove(); };
+    if (bX) bX.onclick = () => { this._recordDismiss(rec.id); if (bar) bar.remove(); };
+    this._bumpRecQuota();
+  },
+
+  // L3 推荐取第一条（复用契约 §3.4 的候选映射，同步域调用；无候选/无推荐返回 null）
+  _nextRecommend(App) {
+    const db = App.db;
+    const feats = extractFeatures(db);
+    const acts = (db.activities || []).filter((a) => a.status === 'Planned' || a.status === 'Started');
+    if (!acts.length) return null;
+    const plans = db.plans || [];
+    const candidates = acts.map((a) => {
+      const plan = plans.find((x) => x.id === (a.plan_ids?.[0] ?? null));
+      const bias = feats.biasModel.find((e) => e.planId === (a.plan_ids?.[0] ?? null));
+      return {
+        activityId: a.id,
+        planId: a.plan_ids?.[0] ?? null,
+        plannedStart: a.planned_start ?? null,
+        deadline: plan?.deadline ?? null,
+        plannedMinutes: a.planned_minutes || 0,
+        n: bias?.n ?? 0,
+        conflictsCount: Array.isArray(a.conflicts) ? a.conflicts.length : 0,
+      };
+    });
+    const top = recommendNext(candidates, feats, { now: Date.now(), limit: 1, k: 1 });
+    const hit = top[0];
+    if (!hit) return null;
+    return { id: hit.activityId, title: (db.activities.find((x) => x.id === hit.activityId) || {}).title || '', reasons: hit.reasons };
+  },
+
+  // 每周推荐计数（勿扰上限）：跨周自动归零；达上限返回 true
+  _recQuotaUsed() {
+    const cap = Number(Prefs.load().recommendPerWeek) || 3;
+    const cur = loadJSON(REC_WEEK_KEY);
+    const week = this._weekOf(Date.now());
+    if (cur.week !== week) return false; // 跨周 → 未达上限
+    return (cur.count || 0) >= cap;
+  },
+  _bumpRecQuota() {
+    const cap = Number(Prefs.load().recommendPerWeek) || 3;
+    const cur = loadJSON(REC_WEEK_KEY);
+    const week = this._weekOf(Date.now());
+    if (cur.week !== week) { saveJSON(REC_WEEK_KEY, { week, count: 1 }); return; }
+    saveJSON(REC_WEEK_KEY, { week, count: Math.min(cap, (cur.count || 0) + 1) });
+  },
+  _weekOf(ms) {
+    const d = new Date(ms);
+    // ISO 周序号（周一为一周起点）
+    const t = new Date(d.getFullYear(), 0, 1);
+    const dayOffset = ((d - t) / 86400000 + t.getDay() - 1 + 7) % 7;
+    return d.getFullYear() * 100 + Math.ceil(((d - t) / 86400000 + 1 - dayOffset) / 7);
   },
 };
