@@ -26,6 +26,8 @@ import * as timer from './views/timer.js';
 import * as setup from './views/setup.js';
 import * as dayGuide from './views/dayGuide.js';
 import * as hud from './views/hud.js';
+import * as reportSlides from './views/reportSlides.js';
+import * as workspace from './views/workspace.js';
 
 // 尽早安装全局错误钩子（onerror + unhandledrejection → 环形日志），后续任何初始化异常都能被记录
 ErrorLog.install();
@@ -59,8 +61,8 @@ function widgetSnapshot(App) {
   };
 }
 
-const TAB_VIEWS = { overview, goals, stats };
-const TAB_ORDER = ['overview', 'goals', 'stats'];
+const TAB_VIEWS = { overview, goals, stats, workspace };
+const TAB_ORDER = ['overview', 'goals', 'stats', 'workspace'];
 
 const App = {
   db: loadDB(),
@@ -69,7 +71,7 @@ const App = {
   // 系统服务接口（预留：小组件 / 系统提示 / 系统通知 / 备份）
   widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS,
   // 视图扁平暴露给内联 handler（App.calendar.open() 等）
-  overview, goals, stats, calendar, timer, dayGuide, hud,
+  overview, goals, stats, calendar, timer, dayGuide, hud, reportSlides,
   setTab(id) { this.tab = id; this.render(true); window.scrollTo({ top: 0 }); },
   // 统一启动入口：撞上捆绑冲突时弹三选一仲裁（先做这个 / 让对方先 / 取消）
   startAct(id) {

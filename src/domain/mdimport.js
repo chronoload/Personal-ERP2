@@ -158,8 +158,8 @@ export function parseMdImport(md, { now = Date.now() } = {}) {
   const defaultPlan = (fm.default && fm.default.plan) || null;
   const defaultMinutes = (fm.default && fm.default.minutes) != null ? Number(fm.default.minutes) || null : null;
 
-  const pushGoal = (title) => {
-    curGoal = { key: 'g' + goals.length, title: title.trim(), desc: '' };
+  const pushGoal = (title, id = null) => {
+    curGoal = { key: 'g' + goals.length, title: title.trim(), desc: '', id };
     goals.push(curGoal);
     curPlan = null;
   };
@@ -171,9 +171,9 @@ export function parseMdImport(md, { now = Date.now() } = {}) {
     plans.push(p);
     return p.key;
   };
-  const pushPlan = (title) => {
+  const pushPlan = (title, id = null) => {
     if (!curGoal) pushGoal('（未分类）');
-    curPlan = { key: 'p' + plans.length, goal_key: curGoal.key, title: title.trim() };
+    curPlan = { key: 'p' + plans.length, goal_key: curGoal.key, title: title.trim(), id };
     plans.push(curPlan);
   };
 
@@ -184,8 +184,8 @@ export function parseMdImport(md, { now = Date.now() } = {}) {
     let actId = null;
     const idm = t.match(/<!--id:([\w-]+)-->/);
     if (idm) { actId = idm[1]; t = t.replace(/<!--id:[\w-]+-->/, '').trim(); }
-    if (/^#\s+\S/.test(t) && !/^##/.test(t)) { pushGoal(t.replace(/^#\s+/, '')); continue; }
-    if (/^##+\s+\S/.test(t)) { pushPlan(t.replace(/^##+\s+/, '')); continue; }
+    if (/^#\s+\S/.test(t) && !/^##/.test(t)) { pushGoal(t.replace(/^#\s+/, ''), actId); continue; }
+    if (/^##+\s+\S/.test(t)) { pushPlan(t.replace(/^##+\s+/, ''), actId); continue; }
     const list = t.match(/^[-*]\s+(?:\[( |x)\]\s+)?(.*)$/);
     if (list) {
       const checked = list[1] === 'x';
@@ -245,11 +245,11 @@ export function serializeDbToMd(db) {
   const orphan = acts.filter((a) => !Array.isArray(a.plan_ids) || !a.plan_ids.length);
   const lines = [];
   for (const g of goals) {
-    lines.push(`# ${g.title}`);
+    lines.push(`# ${g.title} <!--id:${g.id}-->`);
     if (g.desc && g.desc.trim()) lines.push('', g.desc);
     const gPlans = plans.filter((p) => p.goal_id === g.id);
     for (const p of gPlans) {
-      lines.push('', `## ${p.title}`);
+      lines.push('', `## ${p.title} <!--id:${p.id}-->`);
       const pActs = acts.filter((a) => Array.isArray(a.plan_ids) && a.plan_ids.includes(p.id));
       for (const a of pActs) lines.push(actToMd(a, planTitles));
     }
