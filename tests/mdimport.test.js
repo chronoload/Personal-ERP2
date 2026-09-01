@@ -2,7 +2,7 @@
 // 手打 Markdown 批量速录 → 实体候选解析规则（TDD）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMdImport } from '../src/domain/mdimport.js';
+import { parseMdImport, serializeDbToMd } from '../src/domain/mdimport.js';
 
 const NOW = new Date(2026, 7, 30, 12, 0, 0).getTime(); // 2026-8-30 周日
 
@@ -118,4 +118,68 @@ test('mdimport: 空输入 → 空候选', () => {
   assert.deepEqual(r.plans, []);
   assert.deepEqual(r.activities, []);
   assert.deepEqual(r.warnings, []);
+});
+
+// ---- 双向：实体 → md → 实体（round-trip，id 对齐）----
+
+function rtDB() {
+  return {
+    goals: [{ id: 'g1', title: '写一本书', desc: '方法论成书。', status: 'Active' }],
+    plans: [
+      { id: 'p1', goal_id: 'g1', title: '第一章', status: 'Active' },
+      { id: 'p2', goal_id: 'g1', title: '第二章', status: 'Active' },
+    ],
+    activities: [
+      { id: 'a1', title: '写大纲', plan_ids: ['p1'], planned_start: '2026-8-31T09:00', planned_minutes: 60, status: 'Planned' },
+      { id: 'a2', title: '写初稿', plan_ids: ['p1'], planned_start: '2026-9-1T14:30', planned_minutes: 90, status: 'Completed' },
+      { id: 'a3', title: '校对', plan_ids: ['p2'], planned_start: '2026-9-2T18:00', planned_minutes: 45, status: 'Planned' },
+    ],
+  };
+}
+
+test('mdimport 双向: db → md → 候选，按 id 对齐、字段保真', () => {
+  const db = rtDB();
+  const md = serializeDbToMd(db);
+  // 可读性：目标/计划/活动 + 时间/时长/完成态/归属/id 都在
+  assert.ok(md.includes('# 写一本书'));
+  assert.ok(md.includes('## 第一章'));
+  assert.ok(md.includes('- [ ] 写大纲 @ 2026-8-31 09:00 60分钟 (第一章) <!--id:a1-->'));
+  assert.ok(md.includes('- [x] 写初稿 @ 2026-9-1 14:30 90分钟 (第一章) <!--id:a2-->'));
+
+  const r = parseMdImport(md, { now: NOW });
+  assert.equal(r.goals[0].title, '写一本书');
+  assert.equal(r.goals[0].desc, '方法论成书。');
+  assert.equal(r.plans.length, 2);
+  // 活动：id 对齐、字段保真
+  const a1 = r.activities.find((a) => a.id === 'a1');
+  assert.ok(a1, '应携带 id 注释');
+  assert.equal(a1.title, '写大纲');
+  assert.equal(a1.planned_start, '2026-8-31T09:00');
+  assert.equal(a1.planned_minutes, 60);
+  assert.equal(a1.status, 'Planned');
+  const a2 = r.activities.find((a) => a.id === 'a2');
+  assert.equal(a2.title, '写初稿');
+  assert.equal(a2.status, 'Completed');
+  assert.equal(a2.planned_start, '2026-9-1T14:30');
+  assert.equal(a2.planned_minutes, 90);
+  const a3 = r.activities.find((a) => a.id === 'a3');
+  assert.equal(a3.planned_start, '2026-9-2T18:00');
+  // 计划归属：a1 应归「第一章」
+  const p1 = r.plans.find((p) => p.title === '第一章');
+  assert.equal(a1.plan_key, p1.key);
+  assert.deepEqual(r.warnings, []);
+});
+
+test('mdimport 双向: 手改 md（无 id 注释）→ 新建候选（非更新）', () => {
+  const r = parseMdImport('# 目标\n- [ ] 新活动 @ 明天 9:00 30分钟', { now: NOW });
+  assert.equal(r.activities.length, 1);
+  assert.equal(r.activities[0].id, null); // 无 id → 新建语义
+});
+
+test('mdimport 双向: 未挂计划的活动序列化到「未分类」', () => {
+  const db = rtDB();
+  db.activities.push({ id: 'a9', title: '散步', plan_ids: [], planned_start: '2026-9-3T19:00', planned_minutes: 30, status: 'Planned' });
+  const md = serializeDbToMd(db);
+  assert.ok(md.includes('## 未分类'));
+  assert.ok(md.includes('<!--id:a9-->'));
 });

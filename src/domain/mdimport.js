@@ -178,8 +178,12 @@ export function parseMdImport(md, { now = Date.now() } = {}) {
   };
 
   for (const rawLine of rest.split('\n')) {
-    const t = rawLine.trim();
+    let t = rawLine.trim();
     if (!t) continue;
+    // 导出携带的 id 注释：`<!--id:a1-->` → 候选带 id（手打无 → 新建语义）
+    let actId = null;
+    const idm = t.match(/<!--id:([\w-]+)-->/);
+    if (idm) { actId = idm[1]; t = t.replace(/<!--id:[\w-]+-->/, '').trim(); }
     if (/^#\s+\S/.test(t) && !/^##/.test(t)) { pushGoal(t.replace(/^#\s+/, '')); continue; }
     if (/^##+\s+\S/.test(t)) { pushPlan(t.replace(/^##+\s+/, '')); continue; }
     const list = t.match(/^[-*]\s+(?:\[( |x)\]\s+)?(.*)$/);
@@ -190,6 +194,7 @@ export function parseMdImport(md, { now = Date.now() } = {}) {
         ? findOrCreatePlan(parsed.planTitle)
         : (curPlan ? curPlan.key : (defaultPlan ? findOrCreatePlan(defaultPlan) : null));
       activities.push({
+        id: actId, // 导出 round-trip 用；手打为 null
         key: 'a' + activities.length,
         plan_key: planKey,
         title: parsed.title,
@@ -205,4 +210,53 @@ export function parseMdImport(md, { now = Date.now() } = {}) {
     if (curGoal) curGoal.desc = curGoal.desc ? curGoal.desc + '\n' + t : t;
   }
   return { goals, plans, activities, warnings };
+}
+
+// ---- 反向：实体 → md（导出视图，可读可手改，`<!--id:xxx-->` 携带 id 供导回更新）----
+
+function actToMd(a, planTitles) {
+  const done = a.status === 'Completed' || a.status === 'Reviewed';
+  let line = `- [${done ? 'x' : ' '}] ${a.title}`;
+  const bits = [];
+  if (a.planned_start) {
+    const m = String(a.planned_start).match(/(\d{4}-\d{1,2}-\d{1,2})T?(\d{1,2}:\d{2})?/);
+    if (m) bits.push(m[1] + (m[2] ? ' ' + m[2] : ''));
+  }
+  if (a.planned_minutes) bits.push(`${a.planned_minutes}分钟`);
+  if (bits.length) line += ' @ ' + bits.join(' ');
+  const pid = Array.isArray(a.plan_ids) && a.plan_ids.length ? a.plan_ids[0] : null;
+  if (pid && planTitles.has(pid)) line += ` (${planTitles.get(pid)})`;
+  line += ` <!--id:${a.id}-->`;
+  return line;
+}
+
+/**
+ * db → 手打规则 Markdown（与 parseMdImport 互逆）。
+ * 覆盖目标/计划/活动（含时间/时长/完成态/描述/归属）；未挂计划的活动收进「## 未分类」。
+ * 事务流水/收支/期次等 JSON 专属字段不进 md（md 是计划面的可读交换格式）。
+ * @param {object} db { goals, plans, activities }
+ * @returns {string} 可读 md 文本
+ */
+export function serializeDbToMd(db) {
+  const goals = db.goals || [];
+  const plans = db.plans || [];
+  const acts = db.activities || [];
+  const planTitles = new Map(plans.map((p) => [p.id, p.title]));
+  const orphan = acts.filter((a) => !Array.isArray(a.plan_ids) || !a.plan_ids.length);
+  const lines = [];
+  for (const g of goals) {
+    lines.push(`# ${g.title}`);
+    if (g.desc && g.desc.trim()) lines.push('', g.desc);
+    const gPlans = plans.filter((p) => p.goal_id === g.id);
+    for (const p of gPlans) {
+      lines.push('', `## ${p.title}`);
+      const pActs = acts.filter((a) => Array.isArray(a.plan_ids) && a.plan_ids.includes(p.id));
+      for (const a of pActs) lines.push(actToMd(a, planTitles));
+    }
+  }
+  if (orphan.length) {
+    lines.push('', '## 未分类');
+    for (const a of orphan) lines.push(actToMd(a, planTitles));
+  }
+  return lines.join('\n').replace(/\n+$/, '') + '\n';
 }
