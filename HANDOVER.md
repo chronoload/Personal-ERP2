@@ -32,7 +32,7 @@
 - **Markdown 双向速录（mdimport + mdapply，2026-08-30）**：JSON 仍是唯一存储，md 是**可手打/可交换的视图面**。
   `src/domain/mdimport.js`：`parseMdImport`（手打 md → 实体候选，规则 v1：frontmatter default / #目标 / ##计划 / -\[ ]活动 / @时间词·时长 / (计划)归属 / #标签 / \[x]）+ `serializeDbToMd`（实体 → md，带 `<!--id:xxx-->` 注释）。
   `src/domain/mdapply.js`：候选 → db（带 id 更新不复制，无 id 走 engine 新建；\[x] 完成态不绕过状态机）。
-  **三视图工作台** `src/views/workspace.js`（新 tab「工作台」）：横向滑动容器（scroll-snap）并排 **编辑查看器 | 看板 | 日历**——编辑器实时解析预览 +「应用」写 db +「导出 .md」；看板/日历与编辑器同数据源双向同步。
+  **编辑器 = Vditor 4**（`src/views/workspace.js`，活动 Tab 滑动容器新增「📝 编辑器」第三卡片）：WYSIWYG 编辑 md，任务列表可直接勾选切换完成状态，「应用」写 db、「导出 .md」；看板/日历操作 → db 变 → 编辑器同步最新 md（双向）。Vditor 引入使主 bundle 增至 \~570KB（gzip 160KB）。
   测试 `mdimport` 11 + `mdapply` 5，全量 225 绿。
 
 > ⚠️ 本仓库已功能冻结（2026-08-24）：项目迁移至 TWS2-Eco monorepo

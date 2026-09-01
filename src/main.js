@@ -27,7 +27,6 @@ import * as setup from './views/setup.js';
 import * as dayGuide from './views/dayGuide.js';
 import * as hud from './views/hud.js';
 import * as reportSlides from './views/reportSlides.js';
-import * as workspace from './views/workspace.js';
 
 // 尽早安装全局错误钩子（onerror + unhandledrejection → 环形日志），后续任何初始化异常都能被记录
 ErrorLog.install();
@@ -61,8 +60,8 @@ function widgetSnapshot(App) {
   };
 }
 
-const TAB_VIEWS = { overview, goals, stats, workspace };
-const TAB_ORDER = ['overview', 'goals', 'stats', 'workspace'];
+const TAB_VIEWS = { overview, goals, stats };
+const TAB_ORDER = ['overview', 'goals', 'stats'];
 
 const App = {
   db: loadDB(),

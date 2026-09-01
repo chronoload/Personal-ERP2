@@ -9,6 +9,7 @@ import * as calendar from './calendar.js';
 import { Prefs } from '../store/prefs.js';
 import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone } from '../ui/themes.js';
 import { defaultStartPrefill } from '../domain/schedule.js';
+import * as workspace from './workspace.js';
 
 // 批量排程入口：re-export 后自动挂到 App.overview.openBatchCreate
 export { openBatchCreate } from './batchCreate.js';
@@ -1302,6 +1303,7 @@ export function render(App, el) {
       <div class="dash-nav">
         <button type="button" class="dash-nav-item on" data-page="0">📅 当日日程</button>
         <button type="button" class="dash-nav-item" data-page="1">📋 活动看板</button>
+        <button type="button" class="dash-nav-item" data-page="2">📝 编辑器</button>
       </div>
       <div class="dash-track">
         <section class="dash-page">
@@ -1318,6 +1320,9 @@ export function render(App, el) {
             </div>
             <div id="kanban-root">${kanbanFilterBar(App)}<div class="kanban">${kanbanHTML(App)}</div></div>
           </div>
+        </section>
+        <section class="dash-page">
+          <div data-ws-host></div>
         </section>
       </div>
     </div>
@@ -1370,6 +1375,8 @@ export function render(App, el) {
     </section>
   `;
   calendar.renderSection(App, el.querySelector('#calendar-section'));
+  const wsHost = el.querySelector('[data-ws-host]');
+  if (wsHost) workspace.render(App, wsHost); // 三视图工作台（Vditor 编辑器 + 看板 + 日历）
   setupDrag(App);
   settleThemeTones(App, el);
   syncPager(App, el);

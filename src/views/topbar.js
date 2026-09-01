@@ -46,7 +46,6 @@ export function renderTabs(App) {
     { id: 'overview', label: '活动' },
     { id: 'goals', label: '目标与计划' },
     { id: 'stats', label: '统计' },
-    { id: 'workspace', label: '工作台' },
   ];
   el.innerHTML = items.map((t) =>
     `<button class="tab ${App.tab === t.id ? 'on' : ''}" data-tab="${t.id}">${t.label}</button>`
