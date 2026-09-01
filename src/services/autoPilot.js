@@ -13,9 +13,9 @@ import { System } from './system.js';
 import { Notifications } from './notifications.js';
 import { Prefs } from '../store/prefs.js';
 import { scanDueEvents } from '../domain/schedule.js';
-import { suggestNextPlans } from '../domain/recommend.js';
+import { suggestNextActivities } from '../domain/recommend.js';
 
-const DISMISS_KEY = 'autopilot_dismissed_v1'; // 当天已忽略：actId / 'plan:'+planId -> 'YYYY-M-D'
+const DISMISS_KEY = 'autopilot_dismissed_v1'; // 当天已忽略：actId / 'plan:'+planId / 'act:'+title -> 'YYYY-M-D'
 const TRACK_KEY = 'autopilot_notifs_v1';      // 已调度通知登记：nid(string) -> actId
 const NOTIF_BASE = 3000;                      // 与 scheduler 的 2000 段错开，避免撞通知 id
 const TICK_MS = 30000;                        // 常驻巡检周期
@@ -241,11 +241,12 @@ export const AutoPilot = {
     if (bDone) bDone.onclick = () => { if (el) el.remove(); App.overview.openCompleteModal(over.id); };
   },
 
-  // ---- F6 智能推荐（L3 · 按完成时间顺序 + 历史关联性，top-k）----
-  // 语义：非「习惯」（重复性的一般已设成循环活动）；而是从已完成活动的时间序列学计划间
+  // ---- F6 智能推荐（L3 · 活动级：按完成时间顺序 + 历史关联性，top-k）----
+  // 语义：非「习惯」（重复性的一般已设成循环活动）；而是从已完成活动的时间序列学活动模板间
   // 转移关联（做完 A 通常接着做 B），推荐 top-k 个「一键新建」候选，可「换一个」轮换。
-  // User 定调：不限次数。时机：无到点确认条/收尾条/计时全屏/弹窗打扰时弹（绝不堆叠）。
-  // 关闭：推荐条「×」当天不再建议该计划；「智能推荐」开关（smartRecommend=false）彻底停用。
+  // User 定调：活动级（不强制挂计划）、不限次数。
+  // 时机：无到点确认条/收尾条/计时全屏/弹窗打扰时弹（绝不堆叠）。
+  // 关闭：推荐条「×」当天不再建议该活动；「智能推荐」开关（smartRecommend=false）彻底停用。
   _renderRecBar(App) {
     const prefs = Prefs.load();
     if (prefs.smartRecommend === false) return; // 彻底停用
@@ -257,10 +258,10 @@ export const AutoPilot = {
     const el = document.getElementById('ap-rec-bar');
     if (el) el.remove(); // 先清旧条（单实例），再按最新状态重建
 
-    // top-k 候选池（过滤当天已忽略的计划）
-    recPool = suggestNextPlans(App.db, { now: Date.now(), k: 3 })
-      .filter((r) => !this._isPlanDismissed(r.planId));
-    if (!recPool.length) return; // 尚无足够转移关联
+    // top-k 候选池（过滤当天已忽略的活动模板）
+    recPool = suggestNextActivities(App.db, { now: Date.now(), k: 3 })
+      .filter((r) => !this._isActDismissed(r.title));
+    if (!recPool.length) return; // 尚无完成历史
     if (recIdx >= recPool.length) recIdx = 0;
     this._renderRecItem(App, recPool[recIdx]);
   },
@@ -271,10 +272,10 @@ export const AutoPilot = {
     const when = rec.at ? ` ${rec.at}` : '';
     const dur = rec.minutes ? ` · ${rec.minutes} 分钟` : '';
     const idle = rec.daysSince > 0 ? ` · ${rec.daysSince} 天没做` : '';
-    // 转移候选显示「上次完成X后你通常会做」；降级候选显示「完成过 N 次」
+    // 转移候选显示「上次做完X后你通常会做」；降级候选显示「完成过 N 次」
     const basis = rec.degraded
       ? (rec.transCount ? `（完成过 ${rec.transCount} 次${idle}）` : '')
-      : `（上次完成「${esc(rec.fromPlan)}」后你通常会做 · ${rec.transCount} 次${idle}）`;
+      : `（上次做完「${esc(rec.fromTitle)}」后你通常会做 · ${rec.transCount} 次${idle}）`;
     const more = recPool.length > 1
       ? `<button class="btn sm" data-ap-rec-next title="换一个（${recPool.length} 个候选）">↻ ${recIdx + 1}/${recPool.length}</button>` : '';
     bar.innerHTML =
@@ -287,28 +288,28 @@ export const AutoPilot = {
     const bX = bar.querySelector('[data-ap-rec-x]');
     if (bCreate) bCreate.onclick = () => {
       if (bar) bar.remove();
-      // 一键新建：预填关联计划 + 今天习惯时段 + 习惯时长
+      // 一键新建：预填标题 + 今天习惯时段 + 习惯时长（不强制挂计划）
       const today = new Date();
       const start = rec.at
         ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}T${rec.at}`
         : null;
-      App.overview.openActModal(null, rec.planId, start, rec.minutes || null);
+      App.overview.openActModal(null, null, start, rec.minutes || null, rec.title);
     };
     if (bNext) bNext.onclick = () => {
       recIdx = (recIdx + 1) % recPool.length;
       bar.remove();
       this._renderRecItem(App, recPool[recIdx]);
     };
-    if (bX) bX.onclick = () => { this._recordPlanDismiss(rec.planId); if (bar) bar.remove(); };
+    if (bX) bX.onclick = () => { this._recordActDismiss(rec.title); if (bar) bar.remove(); };
   },
 
-  // 计划级 dismiss（按习惯模板）：当天不再建议该计划
-  _recordPlanDismiss(planId) {
+  // 活动模板级 dismiss：当天不再建议该活动标题
+  _recordActDismiss(title) {
     const m = loadJSON(DISMISS_KEY);
-    m['plan:' + String(planId)] = todayKey();
+    m['act:' + String(title)] = todayKey();
     saveJSON(DISMISS_KEY, m);
   },
-  _isPlanDismissed(planId) {
-    return loadJSON(DISMISS_KEY)['plan:' + String(planId)] === todayKey();
+  _isActDismissed(title) {
+    return loadJSON(DISMISS_KEY)['act:' + String(title)] === todayKey();
   },
 };

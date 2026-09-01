@@ -183,10 +183,17 @@ export function recommendNext(candidates, feats, opts = {}) {
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
-// ---- 顺序推荐（L3 教练面 · 按完成计划的时间顺序 + 历史关联性）----
+// ---- 活动级顺序推荐（L3 教练面 · 按完成时间顺序 + 历史关联性）----
 // 语义：不是「习惯」（重复性的一般已设成循环活动，不重复推），而是从「已完成活动的时间序列」里
-// 学出计划间的转移关联（做了 A 之后通常接着做 B），推荐「下一个该新建」的计划。
-// 连续相邻相同计划（= 循环连做）不构成转移，自动跳过。
+// 学出活动模板间的转移关联（做了 A 之后通常接着做 B），推荐「下一个该新建」的活动（不强制挂计划）。
+// 活动模板 = 标题去尾随数字归一；连续相邻相同模板（= 循环连做）不构成转移，自动跳过。
+
+// 标题 → 活动模板：去掉尾随数字/分隔符（「写作 2」「写作2」→「写作」）
+function actTemplate(t) {
+  const s = String(t || '').trim();
+  const base = s.replace(/[\s_\-–—]*\d+[\s_\-–—]*$/g, '').trim();
+  return base || s;
+}
 
 function startHourOf(a) {
   // 兼容时间戳与 'YYYY-M-DTHH:MM' 字符串，取开始时段 "HH:MM"
@@ -218,54 +225,51 @@ function aggStats(acts) {
 }
 
 /**
- * 从历史「已完成活动」按完成时间排序得到的计划序列中，学转移关联（prevPlan→nextPlan 计数），
- * 以「最近完成计划」为起点，返回前 k 个最强后继（按转移关联降序，同级更久没做优先）。
- * 转移数 < minTransitions 的弱关联不强推；**无任何转移时降级**：退化为「最近完成过的计划」
- * （按完成时间降序，保证冷启动/稀疏数据也有推荐可弹）。
- * 连续相邻相同计划跳过（循环连做不构成转移）。
+ * 活动级顺序推荐：从历史「已完成活动」（无论是否挂计划）按完成时间排序，学活动模板间
+ * 转移关联（做了 A 之后通常接着做 B），以「最近完成模板」为起点返回前 k 个最强后继
+ * （转移关联降序，同级更久没做优先）。转移数 < minTransitions 不强推；
+ * **无任何转移时降级**为「最近完成过的活动模板」（保证冷启动/稀疏数据也有推荐可弹）。
+ * 连续相邻相同模板跳过（循环连做不构成转移）。
  * 纯函数、仅本地消费、可 node 测试。
- * @param {object} db { plans, activities }
+ * @param {object} db { activities }
  * @param {object} opts { now(ms), k(候选数), minTransitions }
- * @returns {Array<{ planId, title, fromPlan, transCount, minutes, at, lastDone, daysSince, degraded? }>}
+ * @returns {Array<{ title, fromTitle, transCount, minutes, at, lastDone, daysSince, degraded? }>}
  */
-export function suggestNextPlans(db, { now = Date.now(), k = 3, minTransitions = 1 } = {}) {
-  const plans = db.plans || [];
-  const planTitle = new Map(plans.map((p) => [p.id, p.title]));
+export function suggestNextActivities(db, { now = Date.now(), k = 3, minTransitions = 1 } = {}) {
   const acts = (db.activities || [])
-    .filter((a) => (a.status === 'Completed' || a.status === 'Reviewed') && Array.isArray(a.plan_ids) && a.plan_ids.length)
-    .map((a) => ({ t: a.actual_end ?? a.created ?? 0, pid: a.plan_ids[0], a }))
-    .filter((x) => x.t > 0)
+    .filter((a) => a.status === 'Completed' || a.status === 'Reviewed')
+    .map((a) => ({ t: a.actual_end ?? a.created ?? 0, tmpl: actTemplate(a.title), a }))
+    .filter((x) => x.t > 0 && x.tmpl)
     .sort((a, b) => a.t - b.t); // 完成时间升序 → 时间顺序
   if (!acts.length) return [];
 
-  const lastDoneByPlan = new Map();
-  const trans = new Map(); // "prev->next" -> count
+  const lastDoneByTmpl = new Map();
+  const trans = new Map(); // "from\u0000to" -> count
   for (let i = 0; i < acts.length; i++) {
     const cur = acts[i];
-    lastDoneByPlan.set(cur.pid, Math.max(lastDoneByPlan.get(cur.pid) || 0, cur.t));
+    lastDoneByTmpl.set(cur.tmpl, Math.max(lastDoneByTmpl.get(cur.tmpl) || 0, cur.t));
     if (i === 0) continue;
     const prev = acts[i - 1];
-    if (prev.pid === cur.pid) continue; // 相邻相同（循环连做）不构成转移
-    const key = prev.pid + '->' + cur.pid;
+    if (prev.tmpl === cur.tmpl) continue; // 相邻相同（循环连做）不构成转移
+    const key = prev.tmpl + '\u0000' + cur.tmpl;
     trans.set(key, (trans.get(key) || 0) + 1);
   }
-  const lastPlan = acts[acts.length - 1].pid; // 最近完成的计划
+  const lastTmpl = acts[acts.length - 1].tmpl; // 最近完成的活动模板
   const nextCands = [];
   for (const [key, count] of trans) {
-    const [from, to] = key.split('->');
-    if (from === lastPlan) nextCands.push({ to, count });
+    const [from, to] = key.split('\u0000');
+    if (from === lastTmpl) nextCands.push({ to, count });
   }
   // 排序：转移关联强优先；同级按「更久没做」（lastDone 更小）优先
-  nextCands.sort((a, b) => (b.count - a.count) || ((lastDoneByPlan.get(a.to) || 0) - (lastDoneByPlan.get(b.to) || 0)));
+  nextCands.sort((a, b) => (b.count - a.count) || ((lastDoneByTmpl.get(a.to) || 0) - (lastDoneByTmpl.get(b.to) || 0)));
 
-  const shape = (pid, fromPlan, transCount, degraded) => {
-    const hist = acts.filter((x) => x.pid === pid);
+  const shape = (tmpl, fromTitle, transCount, degraded) => {
+    const hist = acts.filter((x) => x.tmpl === tmpl);
     const { minutes, at } = aggStats(hist);
-    const lastDone = lastDoneByPlan.get(pid) || 0;
+    const lastDone = lastDoneByTmpl.get(tmpl) || 0;
     return {
-      planId: pid,
-      title: planTitle.get(pid) || '',
-      fromPlan,
+      title: tmpl,
+      fromTitle,
       transCount: degraded ? hist.length : transCount, // 降级候选：transCount = 完成次数
       minutes,
       at,
@@ -279,23 +283,23 @@ export function suggestNextPlans(db, { now = Date.now(), k = 3, minTransitions =
   for (const c of nextCands) {
     if (out.length >= k) break;
     if (c.count < minTransitions) break; // 已按计数降序，后续更弱，直接停
-    out.push(shape(c.to, planTitle.get(lastPlan) || '', c.count, false));
+    out.push(shape(c.to, lastTmpl, c.count, false));
   }
   if (out.length) return out;
 
-  // 降级：无足够转移关联 → 退化为「最近完成过的计划」（按完成时间降序），保证有推荐可弹
+  // 降级：无足够转移关联 → 退化为「最近完成过的活动模板」（按完成时间降序），保证有推荐可弹
   const seen = new Set();
   const deg = [];
   for (let i = acts.length - 1; i >= 0 && deg.length < k; i--) {
-    const pid = acts[i].pid;
-    if (seen.has(pid)) continue;
-    seen.add(pid);
-    deg.push(shape(pid, '', 0, true));
+    const tmpl = acts[i].tmpl;
+    if (seen.has(tmpl)) continue;
+    seen.add(tmpl);
+    deg.push(shape(tmpl, '', 0, true));
   }
   return deg;
 }
 
 /** 便捷：取 top1（无候选返回 null） */
-export function suggestNextPlanActivity(db, opts = {}) {
-  return suggestNextPlans(db, { ...opts, k: 1 })[0] ?? null;
+export function suggestNextActivity(db, opts = {}) {
+  return suggestNextActivities(db, { ...opts, k: 1 })[0] ?? null;
 }
