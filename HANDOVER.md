@@ -19,12 +19,12 @@
 - **完成弹窗收支多资源化**：支出/收入改为行式列表（资源+金额+备注+移除），与预设收支/改账同构。
 - **UI 质感增强（CSS）**：收支行轻卡片底、输入焦点光晕、分区虚线、提醒条渐变、弹窗层次阴影（含深色同步）。
 - **L3 智能推荐接入 App（顺序转移推荐 → 一键新建，2026-08-30）**：AutoPilot 新增 F6 推荐条——**按完成计划的时间顺序 + 历史关联性**推荐，非「习惯」（重复性的一般已设成循环活动）。
-  新域函数 `suggestNextPlanActivity(db)`（`src/domain/recommend.js`）：把已完成活动按完成时间排序成计划序列，学「转移关联」（做完 A 通常接着做 B，`prevPlan→nextPlan` 计数），
-  连续相邻相同计划（循环连做）自动跳过不构成转移；取「最近完成计划」的最强后继（转移 ≥ minTransitions=2 才推）。
-  推荐条显示「💡 接下来「阅读」 09:00 · 40 分钟（上次完成「跑步」后你通常会做 · 2 次）」+「一键新建」；
-  「一键新建」→ `openActModal(null, planId, 今天习惯时段, 习惯时长)` 预填（`openActModal` 支持 `presetMinutes`）。
-  不限次数（User 裁决取消每周上限）；「×」当天不再建议该计划；设置「智能推荐」开关（`smartRecommend`，默认开，可彻底关闭）。
-  测试 `tests/recommend.test.js` 顺序推荐 4 条，全量 204 绿。社区化（L4）本轮**未接入 App**（按用户裁决暂缓，域层/适配器/契约已就绪）。
+  `suggestNextPlans(db,{k=3,minTransitions=1})`（`src/domain/recommend.js`）：把已完成活动按完成时间排序成计划序列，学「转移关联」（做完 A 通常接着做 B），
+  连续相邻相同计划（循环连做）自动跳过；返回前 k 个最强后继（转移关联降序，同级更久没做优先）。
+  **触发降级**：转移关联不足或最近完成计划无后继时，降级为「最近完成过的计划」兜底（`degraded:true`，transCount=完成次数），保证冷启动/稀疏数据也有推荐可弹（修复「使用中从不触发」）。
+  F6 推荐条：「💡 接下来「阅读」…」+「↻ i/k 换一个」+「一键新建」（预填计划/时段/时长，`openActModal` 支持 `presetMinutes`）+「×」（当天忽略该计划）。
+  不限次数（User 裁决取消每周上限）；设置「智能推荐」开关（`smartRecommend`，默认开，可彻底关闭）。
+  测试 `tests/recommend.test.js` 顺序推荐/降级/top-k 共 8 条，全量 207 绿。社区化（L4）本轮**未接入 App**（按用户裁决暂缓，域层/适配器/契约已就绪）。
 
 > ⚠️ 本仓库已功能冻结（2026-08-24）：项目迁移至 TWS2-Eco monorepo
 > （apps/perp-web SolidJS 重写 + packages/perp-core TS + apps/perp-mobile）。

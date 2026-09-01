@@ -133,10 +133,13 @@ function mkDB(seqs) {
   return { schemaVersion: 3, resources: [], rules: [], goals: [], plans, outputs: [], valueflows: [], txs: [], goods: [], seq: {}, activities };
 }
 
-test('L3: 顺序推荐 —— 最近完成计划无历史后继 → 不强推', () => {
-  // 序列 写作→跑步→阅读（最后完成=阅读，阅读后无历史）
+test('L3: 顺序推荐 —— 最近完成计划无历史后继 → 降级为最近完成计划（有候选可弹）', () => {
+  // 序列 写作→跑步→阅读（最后完成=阅读，阅读后无历史转移）
   const db = mkDB([[P.w, 1, 9, 0, 60], [P.r, 1, 18, 30, 30], [P.rd, 2, 9, 0, 40]]);
-  assert.equal(suggestNextPlanActivity(db, { now: ms('2026-8-4T12:00') }), null);
+  const rec = suggestNextPlanActivity(db, { now: ms('2026-8-4T12:00') });
+  assert.ok(rec, '无转移时降级，仍应有推荐');
+  assert.equal(rec.planId, 'p-rd'); // 最近完成的计划
+  assert.equal(rec.degraded, true);
 });
 
 test('L3: 顺序推荐 —— 学转移关联推最强后继', () => {
@@ -168,9 +171,21 @@ test('L3: 顺序推荐 —— 循环连做（相邻相同）不计入转移', ()
   assert.equal(rec.transCount, 2);
 });
 
-test('L3: 顺序推荐 —— 无完成历史（<2）返回 null', () => {
-  const db = mkDB([[P.w, 1, 9, 0, 60]]);
+test('L3: 顺序推荐 —— 无任何完成历史返回空（降级也无可推荐）', () => {
+  const db = mkDB([]); // 无完成记录
+  assert.deepEqual(suggestNextPlans(db, { now: ms('2026-8-4T12:00') }), []);
   assert.equal(suggestNextPlanActivity(db, { now: ms('2026-8-4T12:00') }), null);
+});
+
+test('L3: 降级 —— 无转移关联时按「最近完成计划」兜底，transCount=完成次数', () => {
+  // 三条完成记录，计划各不相同（无 A→B 重复 → 无转移关联）
+  const db = mkDB([[P.w, 1, 9, 0, 60], [P.r, 2, 18, 30, 30], [P.rd, 3, 9, 0, 40]]);
+  const recs = suggestNextPlans(db, { now: ms('2026-8-4T12:00'), k: 3 });
+  assert.equal(recs.length, 3);
+  assert.ok(recs.every((r) => r.degraded === true));
+  assert.equal(recs[0].planId, 'p-rd'); // 最近完成的在前
+  assert.equal(recs[0].transCount, 1);  // 完成 1 次
+  assert.equal(recs[0].fromPlan, '');   // 无转移上下文
 });
 
 test('L3: top-k —— 多个后继按转移关联降序返回前 k', () => {

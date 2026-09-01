@@ -271,10 +271,14 @@ export const AutoPilot = {
     const when = rec.at ? ` ${rec.at}` : '';
     const dur = rec.minutes ? ` · ${rec.minutes} 分钟` : '';
     const idle = rec.daysSince > 0 ? ` · ${rec.daysSince} 天没做` : '';
+    // 转移候选显示「上次完成X后你通常会做」；降级候选显示「完成过 N 次」
+    const basis = rec.degraded
+      ? (rec.transCount ? `（完成过 ${rec.transCount} 次${idle}）` : '')
+      : `（上次完成「${esc(rec.fromPlan)}」后你通常会做 · ${rec.transCount} 次${idle}）`;
     const more = recPool.length > 1
       ? `<button class="btn sm" data-ap-rec-next title="换一个（${recPool.length} 个候选）">↻ ${recIdx + 1}/${recPool.length}</button>` : '';
     bar.innerHTML =
-      `<span style="flex:1">💡 接下来「${esc(rec.title)}」${when}${dur}（上次完成「${esc(rec.fromPlan)}」后你通常会做 · ${rec.transCount} 次${idle}）</span>` +
+      `<span style="flex:1">💡 接下来「${esc(rec.title)}」${when}${dur}${basis}</span>` +
       more +
       `<button class="btn sm primary" data-ap-rec-create>一键新建</button>` +
       `<button class="btn sm" data-ap-rec-x title="今天不再提醒">×</button>`;
