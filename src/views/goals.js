@@ -30,11 +30,29 @@ function persistCollapsed() {
 }
 export function toggleGoal(id) {
   collapsedGoals.has(id) ? collapsedGoals.delete(id) : collapsedGoals.add(id);
-  persistCollapsed(); App.refresh();
+  persistCollapsed();
+  // 纯 UI 折叠：局部切换，避免全量 refresh 拖慢响应
+  const block = document.querySelector(`.goal-block[data-gid="${id}"]`);
+  if (!block) return;
+  const collapsed = collapsedGoals.has(id);
+  block.classList.toggle('collapsed', collapsed);
+  const plans = block.querySelector('.goal-plans');
+  if (plans) plans.classList.toggle('hidden', collapsed);
+  const arrow = block.querySelector('.goal-head .collapse-btn');
+  if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
 }
 export function togglePlan(id) {
   collapsedPlans.has(id) ? collapsedPlans.delete(id) : collapsedPlans.add(id);
-  persistCollapsed(); App.refresh();
+  persistCollapsed();
+  // 纯 UI 折叠：局部切换 plan-card，避免全量 refresh 拖慢响应
+  const card = document.querySelector(`.plan-card[data-pid="${id}"]`);
+  if (!card) return;
+  const collapsed = collapsedPlans.has(id);
+  card.classList.toggle('collapsed', collapsed);
+  const dt = card.querySelector('.plan-details');
+  if (dt) dt.classList.toggle('hidden', collapsed);
+  const arrow = card.querySelector('.plan-head .collapse-btn');
+  if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
 }
 // 计划内活动列表展开/收起（超 20 条时）
 export function togglePlanActs(pid) {
@@ -244,7 +262,7 @@ function planCard(App, p) {
       <div class="plan-arch-body" style="${archOpen ? '' : 'display:none'}">${archActs.map(actRow).join('')}</div>
     </div>` : '';
   return `
-    <div class="plan-card ${collapsed ? 'collapsed' : ''}" style="border-left:4px solid ${safeColor(p.color) || '#e5e8ee'}">
+    <div class="plan-card ${collapsed ? 'collapsed' : ''}" data-pid="${jsStr(p.id)}" style="border-left:4px solid ${safeColor(p.color) || '#e5e8ee'}">
       <div class="plan-head" onclick="App.goals.togglePlan('${jsStr(p.id)}')" title="点击收起 / 展开">
         <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.togglePlan('${jsStr(p.id)}')" aria-label="收起/展开">${collapsed ? '▸' : '▾'}</button>
         <div class="grow">
@@ -269,6 +287,7 @@ function planCard(App, p) {
         <button class="btn sm primary" onclick="App.overview.openActModal(null,'${jsStr(p.id)}')">＋ 活动</button>
         <label class="status-select">状态
           <select onchange="App.goals.setPlanStatus('${jsStr(p.id)}', this.value)">
+            <option value="Incubating" ${p.status === 'Incubating' ? 'selected' : ''}>孵化中</option>
             <option value="Active" ${p.status === 'Active' ? 'selected' : ''}>进行中</option>
             <option value="Paused" ${p.status === 'Paused' ? 'selected' : ''}>已暂停</option>
             <option value="Completed" ${p.status === 'Completed' ? 'selected' : ''}>已完成</option>
@@ -311,7 +330,7 @@ export function render(App, el) {
         </div>
       </div>` : '';
     return `
-      <div class="goal-block ${gcoll ? 'collapsed' : ''}">
+      <div class="goal-block ${gcoll ? 'collapsed' : ''}" data-gid="${jsStr(g.id)}">
         <div class="goal-head" data-gid="${jsStr(g.id)}" title="点击收起 / 展开 · 长按 状态 / 归档">
           <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleGoal('${jsStr(g.id)}')" aria-label="收起/展开">${gcoll ? '▸' : '▾'}</button>
           <div class="grow">

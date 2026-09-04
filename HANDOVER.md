@@ -29,11 +29,11 @@
   不限次数（User 裁决取消每周上限）；设置「智能推荐」开关（`smartRecommend`，默认开，可彻底关闭）。
   测试 `tests/recommend.test.js` 活动级/降级/top-k 共 8 条，全量 208 绿。社区化（L4）本轮**未接入 App**（按用户裁决暂缓，域层/适配器/契约已就绪）。
 
-- **Markdown 双向速录（mdimport + mdapply，2026-08-30）**：JSON 仍是唯一存储，md 是**可手打/可交换的视图面**。
-  `src/domain/mdimport.js`：`parseMdImport`（手打 md → 实体候选，规则 v1：frontmatter default / #目标 / ##计划 / -\[ ]活动 / @时间词·时长 / (计划)归属 / #标签 / \[x]）+ `serializeDbToMd`（实体 → md，带 `<!--id:xxx-->` 注释）。
-  `src/domain/mdapply.js`：候选 → db（带 id 更新不复制，无 id 走 engine 新建；\[x] 完成态不绕过状态机）。
-  **编辑器 = Vditor 4**（`src/views/workspace.js`，活动 Tab 滑动容器新增「📝 编辑器」第三卡片）：WYSIWYG 编辑 md，任务列表可直接勾选切换完成状态，「应用」写 db、「导出 .md」；看板/日历操作 → db 变 → 编辑器同步最新 md（双向）。Vditor 引入使主 bundle 增至 \~570KB（gzip 160KB）。
-  测试 `mdimport` 11 + `mdapply` 5，全量 225 绿。
+- **Markdown 双向速录 + 单一文本编辑器（mdimport + mdapply + mdviews + workspace，2026-08-30）**：JSON 仍是唯一存储，md 是可手打/可交换的视图面。
+  `src/domain/mdimport.js`：`parseMdImport`（手打 md → 候选，规则 v1：frontmatter default / #目标 / ##计划 / ##日期组 / -\[ ]活动（兼容 lute 大写 \[X]）/ @时间词·时长 / (计划)归属 / 状态词(进行中/失败/归档) / #标签 / \[x]；隐藏式 id 绑定 `<!--id:xxx-->` 兼容 lute 链接式 `[!--id:x--](!--id:x--)`）+ `serializeDbToMd`（mirror 完整镜像）+ `serializeEntityLine`/`replaceEntityLine`（单行局部替换）。
+  `src/domain/mdapply.js`：候选 → db（**id 绑定更新——改名不断链**；**无 id 一律新建（db 授 seq id，弃内容推导 hash id——同一内容多行是独立实体，绝不冲突）**；**稳健化** **`hardenActivities`** **三层防御**——D1 空标题行（回车空项）不落库、D2 相邻内容完全相同行合并（回车/复制误操作）、D3 同 id 重复行忽略（编辑器复制隐藏 id）；`view:` 标记走**视图局部同步**——只更新带 id 活动、无差异不触碰、视图内新行新建并回补 id、范围内缺失即删（scope=视图日期组∪未排程，范围外不碰）；状态对齐走状态机不绕过，失败记 `statusFails` 供回滚/唤起完成面板）。
+  **编辑器 = 单一 Vditor 4**（`src/views/workspace.js`，活动 Tab「📝 编辑器」卡片）：只有一个文本编辑兼展示器，无任何其他交互组件（vim/终端式）。「视图」= 对 db 的一次重排（`src/views/mdviews.js` 组织器：🗂目标层级 / 📅日 / 🗓周 / 📆月），切换即把 db 组织成另一份 md 填进同一编辑器；日/周/月视图支持 **‹ 今天 › 日期导航**（日 ±1 天 / 周 ±1 周 / 月 ±1 月，锚点跨 render 保留）。**同步模型 = 失焦提交（blur）**：编辑器是纯编辑缓冲，编辑中系统**绝不 setValue / 不写 db**（input 仅只读更新预览），失焦才一次性 parse→reconcile→落库→回填；切视图/导航前先 `sync()` 落库再重排——杜绝 input 重入导致的跳顶/光标丢失/覆盖输入。**视图局部增删**——无 id 新行 → 新建并回补隐藏式 id（bindEntityLine 按 occurrence 绑定，防同标题多行漏绑）；范围内缺失即删（作用域限定视图覆盖日期组 ∪ 未排程，范围外不碰），确认后落盘；**空标题带 id 残留行（回车副本）→ ghostIds 标记存在，不触发缺失即删误删**。**指令顺序宽容**——活动行 `(计划)/#标签/(状态)` 在 @ 前后均可剥离、不混入活动名。**完成态认真处理**——勾选 \[x] 非法流转 → **唤起完成面板**（openCompleteModal 原子完成：Planned 先 start 再登记收支产出完成），填了就完成、取消才回滚该行；Completed 不回退。`sanitize:false` + CSS 隐藏 lute 渲染的 id 链接。「导出 .md」归一化回可读注释。Vditor 引入使主 bundle 增至 \~570KB（gzip 160KB）。
+  测试 `mdimport` 15 + `mdapply` 16 + `mdview` 7，全量 248 绿。
 
 > ⚠️ 本仓库已功能冻结（2026-08-24）：项目迁移至 TWS2-Eco monorepo
 > （apps/perp-web SolidJS 重写 + packages/perp-core TS + apps/perp-mobile）。

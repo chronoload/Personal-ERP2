@@ -395,7 +395,7 @@ export function render(App, el) {
       <div class="vf-sum-row">
         <span class="grow">${esc(out?.title || v.output_id)} ${v.giver && v.receiver ? `（${esc(v.giver)} → ${esc(v.receiver)}）` : ''}</span>
         ${badge(st)}
-        ${st !== 'Closed' ? `<button class="btn sm primary" onclick="App.overview.openFeedbackModal('${jsStr(v.id)}')">反馈</button>` : ''}
+        ${st !== 'Closed' ? `<button class="btn sm primary" onclick="App.finance.openFeedbackModal('${jsStr(v.id)}')">反馈</button>` : ''}
       </div>`;
   }).join('');
 

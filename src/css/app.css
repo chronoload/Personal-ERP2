@@ -202,12 +202,37 @@ h1, h2, h3 { margin: 0; }
 .kanban-arch-body .kanban-card { cursor: default; }
 
 /* ============================================================
-   Markdown 编辑器（活动 Tab「📝 编辑器」页）
+   Markdown 编辑器（活动 Tab「📝 编辑器」页）——单一文本编辑器
    ============================================================ */
 .ws-preview { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 .ws-preview b { color: var(--text); }
 /* Vditor 容器样式微调（贴合卡片内边距） */
 #ws-vditor .vditor { border-radius: 10px; }
+.ws-mirror-tag { color: var(--purple); font-size: 12px; border: 1px solid var(--purple); border-radius: 20px; padding: 0 8px; opacity: .9; }
+
+/* 视图切换条（= db 重排成不同 md 填入同一编辑器） */
+.ws-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.ws-tab {
+  border: 1px solid var(--border); background: #fff; color: var(--muted);
+  border-radius: 8px; padding: 5px 12px; font-size: 12.5px; cursor: pointer;
+}
+.ws-tab.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* 日期视图导航（‹ 今天 ›） */
+.ws-nav { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.ws-nav-label { font-weight: 600; color: var(--text); margin-left: 4px; font-size: 12.5px; }
+
+/* 语法弹窗正文 */
+.ws-syntax-body { font-size: 13px; line-height: 1.6; color: var(--text); }
+.ws-syntax-body code { background: var(--border); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+/* 隐藏式 id 绑定链接（lute 渲染 <!--id:--> 为 <a href="!--id:...">，视觉隐藏但保留于文本流） */
+.vditor a[href^="!--id:"] { display: none; }
+
+/* 删除确认列表 */
+.ws-del-list { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; background: #fbfcfe; }
+.ws-del-item { padding: 4px 2px; border-bottom: 1px dashed #e7eaf0; font-size: 13px; }
+.ws-del-item:last-child { border-bottom: none; }
 .kanban-add { border: 1px dashed #cdd3dd; border-radius: 8px; padding: 16px 8px; text-align: center; color: var(--muted); font-size: 12px; cursor: pointer; }
 .kanban-add:hover { background: #eef1f6; color: #4a5260; border-color: #a9b1bf; }
 .kanban-card {
@@ -801,6 +826,13 @@ html[data-theme="dark"] .theme-preview, html[data-theme="dark"] .theme-select { 
 html[data-theme="dark"] .dg-chip { background: #1d2537; border-color: #2b3a55; color: #7fa8d8; }
 html[data-theme="dark"] .dg-card { background: #1b2130; color: #c6cddb; border-color: #2c3549; }
 html[data-theme="dark"] .dash-nav-item { background: #1b2130; }
+
+/* Markdown 编辑器（深色） */
+html[data-theme="dark"] .ws-tab { background: #1b2130; border-color: #2c3549; color: #8b95a8; }
+html[data-theme="dark"] .ws-tab.on { background: var(--primary); color: #fff; }
+html[data-theme="dark"] .ws-del-list { background: #171c29; border-color: #2a3245; }
+html[data-theme="dark"] .ws-del-item { border-bottom-color: #2a3245; }
+html[data-theme="dark"] .ws-mirror-tag { border-color: #7c6cff; color: #a99cff; }
 
 /* HUD 面板本就深色，略调文字对比 */
 html[data-theme="dark"] #hud-root { background: rgba(12, 15, 22, .96); }

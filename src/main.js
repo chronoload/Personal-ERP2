@@ -19,6 +19,7 @@ import { AutoPilot } from './services/autoPilot.js';
 import { ErrorLog } from './services/errorLog.js';
 import { renderTopbar, renderTabs } from './views/topbar.js';
 import * as overview from './views/overview.js';
+import * as finance from './views/finance.js';
 import * as goals from './views/goals.js';
 import * as stats from './views/stats.js';
 import * as calendar from './views/calendar.js';
@@ -60,8 +61,61 @@ function widgetSnapshot(App) {
   };
 }
 
-const TAB_VIEWS = { overview, goals, stats };
-const TAB_ORDER = ['overview', 'goals', 'stats'];
+const TAB_VIEWS = { overview, finance, goals, stats };
+const TAB_ORDER = ['overview', 'finance', 'goals', 'stats'];
+
+// ---- Tab 视图缓存（初次懒加载 + 持久容器）----
+// 每个 tab 一个永久容器：首次进入才渲染（懒加载），切回只切换显隐、不重建。
+// 这样最重的 overview（含 Vditor 编辑器）在切换间不再 destroy+重建，显著提速。
+// refresh() 会强制重建当前 tab，保证数据最新；其余 tab 容器保持缓存。
+const viewCache = new Map();   // id -> 容器 el
+const viewReady = new Set();   // 已渲染的 id
+let forceRenderId = null;      // 由 refresh() 置位 → 当前 tab 强制重建
+
+function viewContainer(id) {
+  let c = viewCache.get(id);
+  if (c) return c;
+  c = document.createElement('div');
+  c.className = 'app-view';
+  c.dataset.view = id;
+  c.style.display = 'none';
+  document.getElementById('content').appendChild(c);
+  viewCache.set(id, c);
+  return c;
+}
+
+function renderViewInto(App, id) {
+  const c = viewContainer(id);
+  c.innerHTML = '';
+  const view = TAB_VIEWS[id];
+  try {
+    view.render(App, c);
+  } catch (e) {
+    ErrorLog.log('error', `渲染视图「${id}」失败：${(e && e.message) || e}`, e);
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-head"><h3>页面渲染出错</h3><span class="muted">该页面暂时无法显示，其余功能不受影响</span></div>
+        <p class="muted">已记入错误日志。</p>
+        <button class="btn sm" onclick="App.errorLogExport()">导出日志</button>
+      </div>`;
+  }
+  viewReady.add(id);
+  return c;
+}
+
+// 激活指定 tab：首次懒渲染，之后只显隐；forceRenderId 命中时强制重建（数据刷新）
+function activateTab(App, id) {
+  const c = viewContainer(id);
+  const mustForce = forceRenderId === id;
+  if (forceRenderId) forceRenderId = null;
+  if (!viewReady.has(id) || mustForce) renderViewInto(App, id);
+  c.style.display = '';
+  if (c.parentElement) {
+    for (const sib of c.parentElement.children) {
+      if (sib !== c && sib.classList && sib.classList.contains('app-view')) sib.style.display = 'none';
+    }
+  }
+}
 
 const App = {
   db: loadDB(),
@@ -70,7 +124,7 @@ const App = {
   // 系统服务接口（预留：小组件 / 系统提示 / 系统通知 / 备份）
   widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS,
   // 视图扁平暴露给内联 handler（App.calendar.open() 等）
-  overview, goals, stats, calendar, timer, dayGuide, hud, reportSlides,
+  overview, finance, goals, stats, calendar, timer, dayGuide, hud, reportSlides,
   setTab(id) { this.tab = id; this.render(true); window.scrollTo({ top: 0 }); },
   // 统一启动入口：撞上捆绑冲突时弹三选一仲裁（先做这个 / 让对方先 / 取消）
   startAct(id) {
@@ -145,8 +199,10 @@ const App = {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', dark ? '#131722' : '#f4f5f7');
   },
-  // 刷新保留滚动位置，避免点击后页面跳顶/脱离焦点；不重放入场动画
+  // 刷新保留滚动位置，避免点击后页面跳顶/脱离焦点；不重放入场动画。
+  // 置 forceRenderId：本次渲染强制重建当前 tab（数据刷新），其余 tab 容器保持不变缓存。
   refresh() {
+    forceRenderId = this.tab;
     const sy = window.scrollY;
     this.render(false);
     requestAnimationFrame(() => window.scrollTo(0, sy));
@@ -196,6 +252,7 @@ const App = {
     const tabsEl = document.getElementById('tabs');
     if (!this.db.resources.length) {
       tabsEl.style.display = 'none';
+      viewCache.clear(); viewReady.clear(); forceRenderId = null; // 丢弃旧视图缓存，避免 reset 后残留
       content.innerHTML = '';
       setup.render(this, content);
       Widget.push(widgetSnapshot(this));
@@ -204,20 +261,9 @@ const App = {
     }
     tabsEl.style.display = '';
     renderTabs(this);
-    content.innerHTML = '';
-    const view = TAB_VIEWS[this.tab] || overview;
-    try {
-      view.render(this, content);
-    } catch (e) {
-      // 渲染隔离：单个视图崩溃不拖垮整个应用，异常落入环形错误日志
-      ErrorLog.log('error', `渲染视图「${this.tab}」失败：${(e && e.message) || e}`, e);
-      content.innerHTML = `
-        <div class="card">
-          <div class="card-head"><h3>页面渲染出错</h3><span class="muted">该页面暂时无法显示，其余功能不受影响</span></div>
-          <p class="muted">已记入错误日志。</p>
-          <button class="btn sm" onclick="App.errorLogExport()">导出日志</button>
-        </div>`;
-    }
+    // 首次建立 tab 容器时，清掉 content 里可能残留的 setup 内容
+    if (!content.querySelector('.app-view')) content.innerHTML = '';
+    activateTab(this, this.tab); // 懒渲染 + 显隐切换（切回不重建）
     Widget.push(widgetSnapshot(this)); // 维护小组件快照（预留）
     Widget.refreshNative();
     Scheduler.syncValueflowNotifs(this.db); // 待反馈价值流系统通知（16C）

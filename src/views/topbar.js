@@ -44,6 +44,7 @@ export function renderTabs(App) {
   const el = document.getElementById('tabs');
   const items = [
     { id: 'overview', label: '活动' },
+    { id: 'finance', label: '资源' },
     { id: 'goals', label: '目标与计划' },
     { id: 'stats', label: '统计' },
   ];

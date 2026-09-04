@@ -318,10 +318,10 @@ export function consumeGood(db, id, { qty = 1, note = '' } = {}) {
 
 // ---------- 目标 (Goal) ----------
 
-export function createGoal(db, { title, desc }) {
+export function createGoal(db, { title, desc, _id }) {
   if (!title || !title.trim()) return fail('目标名称必填');
   const g = newGoal({ title: title.trim(), desc: (desc || '').trim() });
-  g.id = nextId(db, 'g');
+  g.id = _id || nextId(db, 'g'); // _id：mdapply 用 hash 稳定 id（可幂等回写）
   db.goals.push(g);
   return ok();
 }
@@ -413,7 +413,7 @@ export const PLAN_COLORS = ['#4a7fbf', '#3da06a', '#d97706', '#7c3aed', '#dc2626
 
 // ---------- 计划 (Plan) ----------
 
-export function createPlan(db, { goal_id, title, budget, color, default_expenses, default_incomes }) {
+export function createPlan(db, { goal_id, title, budget, color, default_expenses, default_incomes, _id }) {
   if (!title || !title.trim()) return fail('计划名称必填');
   if (!db.goals.some((g) => g.id === goal_id)) return fail('所属目标不存在');
   if (budget !== null && !(Number(budget) >= 0)) return fail('预算必须 ≥ 0');
@@ -427,7 +427,7 @@ export function createPlan(db, { goal_id, title, budget, color, default_expenses
     color: color || PLAN_COLORS[db.plans.length % PLAN_COLORS.length],
   });
   p.default_expenses = de; p.default_incomes = di;
-  p.id = nextId(db, 'p');
+  p.id = _id || nextId(db, 'p'); // _id：mdapply 用 hash 稳定 id（可幂等回写）
   db.plans.push(p);
   return ok();
 }
@@ -656,7 +656,7 @@ function applyAtomicity(db, a, { keepConflict = false } = {}) {
   return {};
 }
 
-export function createActivity(db, { title, note, plan_ids, planned_date = null, planned_start = null, planned_minutes = 0, repeat = null, repeat_until = null, theme = null, keep_conflict = false, preset_expenses, preset_incomes }) {
+export function createActivity(db, { title, note, plan_ids, planned_date = null, planned_start = null, planned_minutes = 0, repeat = null, repeat_until = null, theme = null, keep_conflict = false, preset_expenses, preset_incomes, _id }) {
   if (!title || !title.trim()) return fail('活动名称必填');
   if (planned_start != null && planned_start !== '' && !validPlannedStart(planned_start)) {
     return fail(`计划时间无效：${planned_start}（需 YYYY-MM-DDTHH:MM 且各部分真实存在）`);
@@ -676,7 +676,7 @@ export function createActivity(db, { title, note, plan_ids, planned_date = null,
     repeat, repeat_until: repeat_until || null, theme: theme || null,
   });
   a.preset_expenses = pe; a.preset_incomes = pi;
-  a.id = nextId(db, 'a');
+  a.id = _id || nextId(db, 'a'); // _id：mdapply 用 hash 稳定 id（可幂等回写）
   db.activities.push(a);
   const atom = applyAtomicity(db, a, { keepConflict: !!keep_conflict }); // 入库后跑原子性（排除自身）
   // 循环（系列容器）：一条活动存全部期次，不生成 N 份副本
