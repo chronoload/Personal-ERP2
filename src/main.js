@@ -44,13 +44,17 @@ function widgetSnapshot(App) {
     balances: db.resources.filter((r) => r.status === 'Active').map((r) => ({
       id: r.id, name: r.name, unit: r.unit, value: engine.balanceOf(db, r.id),
     })),
-    todayActivities: db.activities.filter((a) =>
-      (a.actual_start ? new Date(a.actual_start) : (a.planned_date ? new Date(a.planned_date + 'T00:00') : null)) &&
-      (a.actual_start ? (() => {
+    todayActivities: db.activities.filter((a) => {
+      // 循环活动：今天任一期 pending → 算今日（对齐看板/日历）
+      if (a.repeat && Array.isArray(a.occurrences)) {
+        return a.occurrences.some((o) => o.status === 'pending' && String(o.date) === todayKey);
+      }
+      if (a.actual_start) {
         const d = new Date(a.actual_start);
         return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
-      })() : a.planned_date === todayKey)
-    ).length,
+      }
+      return !!a.planned_date && String(a.planned_date) === todayKey;
+    }).length,
     nextActivity: (() => {
       const msOf = (a) => { const t = new Date(String(a.planned_start || '')).getTime(); return Number.isNaN(t) ? Infinity : t; };
       const list = db.activities

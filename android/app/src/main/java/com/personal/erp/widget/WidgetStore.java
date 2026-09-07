@@ -92,6 +92,21 @@ public class WidgetStore {
         } else if (pd != null && !pd.equals("null") && !pd.isEmpty()) {
           isToday = todayKey.equals(pd) || normalizeDate(pd).equals(todayKey);
         }
+        // 循环活动：今天若有任一 pending 期次 → 纳入今日（对齐看板/日历，提前排期、跳过/完成后轮到今天都会出）
+        if (!isToday && a.optString("repeat", "").length() > 0) {
+          JSONArray occs = a.optJSONArray("occurrences");
+          if (occs != null) {
+            for (int oi = 0; oi < occs.length() && !isToday; oi++) {
+              JSONObject occ = occs.optJSONObject(oi);
+              if (occ == null) continue;
+              String od = occ.optString("date", null);
+              String ost = occ.optString("status", "pending");
+              if (od != null && !od.isEmpty() && "pending".equals(ost)) {
+                isToday = todayKey.equals(od) || normalizeDate(od).equals(todayKey);
+              }
+            }
+          }
+        }
         if (isToday) out.put(a);
       }
       out = sortByPlannedStart(out);
