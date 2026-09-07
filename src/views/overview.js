@@ -436,6 +436,29 @@ export function openCompleteModal(activityId, opts = {}) {
     const tags = m.q('#f-ctags').value.split(',').map((s) => s.trim()).filter(Boolean);
     const expenses = readRowBox('c-e-rows');
     const incomes = readRowBox('c-i-rows');
+    const savePrefs = () => {
+      const e1 = expenses.find((e) => Number(e.amount) > 0);
+      const i1 = incomes.find((i) => Number(i.amount) > 0);
+      Prefs.set({
+        lastExpenseRes: e1 ? e1.resource_id : (expenses[0] ? expenses[0].resource_id : ''),
+        lastExpenseAmount: e1 ? String(Number(e1.amount)) : '',
+        lastIncomeRes: i1 ? i1.resource_id : (incomes[0] ? incomes[0].resource_id : ''),
+        lastIncomeAmount: i1 ? String(Number(i1.amount)) : '',
+        lastOutputTags: tags.join(','),
+      });
+    };
+    // 指定期次完成（循环活动）：走 completeSeriesOccurrence，账挂该期，无需 start 前置
+    if (opts.occurrenceDate) {
+      const r = App.engine.completeSeriesOccurrence(App.db, activityId, opts.occurrenceDate, {
+        expenses, incomes,
+        output_title: m.q('#f-cout').value, output_tags: tags,
+      });
+      if (!r.ok) return toast(r.error, 'err');
+      savePrefs();
+      m.close(); App.refresh(); toast('该期次已完成，收支与产出已入账', 'ok');
+      if (opts.onDone) opts.onDone();
+      return;
+    }
     // 原子完成流程（不绕过状态机）：尚未开始则先开始（无冲突），再登记收支产出完成。
     // 取消时活动保持原状态（Planned 不会因打开面板而被误改）。
     if (a.status === 'Planned') {
@@ -449,15 +472,7 @@ export function openCompleteModal(activityId, opts = {}) {
     });
     if (!r.ok) return toast(r.error, 'err');
     // 记住收支资源/金额与产出 tags 偏好，下次按语境预填（取首行有效值）
-    const e1 = expenses.find((e) => Number(e.amount) > 0);
-    const i1 = incomes.find((i) => Number(i.amount) > 0);
-    Prefs.set({
-      lastExpenseRes: e1 ? e1.resource_id : (expenses[0] ? expenses[0].resource_id : ''),
-      lastExpenseAmount: e1 ? String(Number(e1.amount)) : '',
-      lastIncomeRes: i1 ? i1.resource_id : (incomes[0] ? incomes[0].resource_id : ''),
-      lastIncomeAmount: i1 ? String(Number(i1.amount)) : '',
-      lastOutputTags: tags.join(','),
-    });
+    savePrefs();
     m.close(); App.refresh(); toast('活动已完成，收支与产出已入账', 'ok');
     if (opts.onDone) opts.onDone();
   };
@@ -534,10 +549,9 @@ function activityCard(App, a) {
   const outs = db.outputs.filter((o) => o.activity_id === a.id);
   const blocked = engine.anyPlanBlocked(db, a.plan_ids);
   const tracked = engine.trackedMinutes(db, a.id);
-  const hasLogs = Array.isArray(a.time_logs) && a.time_logs.length > 0;
   const plannedMin = a.planned_minutes || 0;
   const tpct = plannedMin > 0 ? Math.min(100, (tracked / plannedMin) * 100) : 0;
-  const trackedLabel = tracked > 0 ? `${tracked}m` : (hasLogs ? '<1m' : '0m');
+  const trackedLabel = tracked > 0 ? `${tracked}m` : '0m';
   // 循环进度：M/N 期
   const seriesProg = (act) => {
     if (!act.repeat) return '';
@@ -559,22 +573,36 @@ function activityCard(App, a) {
   const th = themeStyle(stheme);
   const tone = themeTone(stheme); // 'dark' | 'light' | null(图片待采样)
 
+  // 信息量压缩：归属/日期/循环 三行 meta 合一；实际起止移入 title（编辑弹窗/日历里仍可见）；
+  // 计时进度条只在有实际计时值时出现（没开始计时的卡片不占一整行 0%）。
+  const dateBit = (a.planned_start || a.planned_date)
+    ? `📅 ${a.planned_start ? `${esc(String(a.planned_start).replace('T', ' ').slice(5))}${plannedEndOf(a) ? `–${plannedEndOf(a)}` : ''}` : esc(String(a.planned_date))}${a.planned_minutes ? ` · ${esc(a.planned_minutes)}m` : ''}`
+    : (a.planned_minutes ? `⏱ ${esc(a.planned_minutes)}m` : '');
+  const metaBits = [];
+  if (pn && pn !== '未关联') metaBits.push(pn);
+  if (dateBit) metaBits.push(dateBit);
+  if (a.repeat) metaBits.push(`🔁 ${REPEAT_LABEL[a.repeat] || a.repeat} · ${seriesProg(a)}${a.repeat_until ? ` 至 ${esc(a.repeat_until)}` : ''}`);
+  if (pn === '未关联') metaBits.push('未关联');
+  // 未来待做期次（看板内嵌，与日历对齐）：pending 且非当前期
+  const pendingFuture = (a.repeat && Array.isArray(a.occurrences))
+    ? a.occurrences.filter((o) => o.status === 'pending' && o.date !== a.planned_date)
+    : [];
+  const occOpen = expandedSeries.has(a.id);
+
   return `
-    <div class="kanban-card ${blocked ? 'warned' : ''} ${th ? 'themed' : ''} ${tone === 'light' ? 'tone-light' : ''}" draggable="true" data-id="${esc(a.id)}" ${th && tone === null ? 'data-await-tone="1"' : ''} onclick="App.overview.editActivityCard('${jsStr(a.id)}', event)" title="点击编辑" style="border-left:4px solid ${pcolor || '#e5e8ee'}${!th && pcolor ? `;background:${hexToRgba(pcolor, 0.05)}` : ''}">
+    <div class="kanban-card ${blocked ? 'warned' : ''} ${th ? 'themed' : ''} ${tone === 'light' ? 'tone-light' : ''}" draggable="true" data-id="${esc(a.id)}" ${th && tone === null ? 'data-await-tone="1"' : ''} onclick="App.overview.editActivityCard('${jsStr(a.id)}', event)" title="${esc(a.title)}${a.actual_start ? ` · 开始 ${fmtDateTime(a.actual_start)}` : ''}${a.actual_end ? ` · 结束 ${fmtDateTime(a.actual_end)}` : ''}" style="border-left:4px solid ${pcolor || '#e5e8ee'}${!th && pcolor ? `;background:${hexToRgba(pcolor, 0.05)}` : ''}">
       ${th ? `<div class="kc-bg" style="background:${th}"></div>` : ''}
       <div class="kc-head">
         <span class="kc-title">${esc(a.title)}</span>
         ${badge(a.status)}
       </div>
-      ${a.note ? `<div class="kc-note">📝 ${esc(a.note)}</div>` : ''}
-      <div class="kc-meta">${pn}${a.actual_start ? ` · 开始 ${fmtDateTime(a.actual_start)}` : ''}${a.actual_end ? ` · 结束 ${fmtDateTime(a.actual_end)}` : ''}</div>
-      ${(tracked > 0 || plannedMin > 0 || hasLogs) ? `
+      ${a.note ? `<div class="kc-note" title="${esc(a.note)}">📝 ${esc(a.note)}</div>` : ''}
+      ${metaBits.length ? `<div class="kc-meta">${metaBits.join(' · ')}</div>` : ''}
+      ${tracked > 0 ? `
       <div class="kc-time-progress" title="已计时 ${trackedLabel} / 计划 ${plannedMin || '—'} 分钟">
         <div class="kc-tp-label"><span><b style="color:${pcolor || '#ff2d55'}">⏱ 已计时 ${trackedLabel}</b>${plannedMin ? ` / 计划 ${plannedMin}m` : ''}</span>${plannedMin ? `<span>${tpct >= 100 ? '100+' : Math.round(tpct)}%</span>` : ''}</div>
         ${plannedMin ? `<div class="progress"><i class="bar" style="width:${tpct}%;background:${pcolor || '#ff2d55'}"></i></div>` : ''}
       </div>` : ''}
-      ${(a.planned_start || a.planned_date) ? `<div class="kc-meta muted">📅 ${a.planned_start ? `${esc(String(a.planned_start).replace('T', ' ').slice(5))}${plannedEndOf(a) ? `–${plannedEndOf(a)}` : ''}` : esc(String(a.planned_date))}${a.planned_minutes ? ` · 计划 ${esc(a.planned_minutes)}m` : ''}</div>` : ''}
-      ${a.repeat ? `<div class="kc-meta"><span class="badge b-purple">🔁 ${REPEAT_LABEL[a.repeat] || a.repeat} · ${seriesProg(a)}</span>${a.repeat_until ? ` 至 ${esc(a.repeat_until)}` : ''}</div>` : ''}
       ${blocked ? `<div class="kc-meta warn">⛔ 关联计划预算已耗尽</div>` : ''}
       ${outs.length ? `<div class="kc-outs">${outs.map((o) => `
         <div class="kc-out">
@@ -595,6 +623,18 @@ function activityCard(App, a) {
           </div>
         </div>
       </div>
+      ${pendingFuture.length ? `
+      <div class="kc-occ" style="margin:6px 0 0;padding-top:6px;border-top:1px dashed var(--border)">
+        <div class="kc-occ-head" onclick="event.stopPropagation();App.overview.toggleSeriesOccs('${jsStr(a.id)}')" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer;margin-bottom:4px">📅 未来 ${pendingFuture.length} 期 <span class="collapse-btn">${occOpen ? '▾' : '▸'}</span></div>
+        <div class="kc-occ-body" style="${occOpen ? '' : 'display:none'}">
+          ${pendingFuture.map((o) => `
+          <div class="kc-occ-row" style="display:flex;gap:6px;align-items:center;margin:2px 0">
+            <span class="grow" style="flex:1;font-size:11px">📅 ${esc(o.date)}</span>
+            <button class="btn sm primary" title="完成该期并入账" onclick="event.stopPropagation();App.overview.completeOccurrence('${jsStr(a.id)}','${jsStr(o.date)}')">完成</button>
+            <button class="btn sm" title="跳过该期" onclick="event.stopPropagation();App.overview.skipOccurrence('${jsStr(a.id)}','${jsStr(o.date)}')">跳过</button>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
     </div>`;
 }
 
@@ -625,26 +665,10 @@ function settleThemeTones(App, root) {
 }
 
 // 日程/看板 并列轮播：transform 平移（无滚动事件→无渲染冲突）+ 高度过渡，下方卡片平滑跟随
+// 信息量纪律：不自动播放（每 2 秒自动翻页会让人无法专注当前画面）——只由用户滑动/点导航切换。
 let pagerResizeBound = false;
-let pagerTimer = null; // 自动播放定时器
 let pagerPage = 0;     // 当前轮播页（跨渲染保留：App.refresh 不跳回日历/不重放动画）
 function isCarousel() { return window.matchMedia('(max-width: 860px)').matches; }
-function stopPagerAutoplay() {
-  if (pagerTimer) { clearInterval(pagerTimer); pagerTimer = null; }
-}
-// 聚焦活动 Tab 时自动播放：统一每 2 秒循环切换（带动画），离开页面/用户一动手即停
-function startPagerAutoplay(pager) {
-  stopPagerAutoplay();
-  if (!isCarousel()) return;
-  pagerTimer = setInterval(() => {
-    if (!pager.isConnected || !document.body.contains(pager)) { stopPagerAutoplay(); return; }
-    const items = [...pager.querySelectorAll('.dash-nav-item')];
-    const cur = items.findIndex((b) => b.classList.contains('on'));
-    const n = pager.querySelectorAll('.dash-page').length;
-    if (cur < 0 || n < 2) return;
-    goToPage(pager, (cur + 1) % n);
-  }, 2000);
-}
 function layoutPager(pager) {
   const pages = pager.querySelectorAll('.dash-page');
   const track = pager.querySelector('.dash-track');
@@ -658,6 +682,9 @@ function goToPage(pager, idx, instant) {
   const pages = pager.querySelectorAll('.dash-page');
   const track = pager.querySelector('.dash-track');
   if (!pages.length || !track) return;
+  // ★ 容器隐藏（display:none）时 offsetHeight=0：此时测量会把 pager 高度锁死为 0，
+  //   切回活动 Tab 就是「整个 Tab 静默消失」。键盘开合触发的 resize 正好打在隐藏期。
+  if (pager.offsetParent === null) return;
   const n = pages.length;
   const cur = Math.max(0, Math.min(idx, n - 1));
   if (instant) track.style.transition = 'none';
@@ -674,9 +701,9 @@ function syncPager(App, root) {
   if (!pager) return;
   layoutPager(pager);
   goToPage(pager, pagerPage, true); // 保留用户当前所在页，而不是重置回日历
-  // 左右滑动切换（到边界后回退为 Tab 切换）；用户一碰即停自动播放
+  // 左右滑动切换（到边界后回退为 Tab 切换）
   let tx = null;
-  pager.addEventListener('touchstart', (e) => { stopPagerAutoplay(); if (e.touches.length === 1) tx = e.touches[0].clientX; }, { passive: true });
+  pager.addEventListener('touchstart', (e) => { if (e.touches.length === 1) tx = e.touches[0].clientX; }, { passive: true });
   pager.addEventListener('touchend', (e) => {
     if (tx === null) return;
     const dx = e.changedTouches[0].clientX - tx;
@@ -689,17 +716,18 @@ function syncPager(App, root) {
     if (next >= 0 && next < n) {
       goToPage(pager, next);
     } else if (next >= n) {
-      // 右边界左滑：容器到底 → 回退为 Tab 切换（跳到下一个 Tab）
-      App.setTab('goals');
+      // 右边界左滑：容器到底 → 回退为 Tab 切换，进入全局 Tab 序的**下一个** Tab
+      //（活动(overview) → 资源(finance)）。此前硬编码 'goals'，越过了「资源」，不符合滑动直觉。
+      const order = App.tabOrder || ['overview', 'finance', 'goals', 'stats'];
+      const nextTab = order[order.indexOf('overview') + 1];
+      if (nextTab) App.setTab(nextTab);
     }
     // 左边界右滑：overview 是首个 Tab，无上一页可回退，忽略
   }, { passive: true });
-  // 点击导航切换（同样停自动播放）
+  // 点击导航切换
   pager.querySelectorAll('.dash-nav-item').forEach((b) => {
-    b.onclick = () => { stopPagerAutoplay(); goToPage(pager, Number(b.dataset.page)); };
+    b.onclick = () => { goToPage(pager, Number(b.dataset.page)); };
   });
-  // 聚焦活动 Tab：自动播放（循环演示）
-  startPagerAutoplay(pager);
   if (!pagerResizeBound) {
     pagerResizeBound = true;
     window.addEventListener('resize', () => {
@@ -767,6 +795,32 @@ export function skipOccurrence(id, date) {
   App.refresh();
 }
 
+// 完成某个期次（对齐非循环活动）：预设了收支 → 按预设一键入账；否则弹完成面板登记收支+产出。
+// 完整走引擎记账（occurrence_date 挂到该期），不再是纯打勾。
+export function completeOccurrence(id, date) {
+  const a = App.db.activities.find((x) => x.id === id);
+  if (!a || !a.repeat) return;
+  const presets = (a.preset_expenses || []).filter((e) => e && Number(e.amount) > 0)
+    .concat((a.preset_incomes || []).filter((i) => i && Number(i.amount) > 0));
+  if (presets.length) { quickCompleteOccurrence(id, date); return; }
+  openCompleteModal(id, { occurrenceDate: date, title: `完成该期 · ${esc(a.title)}` });
+}
+
+// 按预设收支一键完成某期次（对齐 App.quickComplete 的预设语义；产出标题=活动名）
+function quickCompleteOccurrence(id, date) {
+  const a = App.db.activities.find((x) => x.id === id);
+  if (!a) return;
+  const r = App.engine.completeSeriesOccurrence(App.db, id, date, {
+    expenses: (a.preset_expenses || []).filter((e) => e && Number(e.amount) > 0),
+    incomes: (a.preset_incomes || []).filter((i) => i && Number(i.amount) > 0),
+    output_title: a.title,
+    output_tags: ['预设'],
+  });
+  if (!r.ok) return toast(r.error, 'err');
+  App.refresh();
+  toast(`该期次已按预设入账${r.advanced ? '，并推进下一期' : ''}`, 'ok');
+}
+
 // 期次弹窗：查看系列全部期次与状态（done ✓ / skipped 跳 / pending 待）
 export function openOccurrencesModal(id) {
   const a = App.db.activities.find((x) => x.id === id);
@@ -776,11 +830,27 @@ export function openOccurrencesModal(id) {
     const st = o.status === 'done' ? '<span class="badge b-green">✓ 完成</span>'
       : o.status === 'skipped' ? '<span class="badge b-gray">跳过</span>'
         : '<span class="badge b-amber">待做</span>';
-    return `<div class="tx-row"><div class="grow"><div class="tx-main"><b>${esc(o.date)}</b>${o.status === 'done' ? `<span class="muted"> · ${fmtDateTime(o.completedAt)}</span>` : ''}</div></div>${st}</div>`;
+    // 该期账本：同一系列、occurrence_date === 该期日期的流水 / 产出
+    const occTxs = App.db.txs.filter((t) => t.source_id === id && t.occurrence_date === o.date);
+    const occOuts = App.db.outputs.filter((o2) => o2.activity_id === id && o2.occurrence_date === o.date);
+    let ledger = '';
+    if (o.status !== 'pending') {
+      if (occTxs.length) {
+        const inAmt = occTxs.reduce((s, t) => s + (t.debit || 0), 0);
+        const outAmt = occTxs.reduce((s, t) => s + (t.credit || 0), 0);
+        const bits = [];
+        if (outAmt > 0) bits.push(`支 <b>−${fmtNum(outAmt)}</b>`);
+        if (inAmt > 0) bits.push(`收 <b>+${fmtNum(inAmt)}</b>`);
+        if (bits.length) ledger += `<span class="muted"> · ${bits.join(' ')}</span>`;
+      }
+      if (occOuts.length) ledger += `<span class="muted"> · 📤 ${esc(occOuts.map((x) => x.title).join('、'))}</span>`;
+      if (!occTxs.length && !occOuts.length) ledger = '<span class="muted"> · 未记账</span>';
+    }
+    return `<div class="tx-row"><div class="grow"><div class="tx-main"><b>${esc(o.date)}</b>${o.status === 'done' ? `<span class="muted"> · ${fmtDateTime(o.completedAt)}</span>` : ''}${ledger}</div></div>${st}</div>`;
   }).join('');
   openModal({
     title: `📅 期次 · ${esc(a.title)}`,
-    width: 480,
+    width: 520,
     bodyHTML: rows || empty('暂无期次'),
     footerHTML: `<button class="btn" data-close>关闭</button>`,
   });
@@ -805,6 +875,7 @@ export function toggleArchived() {
 // 看板按计划过滤：'all'=全部 | 'none'=未关联 | planId（内存态，渲染重建保留）
 let kanbanPlanFilter = 'all';
 let kanbanTodayOnly = false; // 「今日」模式：只看今天到期的活动
+const expandedSeries = new Set(); // 看板里已展开未来期次的循环活动
 export function setKanbanPlanFilter(id) {
   kanbanPlanFilter = id;
   renderKanbanRoot(App); // 就地重渲染看板，不整页刷新 → 不跳回日历、不重放轮播动画
@@ -813,8 +884,18 @@ export function setKanbanToday(v) {
   kanbanTodayOnly = !!v;
   renderKanbanRoot(App);
 }
+// 看板展开/收起某个循环活动的未来期次（局部，不整页）
+export function toggleSeriesOccs(id) {
+  expandedSeries.has(id) ? expandedSeries.delete(id) : expandedSeries.add(id);
+  refreshBoard();
+}
 function isTodayAct(a) {
   const t = new Date();
+  const tk = `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`;
+  // 循环活动：今天是否有任一 pending 期次（含当前期与未来期）→ 纳入今日看板（对齐日历）
+  if (a.repeat && Array.isArray(a.occurrences) && a.occurrences.length) {
+    return a.occurrences.some((o) => o.status === 'pending' && String(o.date) === tk);
+  }
   if (a.actual_start) {
     const d = new Date(a.actual_start);
     return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();

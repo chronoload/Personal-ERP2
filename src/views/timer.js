@@ -12,6 +12,7 @@ import { Capacitor } from '@capacitor/core';
 import { Notifications } from '../services/notifications.js';
 import { System } from '../services/system.js';
 import { toast } from '../ui/helpers.js';
+import { scheduleTimerAlarm, cancelTimerAlarm, stopAlarm, TIMER_ALARM_ID } from '../services/alarm.js';
 
 const PRESETS = [5, 15, 25, 45, 60];
 const NOTIF_ID = 1001;
@@ -51,13 +52,10 @@ function syncControls() {
     P.hideControls().catch(() => {});
   }
 }
-function ringNow() {
-  const P = nativeControls();
-  if (P) P.ring().catch(() => {});
-}
 function stopRingNow() {
   const P = nativeControls();
   if (P) P.stopRing().catch(() => {});
+  stopAlarm(); // 停 AlarmTonePlayer（闹钟兑底铃声）
 }
 function persistState({ paused = false, remainingMs: rem = null } = {}) {
   const payload = JSON.stringify({
@@ -204,13 +202,16 @@ function syncNowBtn() {
   el.querySelector('#t-now').style.display = (targetActivityId && !finished) ? 'inline-block' : 'none';
 }
 
-// ---------------- 原生通知（后台提醒） ----------------
+// ---------------- 原生闹钟（后台响铃兑底） ----------------
+// 到点由原生 AlarmReceiver 响铃 + 震动 + 锁屏全屏提醒，即使 App 被杀/后台也能响。
+// 替换原 LocalNotifications（只有无声通知，被杀时 JS finish 不执行 → 不响铃）。
 async function scheduleNotif(at) {
-  await Notifications.schedule({ id: NOTIF_ID, title: '⏱ 计时结束', body: '时间到！回来记录这次活动吧', at });
+  const a = targetActivityId ? App.db.activities.find((x) => x.id === targetActivityId) : null;
+  scheduleTimerAlarm(at.getTime(), `🍅 ${(a && a.title) || '计时'} 结束`);
 }
 
 async function cancelNotif() {
-  await Notifications.cancel(NOTIF_ID);
+  cancelTimerAlarm();
 }
 
 // 一次性注册系统监听：回前台校正 + 通知触发完成 + 控制栏按钮
@@ -223,6 +224,12 @@ function ensureListeners() {
     else if (el) paint();
   });
   Notifications.onReceived(() => {
+    if (running && !finished) { stop(); finish(); }
+  });
+  // 闹钟全屏通知点击回 App：番茄钟到点被点开 → 进入完成态（铃声已在 alarm.js 停止）
+  window.addEventListener('alarmOpened', (e) => {
+    const d = (e && e.detail) || {};
+    if (Number(d.id) !== TIMER_ALARM_ID) return;
     if (running && !finished) { stop(); finish(); }
   });
   // 控制栏按钮（暂停/继续/结束）→ 应用到当前会话
@@ -349,12 +356,10 @@ function setGo(t) { if (!el) return; el.querySelector('#t-go').textContent = t; 
 function finish() {
   if (finished) return;
   finished = true; running = false; stop();
-  cancelNotif();
   System.keepAwake(false);
   syncControls(); // 完成 → 隐藏控制栏常驻通知
-  ringNow();      // 原生铃声（闹铃循环）直到用户处理
-  System.vibrate(300);
-  System.success();
+  // 铃声由原生 AlarmReceiver 统一播放（后台/被杀也响），这里不重复 ringNow 避免双响；
+  // 不 cancel 闹钟——若 finish 先于 AlarmManager 触发，让它稍后到点响铃提醒。
   if (el) { // 后台到期时 overlay 未打开，UI 更新推迟到下次 openTimer 的 reflectState
     setLbl('完成！');
     el.querySelector('#t-go').style.display = 'none';

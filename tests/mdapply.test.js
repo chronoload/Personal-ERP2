@@ -149,19 +149,22 @@ test('mdapply: 镜像 round-trip 状态不漂移 —— 归档实体导回仍归
   assert.equal(mdB, mdA, 'round-trip 后 md 稳定');
 });
 
-test('mdapply: 无 id 新增行不覆写已有同名对象（防覆写）', () => {
+test('mdapply: 无 id 重复应用 —— 活动按多重集对账不复制（移动端重复守卫），目标/计划仍新建', () => {
   const db = freshDB();
   // 先有一份「写大纲」（无 id 手打 → 新建）
   applyCandidates(db, parseMdImport('# 目标\n## 计划\n- [ ] 写大纲', { now: NOW }));
   assert.equal(db.activities.length, 1);
   const beforeId = db.activities[0].id;
-  // 再手打一行同名（无 id）→ 视为新增，不按名称匹配覆写已有对象
+  // 再手打一行同签名（同标题同排程，无 id）→ 匹配既有活动走绑定更新，不复制副本
+  //（移动端 id 丢失/补绑失败时，旧「一律新建」语义会让每次同步都多一份 —— 即「分钟不断被重复」）
   const stat = applyCandidates(db, parseMdImport('# 目标\n## 计划\n- [ ] 写大纲', { now: NOW }));
-  assert.equal(stat.created, 3, '无 id 一律新建（目标/计划/活动）');
-  assert.equal(db.activities.length, 2, '不覆写，新增一条');
+  assert.equal(db.activities.length, 1, '同签名多重集对账 → 不复制活动');
   assert.ok(db.activities.some((x) => x.id === beforeId), '原对象保留');
-  assert.equal(db.goals.length, 2);
-  assert.equal(db.plans.length, 2);
+  assert.ok((stat.createdRefs || []).some((x) => x.id === beforeId && x.bind), 'bindRefs 返回既有 id');
+  // buffer 出现第二行同内容（非相邻，相邻重复合并 D2 会先拦截）→ 多重集要求 2 份 → 对账到恰好 2 份
+  applyCandidates(db, parseMdImport('# 目标\n## 计划\n- [ ] 写大纲\n- [ ] 别的事\n- [ ] 写大纲', { now: NOW }));
+  assert.equal(db.activities.length, 3, 'buffer 要求 写大纲×2 + 别的事×1 → 恰好 3 个实体');
+  assert.equal(db.activities.filter((x) => x.title === '写大纲').length, 2, '同内容多行=多实体（基数对账）');
 });
 
 test('mdapply: [x] 完成态不绕过状态机 —— 创建为 Planned 并提示走完成流程', () => {

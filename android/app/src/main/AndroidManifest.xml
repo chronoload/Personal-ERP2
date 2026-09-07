@@ -12,6 +12,7 @@
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:windowSoftInputMode="adjustResize"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
@@ -71,6 +72,17 @@
                 <action android:name="com.personal.erp.timer.CONTROL" />
             </intent-filter>
         </receiver>
+        <receiver android:name=".alarm.AlarmReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.personal.erp.alarm.FIRE" />
+                <action android:name="com.personal.erp.alarm.STOP" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".alarm.BootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <activity
             android:name=".widget.WidgetConfigureActivity"
@@ -83,8 +95,11 @@
     </application>
 
     <!-- Permissions -->
-
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 闹钟生态：精确闹钟（Android 12+ 特殊权限，无则自动降级）+ 锁屏全屏提醒 + 重启恢复 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>

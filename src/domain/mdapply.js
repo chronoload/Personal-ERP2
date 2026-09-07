@@ -23,6 +23,56 @@ function norm(s) {
   return String(s ?? '').replace(/\s+/g, ' ').trim();
 }
 
+// 匹配优先（移动端重复守卫）——多重集对账语义：
+//   md 缓冲区描述「期望的内容多重集」，同步把 db 对账到该多重集：
+//   同签名（规范标题+排程）的第 k 个无 id 行 → 绑定作用域内第 k 个「未被文本显式绑定」的
+//   同签名既有活动；不够匹配才新建。保留「同内容多行 = 多实体」的产品语义（ buffer 有 2 行
+//   「运动」→ db 就该有 2 个），同时根治移动端 WebView/IME 丢失隐藏式 id 或补绑失败时
+//   「每次失焦/重渲染都复制出副本」（分钟条目不断被重复）——同一 buffer 反复应用必然收敛。
+// scopeDates（视图模式）：仅匹配视图作用域内的活动（带日期 → 须在日期组覆盖内；无日期 → 未排程组）。
+//   null = 不限作用域（完整镜像/手打模式）。datePart：planned_start → 'YYYY-M-D'。
+// boundIds：文本中已带 id 显式绑定的活动 id（不参与匹配，防一行多绑）。
+// sigCount：本轮同签名无 id 行计数器（跨调用累计，调用方按行序推进）。
+function findMatchActivity(db, a, scopeDates, datePart, boundIds, sigCount) {
+  const t = norm(a.title);
+  if (!t) return null;
+  const sig = t + '|' + (a.planned_start || '');
+  const k = sigCount.get(sig) || 0;
+  sigCount.set(sig, k + 1);
+  // 精确签名（标题+排程）对账：同签名第 k 个无 id 行绑定第 k 个「未被文本显式绑定」的
+  // 同签名既有活动；不够才新建。保留「同内容多行=多实体」语义，同时根治移动端
+  // id 丢失/补绑失败时的逐轮复制（分钟条目不断被重复）。
+  const inScope = (x) => {
+    if (scopeDates) {
+      const dp = datePart(x.planned_start);
+      if (dp && !scopeDates.has(dp)) return false;
+    }
+    return true;
+  };
+  const sameTitle = (x) => norm(x.title) === t;
+  const exactOf = (x) => (x.planned_start || null) === (a.planned_start || null);
+  // 只认精确签名（标题+排程）。「同标题不同时间」一律新建（合法语义）。
+  // 引擎自动顺延导致的时间漂移由**无条件 id 回填**根治（回填必达 → 下轮按 id 匹配），
+  // 不在此做时间容错——那会把「用户新建的另一时段同名活动」误并到既有活动上。
+  let idx = -1;
+  for (const x of db.activities || []) {
+    if (boundIds.has(x.id)) continue;
+    if (!inScope(x)) continue;
+    if (sameTitle(x) && exactOf(x)) {
+      idx++;
+      if (idx === k) return x;
+    }
+  }
+  return null;
+}
+
+// 记录一条「绑定回执」（既有 id 补回行上用）：与 createdRefs 同构，occ 口径一致（本轮同标题序号）
+function pushBindRef(stat, titleCount, id, title) {
+  const occ = titleCount.get(norm(title)) || 0;
+  titleCount.set(norm(title), occ + 1);
+  stat.createdRefs.push({ type: 'activity', id, title, occ, bind: true });
+}
+
 // 活动候选稳健化（防「回车/复制」产生的文本噪音 → 数据错乱）：
 //   D0 空行 id 错位修复（回车时 Vditor 把上一行行尾的隐藏式 id 标记下移到新的空待办行）：
 //      Shape B（最危险）：原行丢了 id、空行带着原活动 id → 原行被当「新活动」→ 复制出副本且反复重建；
@@ -95,8 +145,16 @@ function applyViewCandidates(db, r) {
   const { clean: acts, warnings: hw, ghostIds } = hardenActivities(r.activities);
   stat.warnings.push(...hw);
   for (const gid of ghostIds) touched.add(gid);
+  // 匹配优先上下文：文本已显式绑定的 id 不参与匹配；同签名无 id 行按出现序号对账
+  const boundIds = new Set(acts.filter((x) => x.id).map((x) => x.id));
+  const sigCount = new Map();
   for (const a of acts) {
-    // 无 id：视图内新增行 → 新建活动（db 授 seq id，防内容推导身份冲突）；返回 createdRefs 供补 id 绑定
+    // 无 id：先匹配优先（作用域内同标题+同排程 → 绑定既有 id 走更新，不新建）；确实无匹配才新建
+    if (!a.id) {
+      const ex = findMatchActivity(db, a, scopeDates, datePart, boundIds, sigCount);
+      if (ex) { a.id = ex.id; pushBindRef(stat, titleCount, ex.id, a.title); }
+    }
+    // 仍无 id：视图内新增行 → 新建活动（db 授 seq id，防内容推导身份冲突）；返回 createdRefs 供补 id 绑定
     if (!a.id) {
       const res = createActivity(db, {
         title: a.title, note: a.note || '',
@@ -252,11 +310,18 @@ export function applyCandidates(db, r) {
     }
   }
 
-  // ---- activities：id 绑定更新（改名不断链）；无 id 一律新建（db 授 seq id，防内容推导身份冲突）----
+  // ---- activities：id 绑定更新（改名不断链）；无 id 行按多重集对账匹配既有（见 findMatchActivity）----
   const { clean: actCands, warnings: hw, ghostIds } = hardenActivities(r.activities);
   stat.warnings.push(...hw);
   for (const gid of ghostIds) touchedActIds.add(gid);
+  const mirrorBoundIds = new Set(actCands.filter((x) => x.id).map((x) => x.id));
+  const mirrorSigCount = new Map();
   for (const a of actCands) {
+    // 无 id：匹配优先（同标题+同排程 → 绑定既有 id 走更新，不新建；防镜像导回 id 丢失复制整本账）
+    if (!a.id) {
+      const exm = findMatchActivity(db, a, null, null, mirrorBoundIds, mirrorSigCount);
+      if (exm) { a.id = exm.id; pushBindRef(stat, titleCount, exm.id, a.title); }
+    }
     const planId = planIdByKey.get(a.plan_key) || null;
     const payload = {
       title: a.title,

@@ -3,6 +3,7 @@ package com.personal.erp;
 import android.content.Intent;
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
+import com.personal.erp.alarm.AlarmPlugin;
 import com.personal.erp.widget.WidgetPlugin;
 import com.personal.erp.sync.SyncPlugin;
 import com.personal.erp.timer.TimerPlugin;
@@ -16,6 +17,7 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(WidgetPlugin.class); // 桌面小组件桥（setTimerState/getTimerState/pushData/getData）
     registerPlugin(SyncPlugin.class);   // 局域网同步服务（start/stop/status/ping）
     registerPlugin(TimerPlugin.class);  // 番茄钟控制栏 + 铃声（showControls/ring）
+    registerPlugin(AlarmPlugin.class);  // 闹钟桥（日程提醒：后台响铃 + 锁屏全屏 + 重启恢复）
     super.load();
   }
 
@@ -45,6 +47,12 @@ public class MainActivity extends BridgeActivity {
     if (intent.hasExtra("timer_action")) {
       final String act = intent.getStringExtra("timer_action");
       postJSEvent("timerControl", "{\"action\":\"" + act + "\"}");
+    }
+    // 闹钟全屏通知点击回 App：停铃 + 通知前端（JS 侧 alarmAction → alarmOpened）
+    if (intent.hasExtra("alarm_action")) {
+      final String act = intent.getStringExtra("alarm_action");
+      final int aid = intent.getIntExtra("alarm_id", 0);
+      postJSEvent("alarmAction", "{\"action\":\"" + act + "\",\"id\":" + aid + "}");
     }
   }
 

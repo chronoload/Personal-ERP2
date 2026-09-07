@@ -197,14 +197,18 @@ export function parseMdImport(md, { now = Date.now(), view: forceView = null } =
   // 行尾 id 标记 → { id } 并剥离（兼容注释 / lute 链接 / 裸残余 三种形态）。
   // 裸残余 `!--id:x--`：Vditor 的 WYSIWYG getValue() 会把 HTML 注释退化输出为可见文本
   // `!--id:x--`，若不剥离会被当成实体标题 → 创建出「以 ID 为名」的垃圾活动/计划/目标。
+  // 移动端加固：一行可能同时残留多种形态（修复回填 + 编辑器退化叠加）→ 全部剥净，只取第一个为身份。
   const stripId = (line) => {
-    let m = line.match(/<!--id:([\w-]+)-->/);
-    if (m) return { id: m[1], rest: line.replace(/<!--id:[\w-]+-->/, '').trim() };
-    m = line.match(/\[!--id:([\w-]+)--\]\(!--id:\1--\)/);
-    if (m) return { id: m[1], rest: line.replace(m[0], '').trim() };
-    m = line.match(/!--id:([\w-]+)--/); // 裸残余兜底（WYSIWYG 退化形态）
-    if (m) return { id: m[1], rest: line.replace(/!--id:[\w-]+--/, '').trim() };
-    return { id: null, rest: line };
+    const RES = [/<!--id:([\w-]+)-->/, /\[!--id:([\w-]+)--\]\(!--id:\1--\)/, /!--id:([\w-]+)--/];
+    let id = null;
+    let rest = line;
+    for (const re of RES) {
+      const m = rest.match(re);
+      if (m && !id) id = m[1];
+      if (m) rest = rest.replace(re, ' ');
+    }
+    if (id) rest = rest.replace(/\s{2,}/g, ' ').trim(); // 剥离占位空格收敛，未剥 id 的行保持原样
+    return { id, rest };
   };
 
   // 行尾状态词 → 目标/计划状态。status：显式标注才设值；未标注为 null
@@ -234,8 +238,13 @@ export function parseMdImport(md, { now = Date.now(), view: forceView = null } =
     return p.key;
   };
   const pushPlan = (title, id = null) => {
+    const pre = pickStatus(title, PLAN_STATUS_WORDS);
+    // 「未分类」是 serializeDbToMd 给 orphan 活动的兜底区段，不是真实计划：
+    // 解析时跳过创建（活动保持无归属），否则 goal 视图每次往返都会凭空造出
+    // 「（未分类）」目标 + 「未分类」计划（切换视图即多出一条目标）。
+    if (!inView && pre.title === '未分类') { curPlan = null; curDateBase = null; return; }
     if (!inView && !curGoal) pushGoal('（未分类）');
-    const { title: t, status } = pickStatus(title, PLAN_STATUS_WORDS);
+    const t = pre.title, status = pre.status;
     // 视图 md：「## 日期标题」→ 其下活动补默认日期；它是分组基线，不是真实计划
     const db_ = parseDateInTitle(t, now);
     curDateBase = db_ || null;
@@ -340,12 +349,15 @@ function planToMdLine(p) {
 // 给「含 title 且无 id 绑定」的实体行补隐藏式 id（新建行绑定，防重复创建/误判缺失即删）。
 // type: goal(# 标题) / plan(## 标题) / activity(- [ ] 标题)；已有 id 绑定的行不重复补。
 // occurrence：同标题出现多行时绑定第 occurrence 个匹配行（0=第一个），防同标题多行只绑第一个。
+// 活动行容忍：行首缩进（嵌套列表）与有序列表 `1.` 标记 —— 移动端手打常见形态。
+// ★ g 标志必须存在：无 g 时 replace 只处理第一个同标题行——若它是已绑定行，后面真正的
+//   无 id 行永远轮不到绑定 → 每轮同步复制一份新活动（「分钟条目不断被重复」的根源机制）。
 export function bindEntityLine(md, type, title, id, occurrence = 0) {
   const esc = String(title).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   let re;
-  if (type === 'goal') re = new RegExp(`^(#\\s+[^\\n]*${esc}[^\\n]*)$`, 'm');
-  else if (type === 'plan') re = new RegExp(`^(##\\s+[^\\n]*${esc}[^\\n]*)$`, 'm');
-  else re = new RegExp(`^([-*]\\s+\\[[ xX]\\]\\s+[^\\n]*${esc}[^\\n]*)$`, 'm');
+  if (type === 'goal') re = new RegExp(`^(#\\s+[^\\n]*${esc}[^\\n]*)$`, 'gm');
+  else if (type === 'plan') re = new RegExp(`^(##\\s+[^\\n]*${esc}[^\\n]*)$`, 'gm');
+  else re = new RegExp(`^\\s*(?:[-*]|\\d+[.、)])\\s+\\[[ xX]\\]\\s*[^\\n]*${esc}[^\\n]*$`, 'gm');
   let seen = -1;
   return String(md).replace(re, (line) => {
     if (/(<!--id:|!--id:)/.test(line)) return line; // 已有绑定不重复补
@@ -415,8 +427,9 @@ export function normalizeIdMarkers(md) {
 // 「上一个无 id 的内容活动行」；若上一内容行已有 id（纯复制）则去掉空行的重复 id。
 // 幂等：修复后再跑不产生变化。返回修复后的文本（无变化则原样返回）。
 export function repairIdMarkers(md) {
-  const ID_RE = /(?:<!--id:([\w-]+)-->|\[!--id:([\w-]+)--\]\(!--id:\2--\))/;
-  const lineId = (l) => { const m = l.match(ID_RE); return (m && (m[1] || m[2])) || null; };
+  // 三形态 id（注释 / lute 链接 / WYSIWYG 裸残余）都能识别，否则带裸 id 的行会被误判「无 id」
+  const ID_RE = /(?:<!--id:([\w-]+)-->|\[!--id:([\w-]+)--\]\(!--id:\2--\)|!--id:([\w-]+)--)/;
+  const lineId = (l) => { const m = l.match(ID_RE); return (m && (m[1] || m[2] || m[3])) || null; };
   const lines = String(md).split('\n');
   let lastContent = -1; // 上一个「有内容的活动行」下标
   let changed = false;

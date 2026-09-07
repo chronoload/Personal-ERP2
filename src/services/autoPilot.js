@@ -53,7 +53,7 @@ function ensureBar(id, above) {
     el.id = id;
     el.style.cssText = [
       'position:fixed', 'left:50%', 'transform:translateX(-50%)',
-      `bottom:${above ? 84 : 20}px`, 'z-index:50',
+      `bottom:calc(${above ? 84 : 20}px + env(safe-area-inset-bottom, 0px))`, 'z-index:50',
       'display:flex', 'align-items:center', 'gap:10px',
       'padding:10px 14px', 'border-radius:12px',
       'background:#1d2330', 'color:#fff',

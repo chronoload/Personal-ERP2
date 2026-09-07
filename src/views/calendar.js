@@ -117,6 +117,7 @@ function agendaRow(App, a, t, occ, virtual) {
           <div class="muted">${planTitles(db, a.plan_ids)}</div>
         </div>
         <div class="row-gap">
+          <button class="btn sm primary" title="标记该期已完成（补记/提前勾掉）" onclick="App.overview.completeOccurrence('${jsStr(a.id)}','${jsStr(occ.date)}')">完成</button>
           <button class="btn sm" title="跳过该期次" onclick="App.overview.skipOccurrence('${jsStr(a.id)}','${jsStr(occ.date)}')">跳过</button>
           <button class="btn sm" title="查看系列期次" onclick="App.overview.openOccurrencesModal('${jsStr(a.id)}')">📅</button>
         </div>
@@ -198,7 +199,9 @@ function renderMonth(App, host, byDay, todayK, resync) {
   const dim = new Date(calYear, calMonth + 1, 0).getDate();
 
   let grid = ['一', '二', '三', '四', '五', '六', '日'].map((d) => `<div class="cal-dow">${d}</div>`).join('');
-  for (let i = 0; i < start; i++) grid += '<div class="cal-day empty"></div>';
+  // 补位空格（cal-fill）：渲染完整网格线，但透明融入底色——不可用 `.empty` 类名，
+  // 会撞通用占位样式（虚线圆角白底）而显成「空白椭圆块」
+  for (let i = 0; i < start; i++) grid += '<div class="cal-day cal-fill"></div>';
   for (let d = 1; d <= dim; d++) {
     const k = dayKey(new Date(calYear, calMonth, d));
     const acts = byDay[k] || [];
@@ -210,9 +213,9 @@ function renderMonth(App, host, byDay, todayK, resync) {
         ${cost ? `<div class="cal-cost">-${cost}</div>` : ''}
       </div>`;
   }
-  // 末尾补空位，保证最后一行填满（网格边线才整齐、圆角不露馅）
+  // 末尾补空位：保证网格线完整到右边线（透明底，不显块）
   const rem = (start + dim) % 7;
-  if (rem) for (let i = 0; i < 7 - rem; i++) grid += '<div class="cal-day empty"></div>';
+  if (rem) for (let i = 0; i < 7 - rem; i++) grid += '<div class="cal-day cal-fill"></div>';
 
   host.innerHTML = `
     <div class="card">

@@ -17,6 +17,7 @@ import { organizeDay, organizeWeek, organizeMonth, dkey, todayKey, parseKey, add
 import { Prefs } from '../store/prefs.js';
 import { saveDB } from '../store/db.js';
 import { toast, esc, openModal } from '../ui/helpers.js';
+import { saveFile } from '../services/saveFile.js';
 import Vditor from 'vditor';
 import 'vditor/dist/index.css';
 
@@ -26,6 +27,16 @@ let viewAnchor = null; // 当前视图锚点日期（YYYY-M-D；null = 今天，
 let CURRENT_APP = null; // 完成面板回调用的 App 引用（跨 render 保留）
 let completeQueue = []; // 待唤起完成面板的活动（勾选 [x] 但需走完成流程）
 let completing = false; // 完成面板是否已打开（防重复）
+// —— 移动端同步加固 ——
+// Android WebView 里 blur 不可靠（键盘收起/点工具栏外/切后台都可能不触发），仅靠失焦提交会丢编辑。
+let syncFn = null; // 当前 render 闭包里的 sync（文档级 flush 监听只绑一次，经此转发）
+let inputTimer = null; // 停手后自动提交的防抖定时器
+let composing = false; // IME 组合输入中（中文输入法拼音期间绝不提交/重写）
+let docSyncBound = false; // visibilitychange/pagehide flush 只绑一次
+let syncing = false; // sync 防重入
+let bufferDirty = false; // 缓冲区有未提交编辑（input 置位，sync 成功清零）
+let inputSeq = 0; // input 事件序号（reload 后判定「期间没有新输入」用）
+let wsExitFullRef = null; // 当前实例的退出全屏（文档级 Esc 只绑一次，经此转发）
 
 const WD_CN = ['日', '一', '二', '三', '四', '五', '六'];
 function weekStartOf(k) { const d = parseKey(k); const off = (d.getDay() + 6) % 7; return dkey(new Date(d.getTime() - off * 86400000)); }
@@ -89,15 +100,23 @@ function findEntity(db, type, id) {
 export function render(App, el) {
   CURRENT_APP = App; // 完成面板回调的 App 引用
   if (vd) { try { vd.destroy(); } catch (e) { /* 忽略旧实例销毁异常 */ } vd = null; }
+  if (inputTimer) { clearTimeout(inputTimer); inputTimer = null; } // 旧实例的防抖提交作废
+  composing = false;
+  bufferDirty = false; // 新实例的初始内容来自 db，天然一致
+  // 全屏模式的卡片被挂到 body 下（见 setFull）：旧实例残留直接清除，状态复位
+  if (typeof document !== 'undefined') {
+    document.querySelectorAll('body > .card.ws-full').forEach((c) => c.remove());
+    document.body.classList.remove('ws-lock');
+  }
   const prefs = Prefs.load();
   const initialMd = organizeView(App.db, curView, viewAnchor);
   const ignoredDeletes = new Set(); // 用户取消过的删除项（type:id），本轮不再弹（每次 render 重置）
   el.innerHTML = `
     <div class="card">
       <div class="card-head">
-        <h3>📝 数据编辑器</h3>
+        <h3>📝 编辑器</h3>
         <div class="row-gap">
-          <span class="muted">单一文本编辑器 · 可视化 · 编辑即同步</span>
+          <button class="btn sm" data-ws-full title="全屏编辑（Esc/返回键退出）">⛶ 全屏</button>
           <button class="btn sm" data-ws-syntax title="当前视图语法">？语法</button>
           <button class="btn sm" data-ws-export>⬇ 导出 .md</button>
         </div>
@@ -119,40 +138,52 @@ export function render(App, el) {
   const getText = () => { try { return vd && vd.getValue ? vd.getValue() : initialMd; } catch (e) { return initialMd; } };
 
   const updatePreview = (r, stat) => {
-    const done = r.activities.filter((a) => a.status === 'Completed' || a.status === 'Reviewed').length;
-    const tag = r.view ? `${VIEW_LABEL[r.view] || r.view}视图·局部同步` : (r.mirror ? '完整镜像' : '增量');
+    // 安静原则：无变更、无警告时状态行留空 —— 一屏只给用户真正需要看的数字
+    const hasInfo = (stat && (stat.created || stat.updated || (stat.deletions && stat.deletions.length)))
+      || r.warnings.length > 0;
+    if (!hasInfo) { preview.innerHTML = ''; return; }
+    const tag = r.view ? `${VIEW_LABEL[r.view] || r.view}视图` : (r.mirror ? '镜像' : '增量');
     const syncInfo = stat ? (stat.created ? ` · 新建 ${stat.created}` : '') + (stat.updated ? ` · 更新 ${stat.updated}` : '') : '';
     preview.innerHTML =
-      `<span>解析：活动 <b>${r.activities.length}</b> · 完成 <b>${done}</b> · ${esc(tag)}${syncInfo}</span>` +
+      `<span>${esc(tag)}${syncInfo}</span>` +
       (r.warnings.length ? `<span class="warn">⚠ ${r.warnings.length} 条提示</span>` : '') +
       (stat && stat.deletions.length ? `<span class="warn">⚠ 将删除 ${stat.deletions.length} 项</span>` : '');
   };
 
   // 实时同步：解析当前 md → 写回 db → 持久化。任何解析异常都不应中断编辑。
-  const sync = () => {
+  // 移动端纪律：blur/isFocused 在 Android WebView 里会说谎（键盘收起/切后台不触发 blur），
+  // 因此 id 绑定回填**不看聚焦状态**（与创建同轮必达，否则行永远拿不到 id → 每轮复制副本）；
+  // 仅「全文修复」和「弹窗/提示」这类打断性动作避开打字窗口。
+  const backfill = (t2, text, force) => {
+    if (t2 === text) return;
+    try { vd.setValue(t2); } catch (e) { /* 忽略 */ }
+  };
+  const sync = (force = false, fromInput = false) => {
+    if (syncing) return;
+    syncing = true;
     try {
       const text = getText();
       // 空行 id 错位修复：回车把上一行 id 下移到空待办行 → 把 id 归还给原行，杜绝副本。
-      // 文本被改写则 setValue 后让 after→sync 带已修复文本重走一轮（幂等），不在错误文本上继续同步。
+      // 文本被改写则 setValue 后让下轮 sync 带已修复文本重走一轮（幂等），不在错误文本上继续同步。
       const repaired = repairIdMarkers(text);
       if (repaired !== text) {
-        try { vd.setValue(repaired); } catch (e) { /* 忽略 */ }
+        // 打字途中（防抖触发）不重写全文（防光标丢失）；失焦/切视图/flush 必达
+        if (!fromInput || force) backfill(repaired, text, force);
         return;
       }
       const r = parseMdImport(text, { now: Date.now(), view: curView === 'goal' ? null : curView });
       const stat = applyCandidates(App.db, r);
       saveDB(App.db); // 写回内存后立即落盘（实时同步必须持久化）
       const statusFails = stat.statusFails || [];
-      // 新建行绑定：无 id 行刚新建 → 给对应行补隐藏式 id（防下次 sync 重复创建/误判缺失即删）
+      // 新建/匹配绑定：无 id 行刚入库或命中既有 → 给对应行补隐藏式 id（防重复创建/误判缺失即删）。
+      // 编辑中回填被推迟也不影响正确性：db 侧已对账收敛，行补 id 只是编辑器侧的绑定优化。
       const refs = stat.createdRefs || [];
       if (refs.length) {
         let t2 = text;
         for (const ref of refs) t2 = bindEntityLine(t2, ref.type, ref.title, ref.id, ref.occ || 0);
-        if (t2 !== text) {
-          try { vd.setValue(t2); } catch (e) { /* 忽略 */ }
-        }
+        backfill(t2, text, force);
         updatePreview(r, stat);
-        return; // 下轮 sync（setValue 触发）行已有 id，再处理状态/删除
+        return; // 下轮 sync（失焦/停手/flush）行已有 id，再处理状态/删除
       }
       // 勾选完成（[x]）但 db 无法直接完成 → 唤起完成面板（填了就完成、取消才回滚）
       const wantComplete = statusFails.filter((f) => f.type === 'activity' && f.to === 'Completed');
@@ -164,17 +195,17 @@ export function render(App, el) {
           const ex = findEntity(App.db, f.type, f.id);
           if (ex) t2 = replaceEntityLine(t2, f.id, serializeEntityLine(App.db, ex));
         }
-        if (t2 !== text) {
-          try { vd.setValue(t2); } catch (e) { /* 忽略 */ }
+        backfill(t2, text, force);
+        if (!fromInput) { // 打字途中不弹提示打断
+          const first = otherFails[0];
+          const typeName = { goal: '目标', plan: '计划', activity: '活动' }[first.type] || '活动';
+          toast(`「${first.title}」${typeName}状态未生效：仅支持合法流转`, 'warn');
         }
-        const first = otherFails[0];
-        const typeName = { goal: '目标', plan: '计划', activity: '活动' }[first.type] || '活动';
-        toast(`「${first.title}」${typeName}状态未生效：仅支持合法流转`, 'warn');
       }
       wantComplete.forEach((f) => queueComplete(f.id, f.title));
-      // 镜像缺失即删：仅未忽略项弹确认
+      // 镜像缺失即删：仅未忽略项弹确认（打字途中的瞬时缺失不弹，推迟到失焦/flush 再确认）
       const fresh = stat.deletions.filter((d) => !ignoredDeletes.has(d.type + ':' + d.id));
-      if (fresh.length) {
+      if (fresh.length && !fromInput) {
         confirmDeletes(App, fresh, () => {
           // 删除已执行；忽略标记对应项避免再次触发
           fresh.forEach((d) => ignoredDeletes.add(d.type + ':' + d.id));
@@ -187,12 +218,35 @@ export function render(App, el) {
       } else {
         updatePreview(r, stat);
       }
+      // 走到这里的所有路径（含提前 return 的修复/绑定）缓冲区都与 db 一致 → 清脏标记
+      bufferDirty = false;
     } catch (e) {
       console.error('[ws] 实时同步异常', e);
+    } finally {
+      syncing = false;
     }
   };
+  syncFn = sync; // 文档级 flush 转发到当前实例
+
+  // 外部改库（目标页改名/删除、小组件、同步、恢复备份……）后由 App.render 调用：
+  // 缓冲区无未提交编辑时，用 db 重新组织当前视图——否则陈旧缓冲会在下次 sync 把
+  // 外部修改改回去（例如目标页改名 → 编辑器又把名字改回来）。
+  const reloadFromDb = () => {
+    if (bufferDirty || composing || !vd || syncing) return;
+    const fresh = organizeView(App.db, curView, viewAnchor);
+    if (getText() === fresh) return;
+    const mySeq = ++inputSeq;
+    try { vd.setValue(fresh); } catch (e) { /* 忽略 */ }
+    // 我们自己的 setValue 可能触发 input（误置脏标记）：期间没有真实输入才清零
+    setTimeout(() => { if (inputSeq === mySeq) bufferDirty = false; }, 80);
+  };
+  window.__wsReloadFromDb = reloadFromDb;
 
   // Vditor 实例（WYSIWYG；sanitize:false 保留隐藏式 id 绑定标记）
+  // 主题跟随夜间模式：dark 强制 / auto 且系统深色也算深（与 applyNightTheme 同一判据），
+  // 否则 auto+系统深色时会得到「页面深色、编辑器纯白」的割裂观感。
+  const darkNow = prefs.nightTheme === 'dark'
+    || (prefs.nightTheme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   // 同步模型：编辑器是纯编辑缓冲——编辑中系统绝不触碰（不 setValue、不写 db），
   // 失焦（blur）才一次性 reconcile 提交。杜绝 input 重入导致的跳顶/光标丢失/覆盖输入。
   vd = new Vditor('ws-vditor', {
@@ -200,7 +254,7 @@ export function render(App, el) {
     height: 440,
     cache: { enable: false }, // 数据由 db 统一管理，禁用编辑器内缓存
     sanitize: false, // 保留 <!--id:--> 的 lute 链接形式（CSS 隐藏，绑定身份用）
-    theme: prefs.nightTheme === 'dark' ? 'dark' : 'classic',
+    theme: darkNow ? 'dark' : 'classic',
     value: initialMd,
     toolbar: [
       'headings', 'bold', 'italic', 'strike', '|',
@@ -208,15 +262,39 @@ export function render(App, el) {
       'link', 'table', 'undo', 'redo', 'outline',
     ],
     input: () => {
+      bufferDirty = true; // 有未提交编辑：外部触发的「从 db 重置」必须让位
+      inputSeq++;
       // 只读更新预览统计（parse 纯函数，零副作用，不触碰编辑器内容）
       const text = getText();
       const r = parseMdImport(text, { now: Date.now(), view: curView === 'goal' ? null : curView });
       updatePreview(r, null);
+      // 移动端 blur 不可靠：停手 900ms 自动提交（fromInput：打字途中不弹窗打断）。
+      // IME 组合输入中推迟——组合结束的下一次 input 会续期定时器。
+      if (inputTimer) clearTimeout(inputTimer);
+      inputTimer = setTimeout(() => { if (!composing) sync(false, true); }, 900);
     },
-    blur: () => sync(), // 失焦提交：一次性 parse → reconcile → 落库 → 回填
+    blur: () => { if (inputTimer) clearTimeout(inputTimer); sync(); }, // 失焦提交：一次性 parse → reconcile → 落库 → 回填
     after: () => setTimeout(sync, 60), // 初始化稳定后同步一次
   });
-  if (typeof window !== 'undefined') window.__wsVd = vd; // 调试/测试钩子
+  // IME 组合输入探测（编辑器容器每次 render 重建，监听随元素走，无堆积）
+  const wsEd = document.getElementById('ws-vditor');
+  if (wsEd) {
+    wsEd.addEventListener('compositionstart', () => { composing = true; });
+    wsEd.addEventListener('compositionend', () => { composing = false; });
+  }
+  // 文档级 flush（只绑一次）：切后台/页面卸载时提交编辑缓冲——Android WebView 切后台不触发 blur，
+  // 不 flush 的话用户最后一次编辑会随重渲染丢失。
+  if (!docSyncBound && typeof document !== 'undefined') {
+    docSyncBound = true;
+    const flush = () => { if (inputTimer) { clearTimeout(inputTimer); inputTimer = null; } if (syncFn) syncFn(true); };
+    document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+    window.addEventListener('pagehide', flush);
+    // Esc 退出全屏编辑（只绑一次；转发到当前实例）
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.querySelector('.card.ws-full') && wsExitFullRef) wsExitFullRef();
+    });
+  }
+  if (typeof window !== 'undefined') { window.__wsVd = vd; window.__wsSync = sync; window.__wsView = () => curView; } // 调试/测试钩子
 
   // 日期视图导航（‹ 今天 ›）：日 ±1 天 / 周 ±1 周 / 月 ±1 月；「今天」回到当前
   const navEl = el.querySelector('[data-ws-nav]');
@@ -247,11 +325,14 @@ export function render(App, el) {
   el.querySelector('[data-ws-tabs]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]');
     if (!b || b.dataset.v === curView) return;
+    // ★ 顺序纪律：先按**旧**视图身份落库当前编辑，再改 curView、再换内容。
+    // 若先改 curView，旧视图内容会被套上新区块的解析规则——
+    // 日视图内容被当 goal 镜像解析会凭空创建「今日」目标/「未分类」计划（移动端重复污染源）。
+    sync(); // 落库旧视图编辑（此时 curView 仍指向旧内容）
     curView = b.dataset.v;
     viewAnchor = null; // 每个视图从今天开始浏览
     el.querySelectorAll('[data-v]').forEach((x) => x.classList.toggle('on', x.dataset.v === curView));
-    sync(); // 先落库当前视图编辑，再切到新视图
-    vd.setValue(organizeView(App.db, curView, viewAnchor));
+    vd.setValue(organizeView(App.db, curView, viewAnchor)); // 触发 after → sync
     showNav(curView);
   });
   // 「？语法」：需要时点击弹窗（不常驻，不干扰写作）
@@ -268,15 +349,53 @@ export function render(App, el) {
   };
   showNav(curView);
 
+  // —— 全屏编辑模式 ——
+  // 卡片 fixed 铺满视口（z=55：高于内容、低于弹窗 60 与计时 90，弹窗仍可浮在其上），
+  // Vditor 高度按剩余空间实测；按钮 / Esc / 硬件返回键均可退出。
+  let wsFull = false;
+  const wsCard = el.querySelector('.card'); // ★ 先抓引用：reparent 到 body 后 el.querySelector 会找不到
+  const fullBtn = el.querySelector('[data-ws-full]');
+  const fitFull = () => {
+    const wrap = document.getElementById('ws-vditor');
+    if (!wsFull || !wsCard || !wrap) return;
+    const chrome = (wsCard.querySelector('.card-head')?.offsetHeight || 0)
+      + (wsCard.querySelector('.ws-tabs')?.offsetHeight || 0)
+      + (wsCard.querySelector('.ws-nav')?.offsetHeight || 0) + 34; // 卡片内边距 + 预览行余量
+    wrap.style.height = Math.max(220, window.innerHeight - chrome) + 'px';
+  };
+  const setFull = (on) => {
+    wsFull = on;
+    if (!wsCard) return;
+    // ★ 必须 reparent 到 body：祖先 .dash-track 带轮播 transform，会把 fixed 的包含块
+    //   劫持成轨道区域（顶栏盖不住）。挂到 body 下才是真正的视口全屏。
+    if (on && wsCard.parentElement !== document.body) document.body.appendChild(wsCard);
+    if (!on && wsCard.parentElement !== el) el.appendChild(wsCard);
+    wsCard.classList.toggle('ws-full', on);
+    document.body.classList.toggle('ws-lock', on);
+    if (fullBtn) fullBtn.textContent = on ? '⤢ 退出全屏' : '⛶ 全屏';
+    const wrap = document.getElementById('ws-vditor');
+    if (on) {
+      setTimeout(fitFull, 60); // 等布局稳定后实测一次
+      window.addEventListener('resize', fitFull);
+    } else {
+      window.removeEventListener('resize', fitFull);
+      if (wrap) wrap.style.height = '440px'; // 还原常规高度（与初始化一致）
+    }
+  };
+  wsExitFullRef = () => setFull(false);
+  if (typeof window !== 'undefined') window.__wsExitFull = wsExitFullRef; // 硬件返回键用
+  if (fullBtn) fullBtn.onclick = () => setFull(!wsFull);
+  // 夜间模式切换即时生效（applyNightTheme 调用）：不必等重渲染重建编辑器
+  if (typeof window !== 'undefined' && vd.setTheme) {
+    window.__wsApplyTheme = (dark) => { try { vd.setTheme(dark ? 'dark' : 'classic'); } catch (e) { /* 忽略 */ } };
+  }
+
   // 导出 .md 文件（lute 链接式 id 标记 → 可读注释）
-  el.querySelector('[data-ws-export]').onclick = () => {
-    const blob = new Blob([normalizeIdMarkers(getText())], { type: 'text/markdown' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `erp-${new Date().toISOString().slice(0, 10)}.md`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast('已导出 Markdown', 'ok');
+  // 走统一导出出口：native 落盘 Documents/exports（WebView 里 <a download> 是 no-op），web 保持下载
+  el.querySelector('[data-ws-export]').onclick = async () => {
+    const name = `erp-${new Date().toISOString().slice(0, 10)}.md`;
+    const r = await saveFile(name, 'text/markdown', normalizeIdMarkers(getText()));
+    if (r.ok && r.how === 'download') toast('已导出 Markdown', 'ok');
   };
 }
 

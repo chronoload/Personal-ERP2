@@ -3,6 +3,107 @@
 > 更新日期：2026-08-30 ｜ 版本：release 已构建（app-release.apk，签名 personal-erp.keystore）
 > 本档为发布后迭代：L4.1 agent MCP 适配器 + 目标"三级归档"交互修正 + 完成弹窗多资源收支 + UI 质感增强。
 
+## 〇-1、本迭代要点（2026-09-06 · 移动端 md 同步根治 + 信息量压缩）
+
+## 〇-2、Android 套壳适配审计（2026-09-06 · 已实现 5 项 + 路线图）
+
+**已实现**：
+1. **硬件返回键闭环（main.js，@capacitor/app backButton）**：返回键逐层退出浮层——通用弹窗
+   → 新一天引导 → 计时浮层 → AutoPilot 三条底部条 → 快捷入账条 → 非首页 Tab 回首页 → 才退出
+   应用。此前任何弹窗打开时按返回 = 直接杀 App。仅原生平台注册（web 无此实现，注册会抛
+   `_pendingBack` 空指针——ErrorLog 已捕获验证过）。
+2. **safe-area 全覆盖（app.css）**：viewport-fit=cover 早已设置但 CSS 从未用 env(safe-area-inset-*)，
+   edge-to-edge（Android 15+/刘海屏）下内容顶进状态栏。现 topbar 顶部、底部 Tab 栏与 content
+   底距、modal-mask、计时全屏、AutoPilot 三条底部条、快捷入账条全部按 inset 让位。
+3. **键盘 adjustResize（Manifest）**：MainActivity 加 `android:windowSoftInputMode="adjustResize"`，
+   键盘弹出时 WebView 正确压缩而不是遮挡表单。
+4. **导出统一出口（services/saveFile.js）**：WebView 里 `<a download>` 是 no-op（无下载管理器
+   接管）——此前 APK 上「导出 .md / 导出 PPTX」全部静默失败。现统一走 saveFile：原生落盘
+   Documents/exports/<文件名> + toast 路径（文件管理器可见），web 保持 Blob 下载；二进制
+   （pptx 的 zip）按 base64 落盘。已接入 workspace .md 与 downloadPptx；ICS 原本就有原生分支。
+5. **可变屏占比 + 全屏编辑模式**：编辑器新增「⛶ 全屏」（按钮/Esc/硬件返回键退出）——卡片
+   reparent 到 body 后 fixed 铺满视口（z=55：高于内容、低于弹窗 60/计时 90，弹窗仍可浮出），
+   Vditor 高度按剩余空间实测、退出还原 440px。两个坑：① 祖先 `.dash-track` 的轮播 transform
+   会劫持 fixed 包含块（顶栏盖不住）→ 必须 reparent；② reparent 后原容器查询失效 → 卡片引用
+   在 render 时抓取。原「小视口压缩编辑器高度」按 User 裁决移除（编辑窗口本来就小）。
+   configChanges 已含 rotation/screenSize（旋转不重建）；轮播断点 860px 覆盖手机横屏/折叠内屏。
+6. **★ 夜间模式编辑器文字**：Vditor 的 dark 主题只调背景，`.vditor-reset` 基类仍是深色字
+   （#24292e）→ 夜间下正文几乎不可读。app.css 显式补：正文 var(--text)、标题白、code/pre
+   深底浅字、blockquote/链接配套色。**背景即时跟随**：编辑器常驻缓存，theme 只在构造时设置——
+   新增 `window.__wsApplyTheme(dark)`（内部 vd.setTheme）由 applyNightTheme 调用，统计页切换
+   主题即刻生效，无需重渲染。
+7. **★ 活动 Tab「静默消失」根治**：轮播 `goToPage` 在容器隐藏（display:none）期间被 resize
+   触发（键盘开合正好打在隐藏期）时，用 offsetHeight=0 测量并把 pager 高度**锁死为 0**——
+   切回活动 Tab 整页高度为 0 = 消失。双保险：goToPage 对 `offsetParent===null` 早退（隐藏期
+   不测量，保留此前正确高度）+ activateTab 激活活动页 60ms 后调 `overview.refreshPagerHeight()`
+   重测自愈遗留的 0 高度。
+8. **★ 编辑器缓冲区外部重置**：视图缓存让编辑器常驻，外部改库（目标页改名/删除、小组件、
+   备份恢复、局域网同步）后缓冲区陈旧——下次 sync 会把外部修改**改回去**（改名被撤销）。
+   新增 `bufferDirty`（input 置位 / sync 成功清零）+ `window.__wsReloadFromDb`（App.render 时
+   调用）：缓冲干净才用 db 重组当前视图；有未提交编辑绝不重置（让位给用户，blur 时正常
+   reconcile）。setValue 误触发的脏标记用 inputSeq 序号识别清除。
+
+**路线图（按价值排序，均需 gradle 重建或大改，未动）**：
+- 状态栏/导航栏图标颜色：装 @capacitor/status-bar，按 nightTheme 切 style（夜间+系统浅色时
+  透明状态栏深色图标对比度不足）；需 npm install + gradle。
+- 文件关联打开：Manifest intent-filter 注册 .json/.md，从文件管理器「打开方式」直达导入；
+  需新增路由（读 intent data → importFromFile 语义）。
+- PDF 导出：window.print 在 WebView 无效；做原生 printToPDF 插件或只保留 PPTX 路线。
+- 系统字体缩放：Android textZoom 会放大 WebView 文本、px 布局可能溢出；尊重无障碍（现状）
+  或 Java setTextZoom(100)（牺牲无障碍）或全站 rem 化（大工程）。
+- @capacitor/keyboard：键盘出现时的精细滚动/光标配合。
+
+### 本迭代要点正文（2026-09-06 · 移动端 md 同步根治 + 信息量压缩）
+
+- **★「分钟条目不断被重复」根治（md 同步四层修复，tests/md_sync_dup.test.js 14 条新增，全量 266 绿）**：
+  1. **bindEntityLine 缺 g 标志（真正的根源机制）**：无 g 时 replace 只访问第一个同标题行——
+     若它是已绑定行，后面真正的无 id 行永远轮不到补 id → 下轮 sync 再建一份 + 引擎原子性自动顺延
+     （09:00→09:30→10:00…每轮一份占一个新空槽）。goal/plan 正则同样补 g；活动正则同时容忍
+     行首缩进（嵌套列表）与有序列表行。
+  2. **多重集对账匹配（applyViewCandidates / applyCandidates）**：无 id 行先按「规范标题+排程」
+     在作用域内对账既有活动（同签名第 k 行绑第 k 个未绑定实体，boundIds 排除已绑定），命中走更新
+     并回传 `createdRefs{bind:true}`；不够才新建。保留「同内容多行=多实体」语义（测试锁定），
+     buffer 反复应用必然收敛（幂等）。「无 id 一律新建」旧教义正是移动端逐轮复制的语义根源，
+     mdapply.test.js 对应断言已改写。
+  3. **视图切换顺序修复（workspace tabs）**：旧代码先改 curView 再 sync——日视图内容被按 goal
+     镜像解析，凭空创建「今日」目标/日期计划并错误归属。现先按旧视图身份落库，再切换+重排。
+  4. **「未分类」往返豁免（parseMdImport pushPlan）**：serializeDbToMd 给 orphan 活动的兜底
+     区段 `## 未分类` 导回时不再创建「（未分类）」目标+「未分类」计划（此前每次切 goal 视图
+     都多出一套幽灵层级）；活动保持 orphan，往返幂等。
+- **移动端同步触发加固（workspace.js）**：blur 在 Android WebView 不可靠（键盘收起/切后台不触发）——
+  新增停手 900ms 防抖提交（input 驱动）+ visibilitychange/pagehide 强制 flush（编辑缓冲不再随
+  重渲染丢失）+ sync 防重入；id 绑定回填**不看聚焦状态**（isFocused 同样会说谎，回填必达）；
+  打字途中（fromInput）不弹删除确认/状态提示（推迟到失焦），防打断。IME 组合输入期间推迟提交。
+  stripId/repairIdMarkers 识别并剥净全部三种 id 形态（注释/lute 链接/WYSIWYG 裸残余），
+  一行多形态残留不再产生以 id 为名的垃圾或双 id 行。
+  调试钩子：`window.__wsVd`（编辑器）/ `__wsSync`（驱动真实同步闭包）/ `__wsView`（当前视图）。
+- **UI 信息量压缩（"专注敏捷而不是眼花缭乱"）**：
+  - 轮播**自动播放移除**（每 2 秒自动翻页是眼花缭乱首因，只留手势/点导航）；
+  - 活动表单分层（openActModal）——**已按 User 裁决回退（2026-09-06）**：折叠式布局对日常
+    使用无增益，恢复原始一屏平铺（名称/备注/关联计划/时间/分钟/循环/结束日/预设收支/主题）；
+    折叠样式 `details.modal-sec` 保留在 CSS 里备用，暂无使用方；
+  - 看板卡片 meta 三行合一（归属·📅日期·🔁循环），实际起止移入 title，计时进度条只在有实际
+    计时值时出现，备注单行截断（悬停看全）；
+  - 编辑器卡头冗余文案删除；同步状态行安静原则（无变更/无警告时不渲染）。
+- **★ 夜间模式补齐（2026-09-06 巡检）**：`.modal-panel { background:#fff }` 从无深色覆盖——
+  深色块里写的 `.modal-box` 是 DOM 里不存在的类（历史笔误）→ 所有弹窗夜间态白底+浅色标题不可读。
+  补齐：弹窗面板/标题、新一天引导面板（.dg-panel）、看板卡文字变量（--kc-text/--kc-sub/
+  --kc-note-* 深色值，否则备注/归属在深卡上不可读）、进度条轨道、日历选中态/计数徽章、
+  tag-chip、溢出菜单 hover、fb.ok、collapse-btn、勾选 chip 选中态（--primary 提对比）。
+  Vditor 编辑器主题改为与 applyNightTheme 同一判据（auto+系统深色也算深），不再出现
+  「页面深色、编辑器纯白」割裂。浅色模式回归已验证（完成弹窗/表单逐屏截图比对）。
+- **轮播右边界滑动修复**：overview 轮播最右页继续左滑此前硬编码 `App.setTab('goals')`，
+  越过「资源」直达「目标与计划」，不符滑动直觉。现经 `App.tabOrder`（main.js 暴露全局 Tab 序）
+  计算下一个 Tab（活动→资源）；App 内勿再硬编码 Tab 跳转。回归：左边界右滑停留、页内滑动切页正常。
+- **月视图「空白椭圆块」优化**：补位空格类名 `.cal-day.empty` 与通用占位类 `.empty`（虚线圆角
+  白底）撞车，一直渲染成块状。终版方案：补位格改用独立类 **`.cal-day.cal-fill`**（不与任何
+  通用类撞车）——透明背景融入面板、无 hover 高亮，但照常撑起网格 hairline（线条完整不断）；
+  行首/月末补位均保留。`.cal-grid` 补深色底（此前被补位块的实心底盖住）。教训：
+  通用短类名（.empty）会被无关组件意外继承，新占位类取名要带前缀。
+- 验证：`node --test` 266/266 绿；`vite build` 过；真机浏览器（420px 视口）冒烟——干净库下
+  6 轮恶劣同步 + day→goal→day 切换往返 + 追加同步，活动恒 1 份、goals/plans 恒 0，行正确回填 id。
+- 打包：`npm run build` → `npx cap sync android` → `gradlew assembleRelease`（三步曲照旧）。
+
 ## 〇、本迭代要点（2026-08-30）
 
 - **L4.1 agent MCP 适配器（`src/services/agentMCP.js`，契约** **`docs/api/mcp-agent.md`）**：

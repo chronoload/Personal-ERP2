@@ -5,6 +5,8 @@
 //   手写 ZIP 容器 + CRC32，产出 PowerPoint 可打开的幻灯片。
 //   本模块只消费「去身份聚合」数据（计数/比值/时长），不触碰原始流水/余额/身份。
 // ============================================================
+import { saveFile } from './saveFile.js';
+import { toast } from '../ui/helpers.js';
 
 // ---------- CRC32（zip 校验） ----------
 const CRC_TABLE = (() => {
@@ -244,14 +246,12 @@ export async function buildPptxBlob(deck) {
   return new Blob([zip], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
 }
 
-// 便捷：把 deck 下载成 .pptx
+// 便捷：把 deck 保存成 .pptx
+// native：WebView 里 <a download> 是 no-op → 走统一导出出口落盘 Documents/exports；web 保持下载
 export async function downloadPptx(deck, filename = '报告.pptx') {
   const blob = await buildPptxBlob(deck);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const r = await saveFile(filename, 'application/vnd.openxmlformats-officedocument.presentationml.presentation', { bytes });
+  if (r.ok && r.how === 'download') toast('已下载 .pptx', 'ok');
   return blob;
 }

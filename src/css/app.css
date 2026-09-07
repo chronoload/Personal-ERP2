@@ -37,7 +37,9 @@ h1, h2, h3 { margin: 0; }
 .topbar {
   position: sticky; top: 0; z-index: 30;
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 12px 20px; background: rgba(255, 255, 255, .92);
+  /* safe-area：edge-to-edge（Android 15+ 强制）/ 刘海屏下内容不顶进状态栏 */
+  padding: calc(12px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) 12px calc(20px + env(safe-area-inset-left, 0px));
+  background: rgba(255, 255, 255, .92);
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; }
@@ -379,6 +381,8 @@ h1, h2, h3 { margin: 0; }
 
 .modal-mask {
   position: fixed; inset: 0; background: rgba(18, 22, 30, .45); z-index: 60;
+  /* 弹窗避开状态栏/手势条（edge-to-edge 下 mask 铺满全屏） */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   display: flex; align-items: center; justify-content: center; padding: 18px;
   animation: fade .18s ease;
 }
@@ -418,8 +422,10 @@ h1, h2, h3 { margin: 0; }
 .cal-dow { background: #f7f9fc; color: var(--muted); text-align: center; padding: 8px 0; font-weight: 700; font-size: 11px; }
 .cal-dow:nth-child(6), .cal-dow:nth-child(7) { color: var(--red); } /* 周六/日标题标红 */
 .cal-day { min-height: 72px; padding: 6px; font-size: 11px; cursor: pointer; background: #fff; transition: background .12s; position: relative; }
-.cal-day:hover:not(.empty) { background: #f2f5fa; }
-.cal-day.empty { background: #fafbfc; cursor: default; }
+.cal-day:hover:not(.empty):not(.cal-fill) { background: #f2f5fa; }
+/* 补位空格（cal-fill）：只负责撑起网格线，透明底融入面板。
+   不能用 `.empty` 类名——与通用占位样式（虚线圆角白底）撞车会显成「空白椭圆块」 */
+.cal-day.cal-fill { background: transparent; cursor: default; }
 .cal-day.today { background: #eef1f8; }
 .cal-day.selected { background: #e6ecf7; box-shadow: inset 0 0 0 2px var(--primary); }
 .cal-d { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-weight: 800; }
@@ -517,6 +523,7 @@ h1, h2, h3 { margin: 0; }
 /* ---------------- TikTok 计时器 ---------------- */
 .timer-overlay {
   position: fixed; inset: 0; background: #0b0b10; color: #fff; z-index: 90;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   padding: 20px;
 }
@@ -655,10 +662,10 @@ h1, h2, h3 { margin: 0; }
   .kanban { grid-template-columns: 1fr; }
   .cal-wrap { grid-template-columns: 1fr; }
   .trend-grid { grid-template-columns: 1fr; }
-  .tabs { top: auto; position: sticky; bottom: 0; background: rgba(255, 255, 255, .95); border-top: 1px solid var(--border); border-radius: 14px 14px 0 0; padding: 6px; }
+  .tabs { top: auto; position: sticky; bottom: 0; background: rgba(255, 255, 255, .95); border-top: 1px solid var(--border); border-radius: 14px 14px 0 0; padding: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
   .tab { flex: 1; border-radius: 10px; border-bottom: none; background: transparent; padding: 10px; }
   .tab.on { background: var(--ink); color: #fff; }
-  .content { padding-bottom: 120px; }
+  .content { padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
   .actions .btn { padding: 7px 10px; font-size: 12px; }
   .top-res { order: 3; width: 100%; }
 }
@@ -794,8 +801,23 @@ html[data-theme="dark"] .tag { background: #232b3d; color: #aab4c8; }
 /* 日历 */
 html[data-theme="dark"] .cal-dow { background: #1b2130; color: var(--muted); }
 html[data-theme="dark"] .cal-day { background: #1b2130; }
-html[data-theme="dark"] .cal-day:hover:not(.empty) { background: #232b3d; }
-html[data-theme="dark"] .cal-day.empty { background: #171c29; }
+html[data-theme="dark"] .cal-day:hover:not(.empty):not(.cal-fill) { background: #232b3d; }
+html[data-theme="dark"] .cal-grid { background: #1b2130; } /* 尾随留白区露出容器底，需与日格同色 */
+html[data-theme="dark"] .cal-day.cal-fill { background: transparent; }
+
+/* ===== 夜间模式编辑器文字：Vditor 的 dark 主题只调背景，.vditor-reset 基类仍是深色字
+   （#24292e），夜间模式下几乎不可读 —— 显式补浅色文字与配套元素色 ===== */
+html[data-theme="dark"] .vditor-reset { color: var(--text); }
+html[data-theme="dark"] .vditor-reset h1,
+html[data-theme="dark"] .vditor-reset h2,
+html[data-theme="dark"] .vditor-reset h3,
+html[data-theme="dark"] .vditor-reset h4,
+html[data-theme="dark"] .vditor-reset h5,
+html[data-theme="dark"] .vditor-reset h6 { color: #fff; }
+html[data-theme="dark"] .vditor-reset code,
+html[data-theme="dark"] .vditor-reset pre { background: #202839; color: #e6e9f1; }
+html[data-theme="dark"] .vditor-reset blockquote { color: #aab4c8; border-left-color: #3a4a66; }
+html[data-theme="dark"] .vditor-reset a { color: #6ea2dd; }
 html[data-theme="dark"] .cal-day.today { background: #222a3d; }
 html[data-theme="dark"] .cal-agenda { background: #181e2c; }
 html[data-theme="dark"] .agenda-row:hover { background: #202839; }
@@ -927,3 +949,80 @@ html[data-theme="dark"] .goal-head:hover { background: #1c2333; }
   #report-print .dash-page { flex: none !important; width: auto !important; min-width: 0 !important; padding: 0 !important; }
   #report-print .dash-pager { height: auto !important; overflow: visible !important; }
 }
+
+/* ===== 信息量压缩：弹窗折叠分区 / 卡片备注截断 / 同步状态行降噪 ===== */
+/* 表单折叠分区：默认只见核心字段，高级项收进可展开的 details（零 JS 依赖） */
+details.modal-sec {
+  border: 1px solid #e7eaf0; border-radius: 10px;
+  margin: 10px 0 0; padding: 0 12px;
+  background: #fbfcfe;
+}
+details.modal-sec > summary {
+  cursor: pointer; user-select: none;
+  padding: 9px 0; margin: 0 -12px; padding-left: 12px;
+  font-size: 12.5px; font-weight: 700; color: var(--muted);
+  list-style: none;
+}
+details.modal-sec > summary::-webkit-details-marker { display: none; }
+details.modal-sec > summary::before { content: '▸ '; color: #b6bdc9; }
+details.modal-sec[open] > summary { border-bottom: 1px dashed #e7eaf0; margin-bottom: 10px; }
+details.modal-sec[open] > summary::before { content: '▾ '; }
+details.modal-sec[open] { padding-bottom: 12px; }
+html[data-theme="dark"] details.modal-sec { background: #181e2c; border-color: #2a3245; }
+html[data-theme="dark"] details.modal-sec > summary { color: #8b95a8; }
+html[data-theme="dark"] details.modal-sec[open] > summary { border-bottom-color: #2a3245; }
+html[data-theme="dark"] details.modal-sec > summary::before { color: #3d4a66; }
+/* 看板卡片备注：只留一行，长备注悬停可看全（title 由渲染层提供） */
+.kc-note {
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+/* 编辑器同步状态行：只在有信息时出现（渲染层已降噪），出现时也更轻 */
+.ws-preview { font-size: 12px; opacity: .85; }
+
+/* ===== 编辑器全屏模式：卡片铺满视口（z=55：高于内容、低于弹窗 60 与计时 90，弹窗仍可浮出） ===== */
+.card.ws-full {
+  position: fixed; inset: 0; z-index: 55; border-radius: 0; margin: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) calc(10px + env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) calc(10px + env(safe-area-inset-left, 0px));
+}
+body.ws-lock { overflow: hidden; }
+.card.ws-full .ws-preview { margin-top: 4px; }
+
+/* ===== 夜间模式补齐（2026-09-06 巡检：硬编码浅色表面逐项覆盖） ===== */
+/* 弹窗面板：此前 .modal-panel 只有 background:#fff，深色块里写的 .modal-box 是不存在的类
+   —— 所有弹窗夜间态都是白底 + 浅色标题（不可读）的主因 */
+html[data-theme="dark"] .modal-panel { background: #1b2130; box-shadow: 0 30px 70px rgba(0, 0, 0, .55), 0 4px 18px rgba(0, 0, 0, .4); }
+html[data-theme="dark"] .modal-head h3 { color: var(--text); }
+html[data-theme="dark"] .modal-panel.accent-brand .modal-head h3 { color: var(--text); }
+/* 新一天引导面板 */
+html[data-theme="dark"] .dg-panel { background: #1b2130; }
+/* 看板卡片（非主题卡）文字/备注变量：默认值是深灰字，深色卡底上不可读 */
+html[data-theme="dark"] .kanban-card {
+  --kc-text: #e6e9f1;
+  --kc-sub: #aab4c8;
+  --kc-note-bg: rgba(22, 28, 42, .9);
+  --kc-note-border: #2c3549;
+}
+/* 进度条轨道（浅灰在深色卡上刺眼） */
+html[data-theme="dark"] .progress { background: #2c3549; }
+html[data-theme="dark"] .kc-time-progress .progress { background: #2c3549; }
+/* 日历选中/计数徽章 */
+html[data-theme="dark"] .cal-day.selected { background: #28324a; }
+html[data-theme="dark"] .cal-cnt { background: #232b3d; color: #aab4c8; }
+html[data-theme="dark"] .kanban-head .cnt { background: #232b3d; }
+/* 过滤条/标签 chips */
+html[data-theme="dark"] .tag-chip { background: #232b3d; border-color: #2e3850; color: #c6cddb; }
+html[data-theme="dark"] .tag-chip:hover { background: #2c3549; color: var(--text); border-color: #3a4a66; }
+html[data-theme="dark"] .tag-chip.on { background: var(--primary); border-color: var(--primary); color: #10141f; }
+/* 溢出菜单 hover */
+html[data-theme="dark"] .act-menu button:hover { background: #232b3d; }
+html[data-theme="dark"] .act-menu button.danger:hover { background: #33242b; }
+/* 反馈条（绿色 ok 变体；warn 已有覆盖） */
+html[data-theme="dark"] .fb.ok { background: #16281e; border-color: #234a35; }
+/* 折叠按钮 hover（计划区） */
+html[data-theme="dark"] .collapse-btn:hover { background: #2c3549; }
+/* 溢出菜单/弹窗内分隔线在深色下的边界 */
+html[data-theme="dark"] .modal-foot .btn.danger { background: #232b3d; }
+/* 勾选 chip 选中态：深色下 --ink 几乎与卡底同色，改用 primary 提对比 */
+html[data-theme="dark"] .chk:has(input:checked) { background: var(--primary); border-color: var(--primary); color: #10141f; }

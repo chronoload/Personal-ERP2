@@ -17,6 +17,9 @@ import { Sync } from './services/sync.js';
 import { ICS } from './services/ics.js';
 import { AutoPilot } from './services/autoPilot.js';
 import { ErrorLog } from './services/errorLog.js';
+import * as AlarmService from './services/alarm.js';
+import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
 import { renderTopbar, renderTabs } from './views/topbar.js';
 import * as overview from './views/overview.js';
 import * as finance from './views/finance.js';
@@ -115,12 +118,17 @@ function activateTab(App, id) {
       if (sib !== c && sib.classList && sib.classList.contains('app-view')) sib.style.display = 'none';
     }
   }
+  // 活动页重新可见：轮播高度可能残留隐藏期测出的 0（键盘开合期的 resize），重测自愈
+  if (id === 'overview' && viewReady.has(id)) {
+    setTimeout(() => { try { overview.refreshPagerHeight(); } catch (e) { /* 忽略 */ } }, 60);
+  }
 }
 
 const App = {
   db: loadDB(),
   engine,
   tab: 'overview',
+  tabOrder: TAB_ORDER, // 全局 Tab 序（overview 轮播右边界滑入「下一个 Tab」用，勿再硬编码）
   // 系统服务接口（预留：小组件 / 系统提示 / 系统通知 / 备份）
   widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS,
   // 视图扁平暴露给内联 handler（App.calendar.open() 等）
@@ -169,7 +177,7 @@ const App = {
     const bar = document.createElement('div');
     bar.id = 'ap-qc-bar';
     bar.style.cssText = [
-      'position:fixed', 'left:50%', 'transform:translateX(-50%)', 'bottom:20px', 'z-index:50',
+      'position:fixed', 'left:50%', 'transform:translateX(-50%)', 'bottom:calc(20px + env(safe-area-inset-bottom, 0px))', 'z-index:50',
       'display:flex', 'align-items:center', 'gap:10px', 'padding:10px 14px', 'border-radius:12px',
       'background:#1d2330', 'color:#fff', 'box-shadow:0 6px 24px rgba(0,0,0,.25)',
       'max-width:min(92vw,560px)',
@@ -198,6 +206,8 @@ const App = {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', dark ? '#131722' : '#f4f5f7');
+    // Vditor 编辑器背景即时跟随（编辑器常驻缓存，不重建；setTheme 切换 vditor--dark 类）
+    if (window.__wsApplyTheme) { try { window.__wsApplyTheme(dark); } catch (e) { /* 忽略 */ } }
   },
   // 刷新保留滚动位置，避免点击后页面跳顶/脱离焦点；不重放入场动画。
   // 置 forceRenderId：本次渲染强制重建当前 tab（数据刷新），其余 tab 容器保持不变缓存。
@@ -264,11 +274,15 @@ const App = {
     // 首次建立 tab 容器时，清掉 content 里可能残留的 setup 内容
     if (!content.querySelector('.app-view')) content.innerHTML = '';
     activateTab(this, this.tab); // 懒渲染 + 显隐切换（切回不重建）
+    // 编辑器缓冲区重置：外部改库（目标页/小组件/备份恢复/同步）后，若缓冲无未提交编辑，
+    // 用 db 重组当前视图——否则陈旧缓冲会在下次 sync 把外部修改改回去
+    if (window.__wsReloadFromDb) { try { window.__wsReloadFromDb(); } catch (e) { /* 忽略 */ } }
     Widget.push(widgetSnapshot(this)); // 维护小组件快照（预留）
     Widget.refreshNative();
     Scheduler.syncValueflowNotifs(this.db); // 待反馈价值流系统通知（16C）
     Scheduler.syncAutoBackup(this.db);      // 定时自动备份（本地保存）
     Scheduler.syncPeriodicReportReminders(); // 周/月报通知提醒（每周日/每月末）
+    AlarmService.syncAlarms(this.db);        // 日程提醒闹钟：为 Planned 活动到点响铃（diff 幂等）
     hud.refresh();                            // HUD 侧边栏数据同步（仅开启时渲染）
   },
 };
@@ -297,6 +311,44 @@ const App = {
 
 window.App = App;
 App.errorLogExport = () => ErrorLog.export(); // 渲染降级卡片的日志导出入口（只挂一次）
+
+// Android 硬件返回键闭环：返回键优先逐层退出浮层（弹窗 → 引导 → 计时 → 确认/提示/推荐条），
+// 再回退 Tab（非首页 → 首页），最后才退出应用。没有它，任何弹窗打开时按返回 = 直接杀掉 App。
+// 仅原生平台注册（web 的 App 插件无 backButton 实现，注册会抛 _pendingBack 空指针）。
+if (Capacitor.isNativePlatform() && CapApp.addListener) {
+  CapApp.addListener('backButton', () => {
+    // 1) 通用弹窗（含确认删除/完成面板/报表 deck）
+    const mask = document.querySelector('.modal-mask');
+    if (mask) {
+      const closeBtn = mask.querySelector('[data-close]') || mask.querySelector('[data-cancel]');
+      if (closeBtn) closeBtn.click();
+      else mask.remove(); // 兜底：无关闭钮的遮罩直接撤（与点遮罩关闭同语义）
+      return;
+    }
+    // 2) 新一天引导
+    const dg = document.getElementById('dayGuide');
+    if (dg && dg.classList.contains('show')) {
+      const skip = [...dg.querySelectorAll('button')].find((b) => b.textContent.trim() === '先跳过');
+      if (skip) skip.click(); else dg.classList.remove('show');
+      return;
+    }
+    // 3) 全屏编辑模式（先于计时：编辑器卡片 z 层在其下但语义上属于当前工作面）
+    if (document.querySelector('.card.ws-full') && window.__wsExitFull) { window.__wsExitFull(); return; }
+    // 4) 全屏计时
+    const tClose = document.querySelector('.timer-overlay [data-close], .timer-overlay .t-close');
+    if (tClose) { tClose.click(); return; }
+    // 5) AutoPilot 确认/收尾/推荐条（单实例，逐条退出）
+    for (const id of ['ap-rec-bar', 'ap-tip-bar', 'ap-confirm-bar']) {
+      const bar = document.getElementById(id);
+      if (bar) { bar.remove(); return; }
+    }
+    const qc = document.getElementById('ap-qc-bar');
+    if (qc) { qc.remove(); return; }
+    // 6) 非首页 Tab → 回首页；首页 → 交回系统（退出）
+    if (App.tab !== 'overview') { App.setTab('overview'); return; }
+    CapApp.exitApp();
+  });
+}
 
 // 双向同步（原生 → JS）：启动与每次回前台时，若桌面小组件独立操作过（rev 变大），
 // 用原生数据覆盖本地并重渲染。pushData 的 txs 合并负责反方向，二者互补成闭环。

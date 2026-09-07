@@ -834,11 +834,16 @@ export function completeActivity(db, id, { expense = null, income = null, expens
   if (!output_title || !output_title.trim()) return fail('产出标题必填');
   for (const e of validExpenses) if (!resourceOf(db, e.resource_id)) return fail('支出资源不存在');
   for (const i of validIncomes) if (!resourceOf(db, i.resource_id)) return fail('收入资源不存在');
+  // 循环系列：「当期」日期 → 打在这次入账的流水/产出上，实现逐期可追溯（旧数据无此字段=系列累计）
+  const occDate = (a.repeat && Array.isArray(a.occurrences) && a.occurrences.length)
+    ? (currentOccurrence(a, dateKey(new Date(a.actual_start || Date.now()))).date || null)
+    : null;
   for (const e of validExpenses) {
     db.txs.push({
       id: nextId(db, 't'), resource_id: e.resource_id, debit: 0,
       credit: Number(e.amount),
-      source_type: 'activity', source_id: id, note: (e.note || '').trim() || '支出',
+      source_type: 'activity', source_id: id, occurrence_date: occDate,
+      note: (e.note || '').trim() || '支出',
       reversal_of: null, created: Date.now(),
     });
   }
@@ -846,12 +851,13 @@ export function completeActivity(db, id, { expense = null, income = null, expens
     db.txs.push({
       id: nextId(db, 't'), resource_id: i.resource_id, debit: Number(i.amount),
       credit: 0,
-      source_type: 'activity', source_id: id, note: (i.note || '').trim() || '收入',
+      source_type: 'activity', source_id: id, occurrence_date: occDate,
+      note: (i.note || '').trim() || '收入',
       reversal_of: null, created: Date.now(),
     });
   }
   const out = newOutput({ title: output_title.trim(), tags: output_tags || [], note: '' });
-  out.id = nextId(db, 'o'); out.activity_id = id;
+  out.id = nextId(db, 'o'); out.activity_id = id; out.occurrence_date = occDate;
   db.outputs.push(out);
   a.actual_end = Date.now();
   a.status = 'Completed';
@@ -1048,6 +1054,67 @@ export function skipOccurrence(db, id, date) {
     advanceRecurrence(db, a); // 跳过当前期 → 推进到下一 pending
   }
   return ok({ planned_date: a.planned_date });
+}
+
+// 完成单个期次（日历展开的「未来/当前期」用）：直接标记该期已办（补记/提前勾掉），
+// 与 skipOccurrence 对偶——不触发布局/不记账（完整入账请走 App 内 开始→登记→完成）。
+// 仅 pending 期次可完成；进行中（Started）拒绝。
+export function completeOccurrence(db, id, date) {
+  const a = db.activities.find((x) => x.id === id);
+  if (!a) return fail('活动不存在');
+  if (!a.repeat || !Array.isArray(a.occurrences) || !a.occurrences.length) return fail('仅循环活动可操作期次');
+  const occ = a.occurrences.find((o) => dateKey(o.date) === dateKey(date));
+  if (!occ) return fail('期次不存在');
+  if (occ.status !== 'pending') return fail(occ.status === 'done' ? '该期次已完成' : '已跳过的期次不可完成');
+  occ.status = 'done';
+  occ.completedAt = Date.now();
+  if (dateKey(a.planned_date) === dateKey(occ.date)) {
+    if (a.status === 'Started') { occ.status = 'pending'; return fail('进行中的本期请用「完成/失败」处理'); }
+    advanceRecurrence(db, a); // 完成当前期 → 推进到下一 pending
+  }
+  return ok({ planned_date: a.planned_date });
+}
+
+// 按指定期次完成并**记账**（与 completeActivity 对齐：预设/手动台账都落到该期）。
+// 与 completeOccurrence 不同：completeActivity 只给「当前 Started 活动」用；
+// 这里允许对未来 pending 期次直接完成入账（对齐非循环的完成面板），该期账挂 occurrence_date。
+// 期次级动作：未来期完成不改 series 整体状态机；仅当 date 是当前期才推进到下一 pending。
+export function completeSeriesOccurrence(db, id, date, { expenses, incomes, output_title, output_tags } = {}) {
+  const a = db.activities.find((x) => x.id === id);
+  if (!a) return fail('活动不存在');
+  if (!a.repeat || !Array.isArray(a.occurrences) || !a.occurrences.length) return fail('仅循环活动可按期次完成');
+  const occ = a.occurrences.find((o) => dateKey(o.date) === dateKey(date));
+  if (!occ) return fail('期次不存在');
+  if (occ.status !== 'pending') return fail(occ.status === 'done' ? '该期次已完成' : '已跳过的期次不可完成');
+  const validExpenses = (expenses || []).filter((e) => e && Number(e.amount) > 0);
+  const validIncomes = (incomes || []).filter((i) => i && Number(i.amount) > 0);
+  if (!validExpenses.length && !validIncomes.length) return fail('必须至少登记一笔收支流水');
+  if (!output_title || !output_title.trim()) return fail('产出标题必填');
+  for (const e of validExpenses) if (!resourceOf(db, e.resource_id)) return fail('支出资源不存在');
+  for (const i of validIncomes) if (!resourceOf(db, i.resource_id)) return fail('收入资源不存在');
+  for (const e of validExpenses) {
+    db.txs.push({
+      id: nextId(db, 't'), resource_id: e.resource_id, debit: 0, credit: Number(e.amount),
+      source_type: 'activity', source_id: id, occurrence_date: date, note: (e.note || '').trim() || '支出',
+      reversal_of: null, created: Date.now(),
+    });
+  }
+  for (const i of validIncomes) {
+    db.txs.push({
+      id: nextId(db, 't'), resource_id: i.resource_id, debit: Number(i.amount), credit: 0,
+      source_type: 'activity', source_id: id, occurrence_date: date, note: (i.note || '').trim() || '收入',
+      reversal_of: null, created: Date.now(),
+    });
+  }
+  const out = newOutput({ title: output_title.trim(), tags: output_tags || [], note: '' });
+  out.id = nextId(db, 'o'); out.activity_id = id; out.occurrence_date = date;
+  db.outputs.push(out);
+  occ.status = 'done';
+  occ.completedAt = Date.now();
+  let advanced = false;
+  if (dateKey(a.planned_date) === dateKey(occ.date)) advanced = advanceRecurrence(db, a);
+  cleanConflictsFor(db, a.id); // 该期完成即离开时间线，解除历史捆绑
+  return ok({ advanced, done: seriesProgress(db, a) });
 }
 
 // ============================================================
