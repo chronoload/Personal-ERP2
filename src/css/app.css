@@ -96,11 +96,13 @@ h1, h2, h3 { margin: 0; }
 .actions .btn.timer-btn { background: #ff2d55; border-color: #ff2d55; color: #fff; }
 .actions .btn.timer-btn:hover { background: #e61e4b; border-color: #e61e4b; }
 
-/* 计时器侧边 dock（设置中可选 左/右/隐藏） */
-.timer-dock { position: fixed; top: 50%; transform: translateY(-50%); z-index: 40; display: flex; flex-direction: column; gap: 8px; }
-.timer-dock.left { left: 6px; }
-.timer-dock.right { right: 6px; }
-.timer-dock .timer-btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; box-shadow: 0 4px 14px rgba(32, 38, 49, .28); }
+/* 上部整体侧边 dock（设置中可选 左/右/完全收起） */
+.topbar-dock { position: fixed; top: 50%; transform: translateY(-50%); z-index: 40; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.topbar-dock.left { left: 6px; }
+.topbar-dock.right { right: 6px; }
+.topbar-dock .dock-logo { width: 44px; height: 44px; border-radius: 12px; background: var(--ink); color: #fff; border: none; font-weight: 800; font-size: 16px; box-shadow: 0 4px 14px rgba(32, 38, 49, .25); cursor: pointer; }
+.topbar-dock .btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; padding: 0; box-shadow: 0 4px 14px rgba(32, 38, 49, .28); }
+.topbar-dock .btn.timer-btn { background: #ff2d55; border-color: #ff2d55; color: #fff; }
 
 /* 计划状态选择（单控件替代多个状态按钮） */
 .status-select { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); font-weight: 700; }

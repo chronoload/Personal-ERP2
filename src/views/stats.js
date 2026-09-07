@@ -502,11 +502,11 @@ export function render(App, el) {
       </div>
       <div class="muted" style="margin-top:8px">导入可选择「增量合并（同名资源复用账户）」或「全量替换」。</div>
 
-      <div class="step-divider">界面布局 · 计时器</div>
-      <div class="row-gap" style="margin-top:6px" data-timer-dock>
-        ${['top', 'left', 'right', 'hidden'].map((m) => `<label class="chk" style="margin:0"><input type="radio" name="timer-dock" value="${m}" ${(prefs.timerDock || 'top') === m ? 'checked' : ''}> ${m === 'top' ? '顶栏紧凑' : m === 'left' ? '左侧边栏' : m === 'right' ? '右侧边栏' : '完全收起'}</label>`).join('')}
+      <div class="step-divider">界面布局 · 上部</div>
+      <div class="row-gap" style="margin-top:6px" data-topbar-mode>
+        ${['top', 'left', 'right', 'hidden'].map((m) => `<label class="chk" style="margin:0"><input type="radio" name="topbar-mode" value="${m}" ${(prefs.topbarMode || 'top') === m ? 'checked' : ''}> ${m === 'top' ? '顶栏紧凑' : m === 'left' ? '左侧边栏' : m === 'right' ? '右侧边栏' : '完全收起'}</label>`).join('')}
       </div>
-      <div class="muted" style="margin-top:4px">计时器入口布局：侧边栏固定在屏幕左右边缘；完全收起后仅可从活动卡片进入。</div>
+      <div class="muted" style="margin-top:4px">上部（商标 / HUD / 创建 / 计时）整体布局：侧边栏固定在屏幕左右边缘；完全收起后从内容区进入各功能。</div>
 
       <div class="step-divider">定时自动备份（本地保存）</div>
       <label class="row-gap" style="align-items:center"><input type="checkbox" id="ab-enabled" ${prefs.autoBackup ? 'checked' : ''}> 启用定时自动备份</label>
@@ -568,13 +568,13 @@ export function render(App, el) {
   const wdark = el.querySelector('#w-dark');
   if (wdark) wdark.addEventListener('change', () => { App.widget.setDarkTheme(wdark.checked); toast(wdark.checked ? '小组件已切换为深色' : '小组件已切换为浅色', 'ok'); });
 
-  // 计时器布局：顶栏 / 左 / 右 / 完全收起
-  el.querySelectorAll('[data-timer-dock] input[name="timer-dock"]').forEach((r) => {
+  // 上部整体布局：顶栏紧凑 / 左 / 右 / 完全收起
+  el.querySelectorAll('[data-topbar-mode] input[name="topbar-mode"]').forEach((r) => {
     r.addEventListener('change', () => {
       if (!r.checked) return;
-      Prefs.set({ timerDock: r.value });
-      App.refresh(); // 立即应用：顶栏按钮形态 / 侧边 dock 即时切换
-      toast(r.value === 'hidden' ? '计时器已完全收起（可从活动卡片进入）' : '计时器布局已更新', 'ok');
+      Prefs.set({ topbarMode: r.value });
+      App.refresh(); // 立即应用：顶栏 / 侧边 dock 即时切换
+      toast(r.value === 'hidden' ? '上部已完全收起（可从内容区进入各功能）' : '上部布局已更新', 'ok');
     });
   });
 

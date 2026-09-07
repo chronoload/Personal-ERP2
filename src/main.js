@@ -283,20 +283,25 @@ const App = {
     Scheduler.syncAutoBackup(this.db);      // 定时自动备份（本地保存）
     Scheduler.syncPeriodicReportReminders(); // 周/月报通知提醒（每周日/每月末）
     AlarmService.syncAlarms(this.db);        // 日程提醒闹钟：为 Planned 活动到点响铃（diff 幂等）
-    syncTimerDock();                          // 计时器布局：顶栏紧凑 / 侧边栏 / 完全收起
+    syncTopbarDock();                         // 上部布局：顶栏紧凑 / 侧边栏 / 完全收起
     hud.refresh();                            // HUD 侧边栏数据同步（仅开启时渲染）
   },
 };
 
-// 计时器布局：按 Prefs.timerDock 在屏幕左右边缘渲染固定 dock（或完全收起）
-function syncTimerDock() {
-  const mode = Prefs.load().timerDock || 'top';
+// 上部整体布局：侧边栏模式在屏幕左/右边缘渲染整条 dock（商标 + 创建 + HUD + 计时）；
+// 完全收起 → 顶栏与 dock 均隐藏（功能仍可从内容区进入）
+function syncTopbarDock() {
+  const mode = Prefs.load().topbarMode || 'top';
   const body = document.body;
-  let dock = document.getElementById('timer-dock');
+  let dock = document.getElementById('topbar-dock');
   if (mode === 'left' || mode === 'right') {
-    if (!dock) { dock = document.createElement('div'); dock.id = 'timer-dock'; body.appendChild(dock); }
-    dock.className = 'timer-dock ' + mode;
-    dock.innerHTML = `<button class="btn timer-btn" onclick="App.timer.open()" title="计时器">⏱</button>`;
+    if (!dock) { dock = document.createElement('div'); dock.id = 'topbar-dock'; body.appendChild(dock); }
+    dock.className = 'topbar-dock ' + mode;
+    dock.innerHTML = `
+      <button class="dock-logo" onclick="App.timer.open()" title="计时器">P</button>
+      <button class="btn" onclick="App.overview.openBatchCreate()" title="批量创建活动">⚡</button>
+      <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">☰</button>
+      <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">⏱</button>`;
     dock.style.display = '';
   } else if (dock) {
     dock.style.display = 'none';

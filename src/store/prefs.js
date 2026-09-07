@@ -12,7 +12,7 @@ const DEFAULTS = {
   hudEnabled: false, // HUD 侧边栏开关（目标→计划→活动 层级树）
   nightTheme: 'auto', // 界面夜间模式：auto 跟随系统 / light 浅色 / dark 深色
   smartRecommend: true, // L3 智能推荐开关：按历史习惯推荐「一键新建」新活动（可彻底关闭）
-  timerDock: 'top', // 计时器布局：top 顶栏紧凑按钮 / left 左侧边栏 / right 右侧边栏 / hidden 完全收起
+  topbarMode: 'top', // 上部整体布局：top 顶栏紧凑 / left 左侧边栏 / right 右侧边栏 / hidden 完全收起
 };
 
 export const Prefs = {
