@@ -701,22 +701,25 @@ function syncPager(App, root) {
   if (!pager) return;
   layoutPager(pager);
   goToPage(pager, pagerPage, true); // 保留用户当前所在页，而不是重置回日历
-  // 看板撞墙联动：内部横向滚动到边界后继续同向滑 → 切相邻容器页
-  const kanban = pager.querySelector('.kanban');
+  // 横向滚动容器撞墙联动（覆盖看板列 + 过滤条）：内部滚动消耗手势 → 抑制翻页；
+  // 只有滚到边界继续同向滑（撞墙）才切相邻容器页
+  const hScrolls = [...pager.querySelectorAll('.kanban, .kanban-filter')];
   let kbScrolled = false, kbEdge = false, kbStartX = 0, kbLastScroll = 0;
-  if (kanban && isCarousel()) {
-    kanban.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1) return;
-      kbStartX = e.touches[0].clientX; kbLastScroll = kanban.scrollLeft; kbScrolled = false; kbEdge = false;
-    }, { passive: true });
-    kanban.addEventListener('touchmove', (e) => {
-      if (e.touches.length !== 1) return;
-      const dx = e.touches[0].clientX - kbStartX;
-      if (kanban.scrollLeft !== kbLastScroll) kbScrolled = true;
-      kbLastScroll = kanban.scrollLeft;
-      const max = kanban.scrollWidth - kanban.clientWidth;
-      if ((kanban.scrollLeft <= 1 && dx > 0) || (kanban.scrollLeft >= max - 1 && dx < 0)) kbEdge = true;
-    }, { passive: true });
+  if (hScrolls.length && isCarousel()) {
+    hScrolls.forEach((el) => {
+      el.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        kbStartX = e.touches[0].clientX; kbLastScroll = el.scrollLeft; kbScrolled = false; kbEdge = false;
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - kbStartX;
+        if (el.scrollLeft !== kbLastScroll) kbScrolled = true;
+        kbLastScroll = el.scrollLeft;
+        const max = el.scrollWidth - el.clientWidth;
+        if ((el.scrollLeft <= 1 && dx > 0) || (el.scrollLeft >= max - 1 && dx < 0)) kbEdge = true;
+      }, { passive: true });
+    });
   }
   // 左右滑动切换（到边界后回退为 Tab 切换）
   let tx = null;
@@ -725,8 +728,8 @@ function syncPager(App, root) {
     if (tx === null) return;
     const dx = e.changedTouches[0].clientX - tx;
     tx = null;
-    const fromKanban = !!(e.target && e.target.closest && e.target.closest('.kanban'));
-    if (fromKanban && kanban && isCarousel()) {
+    const fromHScroll = !!(e.target && e.target.closest && e.target.closest('.kanban, .kanban-filter'));
+    if (fromHScroll && hScrolls.length && isCarousel()) {
       const edge = kbEdge, scrolled = kbScrolled;
       kbEdge = false; kbScrolled = false;
       if (scrolled && !edge) return;             // 内部滚动消耗了手势 → 不翻页
