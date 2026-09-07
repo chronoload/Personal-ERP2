@@ -504,7 +504,7 @@ export function render(App, el) {
 
       <div class="step-divider">界面布局 · 上部</div>
       <div class="row-gap" style="margin-top:6px" data-topbar-mode>
-        ${['top', 'left', 'right', 'hidden'].map((m) => `<label class="chk" style="margin:0"><input type="radio" name="topbar-mode" value="${m}" ${(prefs.topbarMode || 'top') === m ? 'checked' : ''}> ${m === 'top' ? '顶栏紧凑' : m === 'left' ? '左侧边栏' : m === 'right' ? '右侧边栏' : '完全收起'}</label>`).join('')}
+        ${['full', 'compact', 'left', 'right', 'hidden'].map((m) => `<label class="chk" style="margin:0"><input type="radio" name="topbar-mode" value="${m}" ${(prefs.topbarMode || 'full') === m ? 'checked' : ''}> ${m === 'full' ? '完整顶栏' : m === 'compact' ? '紧凑顶栏' : m === 'left' ? '左侧边栏' : m === 'right' ? '右侧边栏' : '完全收起'}</label>`).join('')}
       </div>
       <div class="muted" style="margin-top:4px">上部（商标 / HUD / 创建 / 计时）整体布局：侧边栏固定在屏幕左右边缘；完全收起后从内容区进入各功能。</div>
 
