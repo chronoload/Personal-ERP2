@@ -208,7 +208,8 @@ h1, h2, h3 { margin: 0; }
 .kanban-col.drag-over { outline: 2px dashed var(--primary); outline-offset: -2px; background: #f0f1f6; }
 .kanban-head { font-size: 12.5px; font-weight: 800; color: #4a5260; display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 10px; }
 .kanban-head .cnt { background: #e6e9ef; border-radius: 999px; padding: 1px 9px; font-size: 11px; }
-.kanban-body { display: flex; flex-direction: column; gap: 8px; }
+.kanban-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 100%; }
+.kc-actions, .kc-outs, .kc-meta { flex-wrap: wrap; overflow-wrap: anywhere; max-width: 100%; }
 .kanban-arch { margin-top: 12px; border: 1px dashed #cdd3dd; border-radius: 10px; overflow: hidden; }
 .kanban-arch-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; background: #f7f8fa; font-size: 12.5px; }
 .kanban-arch-head:hover { background: #f0f1f6; }
@@ -261,9 +262,9 @@ h1, h2, h3 { margin: 0; }
 .kanban-add:hover { background: #eef1f6; color: #4a5260; border-color: #a9b1bf; }
 @keyframes kb-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .kanban-card {
-  background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 11px; min-width: 0; overflow-wrap: break-word;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, .05); cursor: grab; animation: kb-in .18s ease both; transition: border-color .15s, box-shadow .15s;
-}
+  background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 11px; min-width: 0; max-width: 100%; overflow-wrap: break-word;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .05); cursor: grab; transition: border-color .15s, box-shadow .15s;
+} /* 去掉卡片入场动画：展开/刷新重渲染时不再全量闪烁（样式丢失感） */
 .kanban-card:hover { border-color: #c4cad4; box-shadow: 0 3px 10px rgba(16, 24, 40, .08); }
 .kanban-card.warned { border-color: #e6c9a8; }
 .kanban-card.dragging { opacity: .55; transform: rotate(1deg); }
