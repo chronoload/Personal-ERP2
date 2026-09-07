@@ -1140,7 +1140,7 @@ export function render(App, el) {
                 <button class="btn sm primary" onclick="App.overview.openActModal()">＋ 活动</button>
               </div>
             </div>
-            <div id="kanban-root">${kanbanFilterBar(App)}<div class="kanban">${kanbanHTML(App)}</div></div>
+            <div id="kanban-root">${kanbanGroupsBar(App)}${kanbanFilterBar(App)}<div class="kanban">${kanbanHTML(App)}</div></div>
           </div>
         </section>
         <section class="dash-page">
