@@ -3,6 +3,7 @@
 // 顶栏：品牌 + 资源余额常驻（每资源独立配色圆点）+ 全局工具（计时）
 // ============================================================
 import { esc, fmtNum, resColor } from '../ui/helpers.js';
+import { Prefs } from '../store/prefs.js';
 
 // 颜色白名单（同 overview.js）：仅放行 #rgb~#rrggbbaa 十六进制，其余回落稳定配色，防 style 注入
 const COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
@@ -34,7 +35,7 @@ export function renderTopbar(App) {
     <div class="actions">
       <button class="btn" style="background:#171a21;color:#fff;border-color:#171a21" onclick="App.overview.openBatchCreate()" title="批量创建活动">⚡ 创建</button>
       <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">☰</button>
-      <button class="btn timer-btn" onclick="App.timer.open()">⏱ 计时</button>
+      ${Prefs.load().timerDock === 'top' ? `<button class="btn timer-btn" onclick="App.timer.open()" title="计时器">⏱</button>` : ''}
     </div>
   `;
 }

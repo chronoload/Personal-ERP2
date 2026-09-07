@@ -701,6 +701,23 @@ function syncPager(App, root) {
   if (!pager) return;
   layoutPager(pager);
   goToPage(pager, pagerPage, true); // 保留用户当前所在页，而不是重置回日历
+  // 看板撞墙联动：内部横向滚动到边界后继续同向滑 → 切相邻容器页
+  const kanban = pager.querySelector('.kanban');
+  let kbScrolled = false, kbEdge = false, kbStartX = 0, kbLastScroll = 0;
+  if (kanban && isCarousel()) {
+    kanban.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      kbStartX = e.touches[0].clientX; kbLastScroll = kanban.scrollLeft; kbScrolled = false; kbEdge = false;
+    }, { passive: true });
+    kanban.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - kbStartX;
+      if (kanban.scrollLeft !== kbLastScroll) kbScrolled = true;
+      kbLastScroll = kanban.scrollLeft;
+      const max = kanban.scrollWidth - kanban.clientWidth;
+      if ((kanban.scrollLeft <= 1 && dx > 0) || (kanban.scrollLeft >= max - 1 && dx < 0)) kbEdge = true;
+    }, { passive: true });
+  }
   // 左右滑动切换（到边界后回退为 Tab 切换）
   let tx = null;
   pager.addEventListener('touchstart', (e) => { if (e.touches.length === 1) tx = e.touches[0].clientX; }, { passive: true });
@@ -708,7 +725,15 @@ function syncPager(App, root) {
     if (tx === null) return;
     const dx = e.changedTouches[0].clientX - tx;
     tx = null;
-    if (Math.abs(dx) <= 48) return;
+    const fromKanban = !!(e.target && e.target.closest && e.target.closest('.kanban'));
+    if (fromKanban && kanban && isCarousel()) {
+      const edge = kbEdge, scrolled = kbScrolled;
+      kbEdge = false; kbScrolled = false;
+      if (scrolled && !edge) return;             // 内部滚动消耗了手势 → 不翻页
+      if (!edge && Math.abs(dx) <= 48) return;   // 未撞墙且位移小 → 不翻
+    } else {
+      if (Math.abs(dx) <= 48) return;
+    }
     const items = [...pager.querySelectorAll('.dash-nav-item')];
     const cur = items.findIndex((b) => b.classList.contains('on'));
     const n = pager.querySelectorAll('.dash-page').length;
@@ -874,11 +899,18 @@ export function toggleArchived() {
 
 // 看板按计划过滤：'all'=全部 | 'none'=未关联 | planId（内存态，渲染重建保留）
 let kanbanPlanFilter = 'all';
+let kanbanGoalFilter = null;  // 目标上层汇聚：null=全部目标；goalId=只看该目标
 let kanbanTodayOnly = false; // 「今日」模式：只看今天到期的活动
 const expandedSeries = new Set(); // 看板里已展开未来期次的循环活动
 export function setKanbanPlanFilter(id) {
   kanbanPlanFilter = id;
+  if (id === 'all') kanbanGoalFilter = null; // 点「全部」同时清目标汇聚
   renderKanbanRoot(App); // 就地重渲染看板，不整页刷新 → 不跳回日历、不重放轮播动画
+}
+export function setKanbanGoal(id) {
+  kanbanGoalFilter = (kanbanGoalFilter === id ? null : id);
+  kanbanPlanFilter = 'all'; // 展开目标时先看该目标全部计划
+  renderKanbanRoot(App);
 }
 export function setKanbanToday(v) {
   kanbanTodayOnly = !!v;
@@ -903,16 +935,30 @@ function isTodayAct(a) {
   return a.planned_date === `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`;
 }
 function kanbanFilterBar(App) {
-  const countOf = (pred) => App.db.activities.filter(pred).length;
+  const { db } = App;
+  const countOf = (pred) => db.activities.filter(pred).length;
   const todayN = countOf((a) => isTodayAct(a));
   const chip = (id, label, cnt, on) => `
     <button type="button" class="tag-chip ${on ? 'on' : ''}" data-f="${id}" onclick="App.overview.setKanbanPlanFilter('${jsStr(id)}')">${label} <span class="muted">${cnt}</span></button>`;
-  let html = `<div class="kanban-filter" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px">`;
+  // 第一层（单一横向滚动条）：今日 / 全部 / 未关联 + 目标汇聚 chips
+  let html = `<div class="kanban-filter">`;
   html += `<button type="button" class="tag-chip ${kanbanTodayOnly ? 'on' : ''}" data-today="1" onclick="App.overview.setKanbanToday(${!kanbanTodayOnly})">📅 今日 <span class="muted">${todayN}</span></button>`;
-  html += chip('all', '全部', App.db.activities.length, !kanbanTodayOnly && kanbanPlanFilter === 'all');
-  html += chip('none', '未关联', countOf((a) => !a.plan_ids || !a.plan_ids.length), !kanbanTodayOnly && kanbanPlanFilter === 'none');
-  for (const p of App.db.plans) html += chip(p.id, esc(p.title), countOf((a) => (a.plan_ids || []).includes(p.id)), !kanbanTodayOnly && kanbanPlanFilter === p.id);
+  html += chip('all', '全部', db.activities.length, !kanbanTodayOnly && !kanbanGoalFilter && kanbanPlanFilter === 'all');
+  html += chip('none', '未关联', countOf((a) => !a.plan_ids || !a.plan_ids.length), !kanbanTodayOnly && !kanbanGoalFilter && kanbanPlanFilter === 'none');
+  for (const g of db.goals) {
+    const gPlans = db.plans.filter((p) => p.goal_id === g.id).map((p) => p.id);
+    const gCnt = db.activities.filter((a) => (a.plan_ids || []).some((pid) => gPlans.includes(pid))).length;
+    html += `<button type="button" class="tag-chip ${kanbanGoalFilter === g.id ? 'on' : ''}" data-goal="${jsStr(g.id)}" onclick="App.overview.setKanbanGoal('${jsStr(g.id)}')">🎯 ${esc(g.title)} <span class="muted">${gCnt}</span></button>`;
+  }
   html += `</div>`;
+  // 第二层（目标展开）：该目标下计划 chips，仍单一横向滚动条
+  if (kanbanGoalFilter && db.plans.some((p) => p.goal_id === kanbanGoalFilter)) {
+    html += `<div class="kanban-filter sub">`;
+    for (const p of db.plans.filter((x) => x.goal_id === kanbanGoalFilter)) {
+      html += chip(p.id, esc(p.title), countOf((a) => (a.plan_ids || []).includes(p.id)), kanbanPlanFilter === p.id);
+    }
+    html += `</div>`;
+  }
   return html;
 }
 
@@ -938,6 +984,15 @@ export function refreshBoard() { renderKanbanRoot(App); }
 function kanbanHTML(App) {
   const byPlan = (a) => {
     if (kanbanTodayOnly && !isTodayAct(a)) return false; // 今日模式：只看今天到期
+    // 目标汇聚层：活动须属于该目标下任一计划（可再叠加具体计划过滤）
+    if (kanbanGoalFilter) {
+      const gPlans = (App.db.plans || []).filter((p) => p.goal_id === kanbanGoalFilter).map((p) => p.id);
+      const inGoal = (a.plan_ids || []).some((pid) => gPlans.includes(pid));
+      if (!inGoal) return false;
+      if (kanbanPlanFilter === 'all') return true;
+      if (kanbanPlanFilter === 'none') return false;
+      return (a.plan_ids || []).includes(kanbanPlanFilter);
+    }
     if (kanbanPlanFilter === 'all') return true;
     if (kanbanPlanFilter === 'none') return !a.plan_ids || !a.plan_ids.length;
     return (a.plan_ids || []).includes(kanbanPlanFilter);
@@ -1031,14 +1086,11 @@ export function render(App, el) {
   el.innerHTML = `
     <div class="dash-pager" id="dash-pager">
       <div class="dash-nav">
-        <button type="button" class="dash-nav-item on" data-page="0">📅 当日日程</button>
-        <button type="button" class="dash-nav-item" data-page="1">📋 活动看板</button>
+        <button type="button" class="dash-nav-item on" data-page="0">📋 活动看板</button>
+        <button type="button" class="dash-nav-item" data-page="1">📅 当日日程</button>
         <button type="button" class="dash-nav-item" data-page="2">📝 编辑器</button>
       </div>
       <div class="dash-track">
-        <section class="dash-page">
-          <div id="calendar-section"></div>
-        </section>
         <section class="dash-page">
           <div class="card">
             <div class="card-head">
@@ -1050,6 +1102,9 @@ export function render(App, el) {
             </div>
             <div id="kanban-root">${kanbanFilterBar(App)}<div class="kanban">${kanbanHTML(App)}</div></div>
           </div>
+        </section>
+        <section class="dash-page">
+          <div id="calendar-section"></div>
         </section>
         <section class="dash-page">
           <div data-ws-host></div>
