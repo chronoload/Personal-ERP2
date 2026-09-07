@@ -199,7 +199,7 @@ h1, h2, h3 { margin: 0; }
 .tag { display: inline-block; padding: 1px 6px; border-radius: 5px; background: #f0f2f6; color: #66707e; font-size: 10.5px; margin-right: 3px; }
 
 /* ---------------- 看板 ---------------- */
-.kanban { display: flex; overflow-x: auto; overflow-y: hidden; gap: 12px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 4px; }
+.kanban { display: flex; overflow-x: auto; overflow-y: hidden; gap: 12px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; scrollbar-color: transparent transparent; padding-bottom: 4px; }
 .kanban::-webkit-scrollbar { display: none; height: 0; }
 .kanban-col { background: #f7f8fa; border: 1px solid var(--border); border-radius: 10px; padding: 10px; min-height: 120px; min-width: min(280px, 80vw); flex: 0 0 auto; scroll-snap-align: start; transition: background .15s; }
 .kanban-col.drag-over { outline: 2px dashed var(--primary); outline-offset: -2px; background: #f0f1f6; }
@@ -244,8 +244,9 @@ h1, h2, h3 { margin: 0; }
 .ws-del-list { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; background: #fbfcfe; }
 .ws-del-item { padding: 4px 2px; border-bottom: 1px dashed #e7eaf0; font-size: 13px; }
 .ws-del-item:last-child { border-bottom: none; }
-.kanban-filter { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+.kanban-filter { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: none; scrollbar-color: transparent transparent; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
 .kanban-filter::-webkit-scrollbar { display: none; height: 0; }
+.kanban-filter .tag-chip { flex: 0 0 auto; white-space: nowrap; } /* 防 chips 多时被压缩成竖排 */
 .kanban-filter.sub { margin: -4px 0 10px; padding-left: 4px; }
 .kanban-add { border: 1px dashed #cdd3dd; border-radius: 8px; padding: 16px 8px; text-align: center; color: var(--muted); font-size: 12px; cursor: pointer; }
 .kanban-add:hover { background: #eef1f6; color: #4a5260; border-color: #a9b1bf; }
