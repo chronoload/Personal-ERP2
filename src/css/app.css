@@ -244,6 +244,12 @@ h1, h2, h3 { margin: 0; }
 .ws-del-list { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; background: #fbfcfe; }
 .ws-del-item { padding: 4px 2px; border-bottom: 1px dashed #e7eaf0; font-size: 13px; }
 .ws-del-item:last-child { border-bottom: none; }
+.kb-scroll-wrap { position: relative; }
+.kb-scroll-wrap::before, .kb-scroll-wrap::after { content: ""; position: absolute; top: 2px; bottom: 2px; width: 16px; pointer-events: none; opacity: 0; transition: opacity .18s; z-index: 2; }
+.kb-scroll-wrap::before { left: 0; background: linear-gradient(to right, var(--card, #fff), transparent); }
+.kb-scroll-wrap::after { right: 0; background: linear-gradient(to left, var(--card, #fff), transparent); }
+.kb-scroll-wrap.edge-left::before { opacity: 1; }
+.kb-scroll-wrap.edge-right::after { opacity: 1; }
 .kanban-filter { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: none; scrollbar-color: transparent transparent; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
 .kanban-filter::-webkit-scrollbar { display: none; height: 0; }
 .kanban-filter .tag-chip { flex: 0 0 auto; white-space: nowrap; } /* 防 chips 多时被压缩成竖排 */

@@ -940,8 +940,8 @@ function kanbanFilterBar(App) {
   const todayN = countOf((a) => isTodayAct(a));
   const chip = (id, label, cnt, on) => `
     <button type="button" class="tag-chip ${on ? 'on' : ''}" data-f="${id}" onclick="App.overview.setKanbanPlanFilter('${jsStr(id)}')">${label} <span class="muted">${cnt}</span></button>`;
-  // 第一层（单一横向滚动条）：今日 / 全部 / 未关联 + 目标汇聚 chips
-  let html = `<div class="kanban-filter">`;
+  // 第一层（单一横向滚动条 + 边缘渐隐光晕提示可滑动）：今日 / 全部 / 未关联 + 目标汇聚 chips
+  let html = `<div class="kb-scroll-wrap" data-edge><div class="kanban-filter">`;
   html += `<button type="button" class="tag-chip ${kanbanTodayOnly ? 'on' : ''}" data-today="1" onclick="App.overview.setKanbanToday(${!kanbanTodayOnly})">📅 今日 <span class="muted">${todayN}</span></button>`;
   html += chip('all', '全部', db.activities.length, !kanbanTodayOnly && !kanbanGoalFilter && kanbanPlanFilter === 'all');
   html += chip('none', '未关联', countOf((a) => !a.plan_ids || !a.plan_ids.length), !kanbanTodayOnly && !kanbanGoalFilter && kanbanPlanFilter === 'none');
@@ -950,16 +950,31 @@ function kanbanFilterBar(App) {
     const gCnt = db.activities.filter((a) => (a.plan_ids || []).some((pid) => gPlans.includes(pid))).length;
     html += `<button type="button" class="tag-chip ${kanbanGoalFilter === g.id ? 'on' : ''}" data-goal="${jsStr(g.id)}" onclick="App.overview.setKanbanGoal('${jsStr(g.id)}')">🎯 ${esc(g.title)} <span class="muted">${gCnt}</span></button>`;
   }
-  html += `</div>`;
-  // 第二层（目标展开）：该目标下计划 chips，仍单一横向滚动条
+  html += `</div></div>`;
+  // 第二层（目标展开）：该目标下计划 chips，仍单一横向滚动条 + 边缘光晕
   if (kanbanGoalFilter && db.plans.some((p) => p.goal_id === kanbanGoalFilter)) {
-    html += `<div class="kanban-filter sub">`;
+    html += `<div class="kb-scroll-wrap" data-edge><div class="kanban-filter sub">`;
     for (const p of db.plans.filter((x) => x.goal_id === kanbanGoalFilter)) {
       html += chip(p.id, esc(p.title), countOf((a) => (a.plan_ids || []).includes(p.id)), kanbanPlanFilter === p.id);
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
   return html;
+}
+
+// 边缘渐隐光晕：横向可滚动且未到尽头 → 对应侧淡出渐变提示（隐藏滚动条下的「还有内容」信号）
+function bindEdgeFade(wrap) {
+  if (!wrap || wrap.dataset.edgeBound) return;
+  wrap.dataset.edgeBound = '1';
+  const scroller = wrap.querySelector('.kanban-filter');
+  if (!scroller) return;
+  const update = () => {
+    const max = scroller.scrollWidth - scroller.clientWidth;
+    wrap.classList.toggle('edge-left', scroller.scrollLeft > 2);
+    wrap.classList.toggle('edge-right', scroller.scrollLeft < max - 2);
+  };
+  scroller.addEventListener('scroll', update, { passive: true });
+  requestAnimationFrame(update);
 }
 
 // 仅重渲染看板容器：过滤条 + 五态看板。重绑看板交互，保持当前轮播页（不 reset 到日历、无切换动画）
@@ -967,6 +982,7 @@ function renderKanbanRoot(App) {
   const root = document.getElementById('kanban-root');
   if (!root) return;
   root.innerHTML = kanbanFilterBar(App) + `<div class="kanban">${kanbanHTML(App)}</div>`;
+  root.querySelectorAll('[data-edge]').forEach(bindEdgeFade); // 过滤条边缘光晕提示可滑动
   setupDrag(App);           // 重绑拖拽/列点击（document 级菜单监听有去重守卫）
   settleThemeTones(App, root); // 图片主题采样补亮暗类
   const pager = document.getElementById('dash-pager');
