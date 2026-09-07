@@ -512,6 +512,7 @@ h1, h2, h3 { margin: 0; }
   .dash-nav { display: none; }
   .dash-track { display: block; width: auto !important; transform: none !important; transition: none; }
   .dash-page { flex: none; width: auto !important; min-width: 0 !important; }
+  .kanban { grid-template-columns: repeat(3, minmax(0, 1fr)); } /* 桌面三组并列，自适应均分宽度 */
 }
 
 /* ---------------- 统计 ---------------- */

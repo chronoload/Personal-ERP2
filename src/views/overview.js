@@ -919,6 +919,7 @@ export function setKanbanGroup(g) {
 }
 // 看板分组切换条（待办 / 进行中 / 已完成 —— 每次只看一个视图）
 function kanbanGroupsBar() {
+  if (!isCarousel()) return ''; // 桌面三组并列展示，无需切换条
   return `<div class="kanban-groups">` +
     [{ g: 'todo', l: '📋 待办' }, { g: 'doing', l: '⚡ 进行中' }, { g: 'done', l: '✅ 已完成' }]
       .map((x) => `<button type="button" class="${kanbanGroup === x.g ? 'on' : ''}" data-group="${x.g}" onclick="App.overview.setKanbanGroup('${x.g}')">${x.l}</button>`).join('') +
@@ -1026,48 +1027,46 @@ function kanbanHTML(App) {
     if (kanbanPlanFilter === 'none') return !a.plan_ids || !a.plan_ids.length;
     return (a.plan_ids || []).includes(kanbanPlanFilter);
   };
-  // 当前分组视图：待办(Planned) / 进行中(Started) / 已完成(Completed+Reviewed+归档)
-  const inGroup = (a) => a.status !== 'Archived' && byPlan(a)
-    && (kanbanGroup === 'todo' ? a.status === 'Planned'
-      : kanbanGroup === 'doing' ? a.status === 'Started'
-        : (a.status === 'Completed' || a.status === 'Reviewed'));
-  let items = db.activities.filter(inGroup);
-  if (kanbanGroup === 'done') {
-    items = [...items].sort((x, y) => (y.actual_end || y.created || 0) - (x.actual_end || x.created || 0));
-    const shown = !doneExpanded ? items.slice(0, DONE_PREVIEW) : items;
-    const hidden = items.length - shown.length;
-    const more = (hidden > 0 || doneExpanded) && items.length > DONE_PREVIEW
-      ? `<button class="btn sm" style="margin:8px auto 0;display:block;width:auto" onclick="App.overview.toggleDone()">${doneExpanded ? '⬆ 收起，只看最近 ' + DONE_PREVIEW + ' 条' : `⬇ 展开更早的 ${hidden} 条`}</button>`
-      : '';
-    const archived = db.activities.filter((a) => a.status === 'Archived' && byPlan(a));
-    const archivedHTML = archived.length ? `
-      <div class="kanban-arch">
-        <div class="kanban-arch-head" onclick="App.overview.toggleArchived()">
-          <span class="collapse-btn">${archivedShown ? '▾' : '▸'}</span>
-          <b>📦 已归档（${archived.length}）</b>
-          <span class="muted">活动 · 历史存档，默认从视图隐藏</span>
-        </div>
-        <div class="kanban-arch-body" style="${archivedShown ? '' : 'display:none'}">
-          ${archived.map((a) => activityCard(App, a)).join('') || ''}
-        </div>
-      </div>` : '';
+  // 三分组：待办 / 进行中 / 已完成。桌面(≥861px)三组并列自适应；移动端每次只看当前组
+  const groups = [
+    { key: 'todo', label: '📋 待办', colKey: 'Planned', match: (a) => a.status === 'Planned' },
+    { key: 'doing', label: '⚡ 进行中', colKey: 'Started', match: (a) => a.status === 'Started' },
+    { key: 'done', label: '✅ 已完成', colKey: 'Done', match: (a) => a.status === 'Completed' || a.status === 'Reviewed' },
+  ];
+  const shown = isCarousel() ? groups.filter((g) => g.key === kanbanGroup) : groups;
+  const cols = shown.map((g) => {
+    let items = db.activities.filter((a) => a.status !== 'Archived' && g.match(a) && byPlan(a));
+    let more = '';
+    if (g.key === 'done') {
+      items = items.sort((x, y) => (y.actual_end || y.created || 0) - (x.actual_end || x.created || 0));
+      const vis = !doneExpanded ? items.slice(0, DONE_PREVIEW) : items;
+      const hidden = items.length - vis.length;
+      more = (hidden > 0 || doneExpanded) && items.length > DONE_PREVIEW
+        ? `<button class="btn sm" style="margin:8px auto 0;display:block;width:auto" onclick="App.overview.toggleDone()">${doneExpanded ? '⬆ 收起，只看最近 ' + DONE_PREVIEW + ' 条' : `⬇ 展开更早的 ${hidden} 条`}</button>` : '';
+      items = vis;
+    }
     return `
-      <div class="kanban-col" data-col="Done">
-        <div class="kanban-head">✅ 已完成 <span class="cnt">${items.length}</span>
+      <div class="kanban-col" data-col="${g.colKey}">
+        <div class="kanban-head">${g.label} <span class="cnt">${items.length}</span>
           <button class="btn sm" title="快速添加待办" onclick="App.overview.openActModal()">＋</button>
         </div>
-        <div class="kanban-body">${shown.map((a) => activityCard(App, a)).join('') || '<div class="kanban-add">＋ 点击添加待办</div>'}${more}</div>
-      </div>${archivedHTML}`;
-  }
-  const label = kanbanGroup === 'todo' ? '📋 待办' : '⚡ 进行中';
-  const colKey = kanbanGroup === 'todo' ? 'Planned' : 'Started';
-  return `
-    <div class="kanban-col" data-col="${colKey}">
-      <div class="kanban-head">${label} <span class="cnt">${items.length}</span>
-        <button class="btn sm" title="快速添加待办" onclick="App.overview.openActModal()">＋</button>
+        <div class="kanban-body">${items.map((a) => activityCard(App, a)).join('') || '<div class="kanban-add">＋ 点击添加待办</div>'}${more}</div>
+      </div>`;
+  }).join('');
+  // 归档折叠区：桌面随行显示；移动端仅「已完成」组
+  const archived = db.activities.filter((a) => a.status === 'Archived' && byPlan(a));
+  const archivedHTML = archived.length && (isCarousel() ? kanbanGroup === 'done' : true) ? `
+    <div class="kanban-arch">
+      <div class="kanban-arch-head" onclick="App.overview.toggleArchived()">
+        <span class="collapse-btn">${archivedShown ? '▾' : '▸'}</span>
+        <b>📦 已归档（${archived.length}）</b>
+        <span class="muted">活动 · 历史存档，默认从视图隐藏</span>
       </div>
-      <div class="kanban-body">${items.map((a) => activityCard(App, a)).join('') || '<div class="kanban-add">＋ 点击添加待办</div>'}</div>
-    </div>`;
+      <div class="kanban-arch-body" style="${archivedShown ? '' : 'display:none'}">
+        ${archived.map((a) => activityCard(App, a)).join('') || ''}
+      </div>
+    </div>` : '';
+  return cols + archivedHTML;
 }
 
 export function toggleDone() {
