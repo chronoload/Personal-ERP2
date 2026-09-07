@@ -14,31 +14,20 @@ function safeColor(c) {
 }
 
 export function renderTopbar(App) {
-  const { db } = App;
   const el = document.getElementById('topbar');
   const mode = Prefs.load().topbarMode || 'top';
   // 侧边栏 / 完全收起：顶栏主体留空，侧边 dock 由 main.syncTopbarDock 渲染
   if (mode !== 'top') { el.innerHTML = ''; el.classList.add('collapsed'); return; }
   el.classList.remove('collapsed');
-  const pills = db.resources
-    .filter((r) => r.status === 'Active')
-    .map((r) => {
-      const b = App.engine.balanceOf(db, r.id);
-      return `<span class="res-pill" style="--pill-c:${safeColor(r.color) || resColor(r.id)}" title="${esc(r.name)} 余额 = 初始 + Σ(debit−credit)">${esc(r.name)} <b>${fmtNum(b)}</b></span>`;
-    }).join('');
+  // 顶栏紧凑：仅展示按钮（商标 logo + ⚡/☰/⏱），隐藏品牌文字与余额 pills，消除上方挤压
   el.innerHTML = `
     <div class="brand">
       <div class="logo" onclick="App.timer.open()" title="计时器">P</div>
-      <div class="brand-text">
-        <h1>Personal ERP</h1>
-        <div class="muted">个人经济系统 · 单机自包含</div>
-      </div>
     </div>
-    <div class="top-res">${pills}</div>
     <div class="actions">
-      <button class="btn" style="background:#171a21;color:#fff;border-color:#171a21" onclick="App.overview.openBatchCreate()" title="批量创建活动">⚡ 创建</button>
+      <button class="btn" style="background:#171a21;color:#fff;border-color:#171a21" onclick="App.overview.openBatchCreate()" title="批量创建活动">⚡</button>
       <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">☰</button>
-      <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">⏱ 计时</button>
+      <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">⏱</button>
     </div>
   `;
 }
