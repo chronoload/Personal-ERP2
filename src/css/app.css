@@ -494,6 +494,7 @@ h1, h2, h3 { margin: 0; }
 .dash-nav-item:hover { color: var(--text); border-color: #c9d0db; }
 .dash-nav-item.on { background: var(--ink); border-color: var(--ink); color: #fff; }
 .dash-track { display: flex; align-items: flex-start; transition: transform .28s ease; }
+.dash-track { display: flex; align-items: flex-start; } /* 子页高度各自独立，不被其他页 stretch 撑高后裁切 */
 .dash-page { flex: 0 0 50%; min-width: 50%; }
 @media (min-width: 861px) {
   .dash-pager { display: block; overflow: visible; height: auto !important; transition: none; }
