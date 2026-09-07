@@ -1096,7 +1096,6 @@ export function render(App, el) {
             <div class="card-head">
               <h3>活动看板</h3>
               <div class="row-gap">
-                <span class="muted">五态：Planned → Started → Completed → Reviewed → Archived · 卡片可编辑/删除 · 拖拽流转</span>
                 <button class="btn sm primary" onclick="App.overview.openActModal()">＋ 活动</button>
               </div>
             </div>
