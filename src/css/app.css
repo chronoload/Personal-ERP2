@@ -199,9 +199,12 @@ h1, h2, h3 { margin: 0; }
 .tag { display: inline-block; padding: 1px 6px; border-radius: 5px; background: #f0f2f6; color: #66707e; font-size: 10.5px; margin-right: 3px; }
 
 /* ---------------- 看板 ---------------- */
-.kanban { display: flex; align-items: flex-start; overflow-x: auto; overflow-y: hidden; gap: 12px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; scrollbar-color: transparent transparent; padding-bottom: 4px; }
-.kanban::-webkit-scrollbar { display: none; height: 0; }
-.kanban-col { background: #f7f8fa; border: 1px solid var(--border); border-radius: 10px; padding: 10px; min-height: 120px; min-width: min(280px, 80vw); flex: 0 0 auto; height: fit-content; scroll-snap-align: start; transition: background .15s, height .22s ease; }
+.kanban-groups { display: flex; gap: 6px; margin: 0 0 8px; }
+.kanban-groups button { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 4px 14px; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+.kanban-groups button:hover { color: var(--text); border-color: #c9d0db; }
+.kanban-groups button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.kanban { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); align-items: start; gap: 10px; } /* 分组视图：宽度自适应容器，不横向连排 */
+.kanban-col { background: #f7f8fa; border: 1px solid var(--border); border-radius: 10px; padding: 10px; min-height: 120px; height: fit-content; transition: background .15s, height .22s ease; }
 .kanban-col.drag-over { outline: 2px dashed var(--primary); outline-offset: -2px; background: #f0f1f6; }
 .kanban-head { font-size: 12.5px; font-weight: 800; color: #4a5260; display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 10px; }
 .kanban-head .cnt { background: #e6e9ef; border-radius: 999px; padding: 1px 9px; font-size: 11px; }

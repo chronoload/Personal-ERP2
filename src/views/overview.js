@@ -901,6 +901,7 @@ export function toggleArchived() {
 let kanbanPlanFilter = 'all';
 let kanbanGoalFilter = null;  // 目标上层汇聚：null=全部目标；goalId=只看该目标
 let kanbanTodayOnly = false; // 「今日」模式：只看今天到期的活动
+let kanbanGroup = 'todo';    // 看板分组视图：todo 待办 / doing 进行中 / done 已完成
 const expandedSeries = new Set(); // 看板里已展开未来期次的循环活动
 export function setKanbanPlanFilter(id) {
   kanbanPlanFilter = id;
@@ -911,6 +912,17 @@ export function setKanbanGoal(id) {
   kanbanGoalFilter = (kanbanGoalFilter === id ? null : id);
   kanbanPlanFilter = 'all'; // 展开目标时先看该目标全部计划
   renderKanbanRoot(App);
+}
+export function setKanbanGroup(g) {
+  kanbanGroup = g;
+  renderKanbanRoot(App); // 分组视图切换：待办 / 进行中 / 已完成
+}
+// 看板分组切换条（待办 / 进行中 / 已完成 —— 每次只看一个视图）
+function kanbanGroupsBar() {
+  return `<div class="kanban-groups">` +
+    [{ g: 'todo', l: '📋 待办' }, { g: 'doing', l: '⚡ 进行中' }, { g: 'done', l: '✅ 已完成' }]
+      .map((x) => `<button type="button" class="${kanbanGroup === x.g ? 'on' : ''}" data-group="${x.g}" onclick="App.overview.setKanbanGroup('${x.g}')">${x.l}</button>`).join('') +
+    `</div>`;
 }
 export function setKanbanToday(v) {
   kanbanTodayOnly = !!v;
@@ -981,7 +993,7 @@ function bindEdgeFade(wrap) {
 function renderKanbanRoot(App) {
   const root = document.getElementById('kanban-root');
   if (!root) return;
-  root.innerHTML = kanbanFilterBar(App) + `<div class="kanban">${kanbanHTML(App)}</div>`;
+  root.innerHTML = kanbanGroupsBar(App) + kanbanFilterBar(App) + `<div class="kanban">${kanbanHTML(App)}</div>`;
   root.querySelectorAll('[data-edge]').forEach(bindEdgeFade); // 过滤条边缘光晕提示可滑动
   setupDrag(App);           // 重绑拖拽/列点击（document 级菜单监听有去重守卫）
   settleThemeTones(App, root); // 图片主题采样补亮暗类
@@ -998,11 +1010,12 @@ function renderKanbanRoot(App) {
 export function refreshBoard() { renderKanbanRoot(App); }
 
 function kanbanHTML(App) {
+  const { db } = App;
   const byPlan = (a) => {
     if (kanbanTodayOnly && !isTodayAct(a)) return false; // 今日模式：只看今天到期
     // 目标汇聚层：活动须属于该目标下任一计划（可再叠加具体计划过滤）
     if (kanbanGoalFilter) {
-      const gPlans = (App.db.plans || []).filter((p) => p.goal_id === kanbanGoalFilter).map((p) => p.id);
+      const gPlans = (db.plans || []).filter((p) => p.goal_id === kanbanGoalFilter).map((p) => p.id);
       const inGoal = (a.plan_ids || []).some((pid) => gPlans.includes(pid));
       if (!inGoal) return false;
       if (kanbanPlanFilter === 'all') return true;
@@ -1013,38 +1026,48 @@ function kanbanHTML(App) {
     if (kanbanPlanFilter === 'none') return !a.plan_ids || !a.plan_ids.length;
     return (a.plan_ids || []).includes(kanbanPlanFilter);
   };
-  // 活动级归档：Archived 不占五态看板，单独收进折叠区（历史存档，随时可展开）
-  const archived = App.db.activities.filter((a) => a.status === 'Archived' && byPlan(a));
-  const archivedHTML = archived.length ? `
-    <div class="kanban-arch">
-      <div class="kanban-arch-head" onclick="App.overview.toggleArchived()">
-        <span class="collapse-btn">${archivedShown ? '▾' : '▸'}</span>
-        <b>📦 已归档（${archived.length}）</b>
-        <span class="muted">活动 · 历史存档，默认从视图隐藏</span>
-      </div>
-      <div class="kanban-arch-body" style="${archivedShown ? '' : 'display:none'}">
-        ${archived.map((a) => activityCard(App, a)).join('') || ''}
-      </div>
-    </div>` : '';
-  return COLUMNS.map((col) => {
-    let items = App.db.activities.filter((a) => col.match(a.status) && byPlan(a));
-    if (col.key === 'Done') {
-      items = [...items].sort((x, y) => (y.actual_end || y.created || 0) - (x.actual_end || x.created || 0));
-    }
-    const shown = (col.key === 'Done' && !doneExpanded) ? items.slice(0, DONE_PREVIEW) : items;
+  // 当前分组视图：待办(Planned) / 进行中(Started) / 已完成(Completed+Reviewed+归档)
+  const inGroup = (a) => a.status !== 'Archived' && byPlan(a)
+    && (kanbanGroup === 'todo' ? a.status === 'Planned'
+      : kanbanGroup === 'doing' ? a.status === 'Started'
+        : (a.status === 'Completed' || a.status === 'Reviewed'));
+  let items = db.activities.filter(inGroup);
+  if (kanbanGroup === 'done') {
+    items = [...items].sort((x, y) => (y.actual_end || y.created || 0) - (x.actual_end || x.created || 0));
+    const shown = !doneExpanded ? items.slice(0, DONE_PREVIEW) : items;
     const hidden = items.length - shown.length;
-    const more = (col.key === 'Done' && (hidden > 0 || doneExpanded)) && items.length > DONE_PREVIEW
+    const more = (hidden > 0 || doneExpanded) && items.length > DONE_PREVIEW
       ? `<button class="btn sm" style="margin:8px auto 0;display:block;width:auto" onclick="App.overview.toggleDone()">${doneExpanded ? '⬆ 收起，只看最近 ' + DONE_PREVIEW + ' 条' : `⬇ 展开更早的 ${hidden} 条`}</button>`
       : '';
+    const archived = db.activities.filter((a) => a.status === 'Archived' && byPlan(a));
+    const archivedHTML = archived.length ? `
+      <div class="kanban-arch">
+        <div class="kanban-arch-head" onclick="App.overview.toggleArchived()">
+          <span class="collapse-btn">${archivedShown ? '▾' : '▸'}</span>
+          <b>📦 已归档（${archived.length}）</b>
+          <span class="muted">活动 · 历史存档，默认从视图隐藏</span>
+        </div>
+        <div class="kanban-arch-body" style="${archivedShown ? '' : 'display:none'}">
+          ${archived.map((a) => activityCard(App, a)).join('') || ''}
+        </div>
+      </div>` : '';
     return `
-      <div class="kanban-col" data-col="${col.key}">
-        <div class="kanban-head">
-          ${col.label} <span class="cnt">${items.length}</span>
+      <div class="kanban-col" data-col="Done">
+        <div class="kanban-head">✅ 已完成 <span class="cnt">${items.length}</span>
           <button class="btn sm" title="快速添加待办" onclick="App.overview.openActModal()">＋</button>
         </div>
         <div class="kanban-body">${shown.map((a) => activityCard(App, a)).join('') || '<div class="kanban-add">＋ 点击添加待办</div>'}${more}</div>
-      </div>`;
-  }).join('') + archivedHTML;
+      </div>${archivedHTML}`;
+  }
+  const label = kanbanGroup === 'todo' ? '📋 待办' : '⚡ 进行中';
+  const colKey = kanbanGroup === 'todo' ? 'Planned' : 'Started';
+  return `
+    <div class="kanban-col" data-col="${colKey}">
+      <div class="kanban-head">${label} <span class="cnt">${items.length}</span>
+        <button class="btn sm" title="快速添加待办" onclick="App.overview.openActModal()">＋</button>
+      </div>
+      <div class="kanban-body">${items.map((a) => activityCard(App, a)).join('') || '<div class="kanban-add">＋ 点击添加待办</div>'}</div>
+    </div>`;
 }
 
 export function toggleDone() {
