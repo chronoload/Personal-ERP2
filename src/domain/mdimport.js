@@ -133,6 +133,16 @@ function parseActLine(raw, { defaultPlan, defaultMinutes, now }) {
       s = s.replace(/\s+#([\w\u4e00-\u9fa5]+)$/, (m, st) => { if (!out.note) out.note = '#' + st; return ''; }).trim();
       // 自由备注：；备注（追加，可与 #标签 并存）
       s = s.replace(/；(.+)$/, (m, nt) => { const t = nt.trim(); if (t) out.note = out.note ? out.note + ' ' + t : t; return ''; }).trim();
+      // 裸时长（无 @ 起始时间）：剥离行尾 "30分钟/1小时/1h" 并换算记录，防残留进标题
+      //（单位集与 parseDuration 一致；日/周/月视图对「只有时长」活动序列化不带 @，缺此剥离会逐轮复制污染）
+      s = s.replace(/(\d+(?:\.\d+)?)\s*(分钟|分|小时|m|h)\s*$/, (m, amt, unit) => {
+        if (out.minutes == null) {
+          const n = Number(amt);
+          const mult = (unit === '小时' || unit === 'h') ? 60 : 1;
+          out.minutes = Math.max(1, Math.round(n * mult));
+        }
+        return '';
+      }).trim();
     } while (s !== prev);
     return s;
   };

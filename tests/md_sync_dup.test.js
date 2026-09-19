@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseMdImport, repairIdMarkers, bindEntityLine, serializeDbToMd } from '../src/domain/mdimport.js';
+import { organizeDay } from '../src/views/mdviews.js';
 import { applyCandidates } from '../src/domain/mdapply.js';
 import * as eng from '../src/domain/engine.js';
 
@@ -56,9 +57,10 @@ test('R1b 幂等：同一份视图 md 连续应用两次 → 第二次零新建�
 
 test('R1c 绑定失败也不重复：编辑器未补上 id 的行再次同步 → 仍匹配既有不新建', () => {
   const db = freshDB();
-  eng.createActivity(db, { title: '写作', note: '', plan_ids: [], planned_start: null, planned_minutes: 25 });
-  // 未排程行（视图底部「未排程」组）id 丢失：连续三次同步，一行也不该复制出三份
-  const r = () => parseMdImport(dayView('- [ ] 写作 25分钟'), { now: NOW });
+  eng.createActivity(db, { title: '写作', note: '', plan_ids: [], planned_start: '2026-8-30T09:00', planned_minutes: 25 });
+  // 日期组内的行（时间匹配既有）id 丢失：连续三次同步，一行也不该复制出三份。
+  //（此前该断言靠标题污染「写作 25分钟」碰巧通过；裸时长解析修复后按本意校验）
+  const r = () => parseMdImport(dayView('- [ ] 写作 @ 09:00 25分钟'), { now: NOW });
   applyCandidates(db, r());
   applyCandidates(db, r());
   applyCandidates(db, r());
@@ -161,4 +163,58 @@ test('R5 mirror 往返：orphan 活动的「## 未分类」区段不凭空创建
   assert.deepEqual(db.activities[0].plan_ids, []);
   const md2 = serializeDbToMd(db);
   assert.equal(md2, md1, '往返幂等');
+});
+
+// ===== R6 时间/时长解析不污染标题（「日/周/月视图时间丢 @、时长被追加进活动名」根因守卫）=====
+// 触发场景：活动只有时长、无起始时间 → actToViewLine 序列化 `- [ ] 晨跑 30分钟`（无 @），
+// 解析端若不剥裸时长，`30分钟` 残留进标题 → 写回 db → 下一轮 `晨跑 30分钟 30分钟` 逐轮追加。
+test('R6a 裸时长（无 @）解析为时长，不残留进标题', () => {
+  const r = parseMdImport('- [ ] 晨跑 30分钟', { now: NOW });
+  assert.equal(r.activities[0].title, '晨跑', '标题不含时长');
+  assert.equal(r.activities[0].planned_minutes, 30, '时长入账');
+  assert.equal(r.activities[0].planned_start, null, '无起始时间');
+  const r2 = parseMdImport('- [ ] 学习 1小时', { now: NOW });
+  assert.equal(r2.activities[0].title, '学习', '小时单位不进标题');
+  assert.equal(r2.activities[0].planned_minutes, 60, '小时换算为分钟');
+  const r3 = parseMdImport('- [ ] 冲刺 45m', { now: NOW });
+  assert.equal(r3.activities[0].title, '冲刺');
+  assert.equal(r3.activities[0].planned_minutes, 45, 'h 单位换算');
+});
+
+test('R6b 带 @ 的行：时长在时间前/后都解析，标题干净且时间落地', () => {
+  // clock 是解析内部字段（供日期组补全），透传面是 planned_start —— 用「明天」断言落地值
+  const a = parseMdImport('- [ ] 晨跑 @ 明天 07:30 30分钟', { now: NOW }).activities[0];
+  assert.equal(a.title, '晨跑');
+  assert.equal(a.planned_start, '2026-8-31T07:30');
+  assert.equal(a.planned_minutes, 30);
+  const b = parseMdImport('- [ ] 晨跑 30分钟 @ 明天 07:30', { now: NOW }).activities[0];
+  assert.equal(b.title, '晨跑', '时长写在 @ 之前也不进标题');
+  assert.equal(b.planned_start, '2026-8-31T07:30');
+  assert.equal(b.planned_minutes, 30);
+});
+
+test('R6c 日视图 round-trip：只有时长的活动不复制、不追加（幂等）', () => {
+  const db = freshDB();
+  eng.createActivity(db, { title: '晨跑', note: '', plan_ids: [], planned_start: null, planned_minutes: 30 });
+  const step = () => applyCandidates(db, parseMdImport(organizeDay(db, '2026-9-19', NOW), { now: NOW, view: 'day' }));
+  step();
+  assert.equal(db.activities.length, 1, '不复制副本');
+  assert.equal(db.activities[0].title, '晨跑', '标题干净（不含 30分钟）');
+  assert.equal(db.activities[0].planned_minutes, 30, '时长保留');
+  step(); // 第二轮（编辑器不回填 id 的最恶劣情形）
+  assert.equal(db.activities.length, 1, '第二轮仍一份（多重集对账收敛）');
+  assert.equal(db.activities[0].title, '晨跑');
+});
+
+test('R6d mirror round-trip：只有时长的活动（`@ 30分钟` 形态）不污染不误报', () => {
+  const db = freshDB();
+  eng.createActivity(db, { title: '晨跑', note: '', plan_ids: [], planned_start: null, planned_minutes: 30 });
+  const md1 = serializeDbToMd(db); // `- [ ] 晨跑 @ 30分钟`
+  const r = parseMdImport(md1, { now: NOW });
+  assert.equal(r.activities[0].title, '晨跑');
+  assert.equal(r.activities[0].planned_minutes, 30);
+  assert.deepEqual(r.warnings, [], '纯时长指令不算「时间指令无法解析」');
+  applyCandidates(db, r);
+  const md2 = serializeDbToMd(db);
+  assert.equal(md2, md1, 'mirror 往返幂等');
 });
