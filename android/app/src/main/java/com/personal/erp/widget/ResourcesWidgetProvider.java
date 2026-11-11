@@ -3,6 +3,7 @@ package com.personal.erp.widget;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.view.View;
@@ -38,9 +39,11 @@ public class ResourcesWidgetProvider extends AppWidgetProvider {
 
     JSONObject db = WidgetStore.readDB(ctx);
     JSONObject snap = WidgetStore.readSnapshot(ctx);
-    JSONArray balances = null;
-    if (snap != null) balances = snap.optJSONArray("balances");
-    if (balances == null || balances.length() == 0) balances = fallbackBalances(db);
+    // 余额以 db 的流水为准：桌面记账/消费后立刻生效；db 缺失时才回落到 App 推送的快照
+    JSONArray balances = db != null ? fallbackBalances(db) : null;
+    if (balances == null || balances.length() == 0) {
+      balances = snap != null ? snap.optJSONArray("balances") : null;
+    }
     int n = balances != null ? balances.length() : 0;
 
     if (db == null && snap == null) {
@@ -59,7 +62,10 @@ public class ResourcesWidgetProvider extends AppWidgetProvider {
       }
       for (int i = n; i < 3; i++) hideRow(ctx, rv, i + 1);
       String updated = "";
-      if (snap != null) {
+      if (db != null) {
+        long at = latestTxMs(db);
+        if (at > 0) updated = "已记账 " + hhmm(at);
+      } else if (snap != null) {
         String at = snap.optString("updatedAt", "");
         if (at.length() >= 16) updated = "更新 " + at.substring(11, 16);
       }
@@ -100,6 +106,35 @@ public class ResourcesWidgetProvider extends AppWidgetProvider {
         rv.setOnClickPendingIntent(row, pi);
       }
     }
+  }
+
+  static void refreshAll(Context ctx) {
+    try {
+      AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
+      int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, ResourcesWidgetProvider.class));
+      for (int id : ids) updateOne(ctx, mgr, id);
+    } catch (Exception ignored) {}
+  }
+
+  /** 最近一笔流水时间（用于底部「已记账 HH:mm」） */
+  private static long latestTxMs(JSONObject db) {
+    try {
+      JSONArray txs = db.optJSONArray("txs");
+      if (txs == null) return 0;
+      long max = 0;
+      for (int i = 0; i < txs.length(); i++) {
+        JSONObject t = txs.optJSONObject(i);
+        if (t != null) max = Math.max(max, t.optLong("created", 0));
+      }
+      return max;
+    } catch (Exception e) { return 0; }
+  }
+
+  private static String hhmm(long ms) {
+    java.util.Calendar c = java.util.Calendar.getInstance();
+    c.setTimeInMillis(ms);
+    return String.format(java.util.Locale.US, "%02d:%02d",
+        c.get(java.util.Calendar.HOUR_OF_DAY), c.get(java.util.Calendar.MINUTE));
   }
 
   private static void hideRow(Context ctx, RemoteViews rv, int i) {

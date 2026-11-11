@@ -97,7 +97,7 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
     try {
       AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
       Class<?>[] providers = { TodayWidgetProvider.class, ResourcesWidgetProvider.class,
-          GoalsWidgetProvider.class, GoodsWidgetProvider.class };
+          GoalsWidgetProvider.class, GoodsWidgetProvider.class, LedgerWidgetProvider.class };
       for (Class<?> cls : providers) {
         int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, cls));
         for (int id : ids) {
@@ -106,6 +106,7 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
             else if (cls == ResourcesWidgetProvider.class) ResourcesWidgetProvider.updateOne(ctx, mgr, id);
             else if (cls == GoalsWidgetProvider.class) GoalsWidgetProvider.updateOne(ctx, mgr, id);
             else if (cls == GoodsWidgetProvider.class) GoodsWidgetProvider.updateOne(ctx, mgr, id);
+            else if (cls == LedgerWidgetProvider.class) LedgerWidgetProvider.updateOne(ctx, mgr, id);
           } catch (Exception ignored) {}
         }
       }
@@ -139,8 +140,9 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
       for (int i = 0; i < 4; i++) {
         JSONObject g = i < show ? goods.optJSONObject(i) : null;
         if (g == null) { setRow(ctx, rv, i + 1, "", null); continue; }
+        String cost = costSummary(g, db);
         String label = g.optString("emoji", "🛍️") + " " + g.optString("name", "—")
-            + " · " + fmt(g.optDouble("price", 0)) + "  ▸ 点此消费";
+            + (cost.isEmpty() ? "" : " · " + cost) + "  ▸ 点此消费";
         setRow(ctx, rv, i + 1, label, g.optString("id"));
       }
     }
@@ -176,8 +178,53 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
     super.onReceive(context, intent);
     if (ACTION_CONSUME.equals(intent.getAction())) {
       String goodId = intent.getStringExtra(EXTRA_GOOD_ID);
-      if (goodId != null) consume(context, goodId); // 失败信息暂以刷新后的余额体现；成功静默
+      if (goodId != null) {
+        String err = consume(context, goodId);
+        try {
+          android.widget.Toast.makeText(context, err == null ? "已消费并入账" : err,
+              android.widget.Toast.LENGTH_SHORT).show();
+        } catch (Exception ignored) {}
+      }
     }
+  }
+
+  /** 商品成本的紧凑展示：优先 costs[]（多资源），兼容旧 price */
+  private static String costSummary(JSONObject g, JSONObject db) {
+    try {
+      org.json.JSONArray costs = g.optJSONArray("costs");
+      StringBuilder sb = new StringBuilder();
+      if (costs != null && costs.length() > 0) {
+        for (int i = 0; i < costs.length() && sb.length() < 28; i++) {
+          JSONObject c = costs.optJSONObject(i);
+          if (c == null) continue;
+          double amt = c.optDouble("amount", 0);
+          if (amt <= 0) continue;
+          if (sb.length() > 0) sb.append('+');
+          sb.append(fmt(amt)).append(resLabel(db, c.optString("resource_id", "")));
+        }
+        if (sb.length() > 0) return sb.toString();
+      }
+      if (!g.optString("resource_id").isEmpty() && g.optDouble("price", 0) > 0) {
+        return fmt(g.optDouble("price")) + resLabel(db, g.optString("resource_id"));
+      }
+    } catch (Exception ignored) {}
+    return "";
+  }
+
+  private static String resLabel(JSONObject db, String resourceId) {
+    if (db == null || resourceId == null || resourceId.isEmpty()) return "";
+    try {
+      org.json.JSONArray rs = db.optJSONArray("resources");
+      if (rs == null) return "";
+      for (int i = 0; i < rs.length(); i++) {
+        JSONObject r = rs.optJSONObject(i);
+        if (r != null && resourceId.equals(r.optString("id"))) {
+          String unit = r.optString("unit", "");
+          return unit.isEmpty() ? r.optString("name", "") : unit;
+        }
+      }
+    } catch (Exception ignored) {}
+    return "";
   }
 
   private static int rowId(Context ctx, int i) {

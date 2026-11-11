@@ -22,8 +22,11 @@ public class WidgetActionReceiver extends BroadcastReceiver {
   public static final String ACTION_CD_TICK = "com.personal.erp.widget.ACTION_CD_TICK";
   public static final String ACTION_CD_FINISH = "com.personal.erp.widget.ACTION_CD_FINISH";
   public static final String ACTION_CD_PRESET = "com.personal.erp.widget.ACTION_CD_PRESET";
+  public static final String ACTION_LEDGER_ADD = "com.personal.erp.widget.ACTION_LEDGER_ADD";
+  public static final String ACTION_LEDGER_SWITCH = "com.personal.erp.widget.ACTION_LEDGER_SWITCH";
   public static final String EXTRA_RESOURCE_ID = "resource_id";
   public static final String EXTRA_AMOUNT = "amount";
+  public static final String EXTRA_DIRECTION = "direction"; // income | expense
   public static final String EXTRA_ACTIVITY_ID = "activity_id";
   public static final String EXTRA_WIDGET_ID = "widget_id";
   public static final String EXTRA_KIND = "widget_kind";   // countdown | stopwatch：到点提醒的文案与归属
@@ -50,6 +53,22 @@ public class WidgetActionReceiver extends BroadcastReceiver {
     } else if (ACTION_CD_TOGGLE.equals(action)) {
       int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
       if (wid >= 0) FocusStopwatchProvider.toggleTimer(context, wid);
+    } else if (ACTION_LEDGER_ADD.equals(action)) {
+      int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
+      double amount = intent.getDoubleExtra(EXTRA_AMOUNT, 0);
+      boolean income = "income".equals(intent.getStringExtra(EXTRA_DIRECTION));
+      String rid = wid >= 0 ? LedgerWidgetProvider.currentResourceId(context, wid) : null;
+      String err = postTx(context, rid, amount, income, "桌面记账");
+      if (err != null) {
+        toast(context, err);
+      } else {
+        if (wid >= 0) LedgerWidgetProvider.refreshOne(context, wid);
+        ResourcesWidgetProvider.refreshAll(context);
+        toast(context, (income ? "+" : "−") + fmt(amount) + " 已入账");
+      }
+    } else if (ACTION_LEDGER_SWITCH.equals(action)) {
+      int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
+      if (wid >= 0) LedgerWidgetProvider.switchResource(context, wid);
     } else if (ACTION_CD_RESET.equals(action)) {
       int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
       if (wid >= 0) FocusStopwatchProvider.resetTimer(context, wid);
@@ -119,39 +138,62 @@ public class WidgetActionReceiver extends BroadcastReceiver {
     } catch (Exception ignored) {}
   }
 
-  /** 即时充值：追加 manual debit 流水（与 JS adjustResource 同构） */
+  /** 即时充值：走统一入账（manual debit 流水） */
   private void recharge(Context ctx, String resourceId, double amount) {
+    postTx(ctx, resourceId, amount, true, "小组件快捷充值");
+  }
+
+  /**
+   * 统一入账：追加一笔真实流水（收入=debit，支出=credit），seq.t 自增并登记 native_txs，
+   * App 回前台时按 id 合并，余额与账本立刻变化。成功返回 null，失败返回可读原因。
+   */
+  static String postTx(Context ctx, String resourceId, double amount, boolean income, String notePrefix) {
     try {
+      if (resourceId == null || resourceId.isEmpty()) return "未选择资源";
+      if (!(amount > 0)) return "金额无效";
       JSONObject db = WidgetStore.readDB(ctx);
-      if (db == null) return;
+      if (db == null) return "数据未同步，请先打开应用";
       JSONArray resources = db.optJSONArray("resources");
       JSONArray txs = db.optJSONArray("txs");
-      if (resources == null || txs == null) return;
-      boolean found = false;
+      if (resources == null || txs == null) return "数据异常";
+      JSONObject res = null;
       for (int i = 0; i < resources.length(); i++) {
         JSONObject r = resources.optJSONObject(i);
-        if (r != null && resourceId.equals(r.optString("id"))) { found = true; break; }
+        if (r != null && resourceId.equals(r.optString("id"))) { res = r; break; }
       }
-      if (!found) return;
+      if (res == null) return "资源不存在";
+
       JSONObject seq = db.optJSONObject("seq");
-      int nextT = (seq != null ? seq.optInt("t", 0) : 0) + 1;
       if (seq == null) { seq = new JSONObject(); db.put("seq", seq); }
+      int nextT = seq.optInt("t", 0) + 1;
       seq.put("t", nextT);
+
       JSONObject tx = new JSONObject();
       tx.put("id", "t" + nextT);
       tx.put("resource_id", resourceId);
-      tx.put("debit", amount);
-      tx.put("credit", 0);
+      tx.put("debit", income ? amount : 0);
+      tx.put("credit", income ? 0 : amount);
       tx.put("source_type", "manual");
       tx.put("source_id", "widget");
-      tx.put("note", "小组件快捷充值 +" + fmt(amount));
+      tx.put("note", notePrefix + (income ? " +" : " −") + fmt(amount) + " " + res.optString("name", ""));
       tx.put("reversal_of", JSONObject.NULL);
       tx.put("created", System.currentTimeMillis());
       txs.put(tx);
-      org.json.JSONArray nativeIds = db.optJSONArray("native_txs");
-      if (nativeIds == null) { nativeIds = new org.json.JSONArray(); db.put("native_txs", nativeIds); }
+
+      JSONArray nativeIds = db.optJSONArray("native_txs");
+      if (nativeIds == null) { nativeIds = new JSONArray(); db.put("native_txs", nativeIds); }
       nativeIds.put("t" + nextT);
+
       WidgetStore.writeDB(ctx, db);
+      return null;
+    } catch (Exception e) {
+      return e.getMessage() == null ? "操作失败" : e.getMessage();
+    }
+  }
+
+  private static void toast(Context ctx, String msg) {
+    try {
+      android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show();
     } catch (Exception ignored) {}
   }
 
