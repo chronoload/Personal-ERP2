@@ -7,6 +7,12 @@ const REV_KEY = 'widget_native_rev';
 export const Widget = {
   key: SNAPSHOT_KEY,
 
+  // 是否跑在原生壳里（此前缺失这个方法，导致 pullPending/pullFromNative 一进就抛
+  // TypeError 被吞掉——桌面记的流水永远进不来，表现为「写进小组件但 App 没有账」）
+  nativeAvailable() {
+    return Capacitor.isNativePlatform();
+  },
+
   enabled() {
     return !!Prefs.load().widgetEnabled;
   },
@@ -84,14 +90,14 @@ export const Widget = {
    * 桌面记账、快速消费、充值都走这条通道，保证一定进流水。
    */
   async pullPending() {
-    if (!this.nativeAvailable()) return { changed: false };
+    if (!this.nativeAvailable()) return { changed: false, added: 0 };
     try {
       const P = Capacitor.registerPlugin('Widget');
       const r = await P.getPendingTxs();
       const list = JSON.parse(r.txs || '[]');
-      if (!Array.isArray(list) || !list.length) return { changed: false };
+      if (!Array.isArray(list) || !list.length) return { changed: false, added: 0 };
       const raw = localStorage.getItem('personal_erp_db_v1');
-      if (!raw) return { changed: false };
+      if (!raw) return { changed: false, added: 0 };
       const db = JSON.parse(raw);
       db.txs = db.txs || [];
       const have = new Set(db.txs.map((t) => t && t.id));
@@ -105,12 +111,12 @@ export const Widget = {
         const n = parseInt(String(t.id).replace(/\D/g, ''), 10) || 0;
         if (n > maxSeq) maxSeq = n;
       }
-      if (!added) return { changed: false };
+      if (!added) return { changed: false, added: 0 };
       db.seq = db.seq || {};
       db.seq.t = maxSeq;
       localStorage.setItem('personal_erp_db_v1', JSON.stringify(db));
-      return { changed: true };
-    } catch (e) { return { changed: false }; }
+      return { changed: true, added };
+    } catch (e) { return { changed: false, added: 0 }; }
   },
 
   async refreshNative() {

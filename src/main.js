@@ -432,7 +432,13 @@ async function syncFromNative() {
     const p = await Widget.pullPending();
     // 2) 再按修订号拉整库（其他桌面操作：开始任务、主题等）
     const r = await Widget.pullFromNative();
-    if (p.changed || r.changed) { App.db = loadDB(); App.render(false); }
+    if (p.changed || r.changed) {
+      App.db = loadDB();
+      // 必须走 refresh()：render() 只重建「未渲染过」的 tab，已缓存的视图（流水/看板）
+      // 会继续显示旧 DOM——这正是「数据进来了但界面没动」的原因
+      App.refresh();
+      if (p.added) toast(`已从桌面小组件同步 ${p.added} 笔流水`, 'ok');
+    }
     // 回前台立即把最新 db 推给小组件（「核心 → 小组件」即时同步，不等下一次渲染）
     Widget.refreshNative();
   } catch (e) {}
@@ -450,6 +456,8 @@ timer.restoreNative();
 // 桌面小组件点击跳转：MainActivity 触发 window 事件，切到对应 Tab（fresh=直接弹新建，date=预填日期）
 window.addEventListener('erpLaunchTab', (e) => {
   const d = e.detail || {};
+  // 从桌面小组件点进来时先把原生流水拉一遍，再切页（否则刚记的那笔看不到）
+  syncFromNative();
   if (d.tab && TAB_ORDER.includes(d.tab)) App.setTab(d.tab);
   if (d.fresh) {
     const pad = (k) => {

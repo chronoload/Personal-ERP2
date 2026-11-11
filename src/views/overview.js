@@ -1164,14 +1164,24 @@ function groupUnscheduled(db) {
  */
 export function scheduleOne(activityId, offset = 0) {
   const a = App.db.activities.find((x) => x.id === activityId);
-  if (!a) return { ok: false, error: '活动不存在' };
+  if (!a) {
+    toast('活动不存在，可能已被删除', 'err');
+    return { ok: false, error: '活动不存在' };
+  }
+  const at = dayAt(offset);
   const r = App.engine.updateActivity(App.db, activityId, {
     title: a.title,
-    planned_start: dtStr(dayAt(offset)),
+    planned_start: dtStr(at),
     planned_minutes: Number(a.planned_minutes) || 30,
   });
-  if (!r.ok) return r;
-  return { ok: true, to: a.planned_start };
+  if (!r || r.ok === false) {
+    toast(`排不进日程：${(r && r.error) || '未知原因'}`, 'err');
+    return { ok: false, error: (r && r.error) || '排不进日程' };
+  }
+  // 关键：落盘 + 让看板/日历/统计一起重建（只改内存不会持久化，界面也不会动）
+  App.refresh();
+  const after = App.db.activities.find((x) => x.id === activityId);
+  return { ok: true, to: (after && after.planned_start) || dtStr(at) };
 }
 
 /** 排满今天：从 09:00（或当前时刻，取较晚）起按顺序塞进空档，到 23:00 停 */
@@ -1202,35 +1212,43 @@ export function fillToday() {
 }
 
 export function openSchedulerBoard() {
-  const renderBody = () => {
+  // 折叠状态在重绘后原样恢复：排一条只让那一行消失，不要整块收起来
+  const readOpenKeys = (host) => {
+    const set = new Set();
+    host.querySelectorAll('details[data-key]').forEach((d) => { if (d.open) set.add(d.dataset.key); });
+    return set;
+  };
+
+  const renderBody = (openKeys = null) => {
     const db = App.db;
     const list = App.engine.unscheduledActivities(db);
     const overdue = App.engine.overdueActivities(db);
     if (!list.length && !overdue.length) {
-      return `<div class="muted" style="padding:12px 0">没有待排或延期的活动——今天的日程已经排好了。</div>`;
+      return `<div class="muted" style="padding:16px 0">没有待排或延期的活动——今天的日程已经排好了。</div>`;
     }
+    const isOpen = (key, def) => (openKeys ? openKeys.has(key) : def);
     const total = list.reduce((s, a) => s + (Number(a.planned_minutes) || 0), 0);
     const groups = groupUnscheduled(db);
     const groupHTML = groups.map((g, gi) => `
-      <details class="sched-group" ${gi < 2 ? 'open' : ''}>
+      <details class="sched-group" data-key="g-${gi}" ${isOpen(`g-${gi}`, gi < 2) ? 'open' : ''}>
         <summary><b>${esc(g.title)}</b><span class="muted"> · ${g.plans.reduce((s, p) => s + p.items.length, 0)} 条</span></summary>
         ${g.plans.map((p, pi) => `
-          <details class="sched-plan" ${pi < 2 ? 'open' : ''}>
+          <details class="sched-plan" data-key="p-${gi}-${pi}" ${isOpen(`p-${gi}-${pi}`, pi < 2) ? 'open' : ''}>
             <summary>${esc(p.title)}<span class="muted"> · ${p.items.length} 条</span></summary>
             ${p.items.map((a) => `
               <div class="sched-row">
                 <span class="sched-title">${esc(a.title)}</span>
                 <span class="muted sched-min">${Number(a.planned_minutes) || 0} 分钟</span>
-                <button class="btn sm" onclick="App.overview.scheduleOne('${jsStr(a.id)}',0)">今天</button>
-                <button class="btn sm" onclick="App.overview.scheduleOne('${jsStr(a.id)}',1)">明天</button>
-                <button class="btn sm" onclick="App.overview.openActModal('${jsStr(a.id)}')">编辑</button>
+                <button class="btn sm" data-sched="today" data-id="${esc(a.id)}">今天</button>
+                <button class="btn sm" data-sched="tomorrow" data-id="${esc(a.id)}">明天</button>
+                <button class="btn sm" data-sched="edit" data-id="${esc(a.id)}">编辑</button>
               </div>`).join('')}
           </details>`).join('')}
       </details>`).join('');
 
     // 延期：有排期但已过期，仍未完成——也属于「该重新排进日程」的积压
     const overdueHTML = overdue.length ? `
-      <details class="sched-group" open>
+      <details class="sched-group" data-key="od" ${isOpen('od', true) ? 'open' : ''}>
         <summary><b>${icon('undo')} 延期未完成</b><span class="muted"> · ${overdue.length} 条</span></summary>
         ${overdue.map((a) => {
           const dayKey = String(a.planned_start || a.planned_date || '').split('T')[0];
@@ -1238,9 +1256,9 @@ export function openSchedulerBoard() {
           <div class="sched-row">
             <span class="sched-title">${esc(a.title)}</span>
             <span class="muted sched-min">${esc(dayKey)} · ${Number(a.planned_minutes) || 0} 分钟</span>
-            <button class="btn sm" onclick="App.overview.scheduleOne('${jsStr(a.id)}',0)">今天</button>
-            <button class="btn sm" onclick="App.overview.scheduleOne('${jsStr(a.id)}',1)">明天</button>
-            <button class="btn sm" onclick="App.overview.openActModal('${jsStr(a.id)}')">编辑</button>
+            <button class="btn sm" data-sched="today" data-id="${esc(a.id)}">今天</button>
+            <button class="btn sm" data-sched="tomorrow" data-id="${esc(a.id)}">明天</button>
+            <button class="btn sm" data-sched="edit" data-id="${esc(a.id)}">编辑</button>
           </div>`;
         }).join('')}
       </details>` : '';
@@ -1251,7 +1269,7 @@ export function openSchedulerBoard() {
         这些都是已经规划、但还没落到具体时间上的活动。
       </div>
       <div class="row-gap" style="margin-bottom:8px">
-        <button class="btn primary sm" onclick="App.overview.fillToday()">${icon('bolt')} 把未指派排满今天</button>
+        <button class="btn primary sm" data-sched="fill">${icon('bolt')} 把未指派排满今天</button>
         <span class="muted">从 09:00（或现在）开始依次塞进空档，到 23:00 停</span>
       </div>
       <div class="sched-groups">${overdueHTML}${groupHTML}</div>`;
@@ -1260,16 +1278,43 @@ export function openSchedulerBoard() {
   const m = openModal({
     title: '📋 待排程 · 把规划排进日程',
     width: 720,
-    bodyHTML: `<div id="sched-body">${renderBody()}</div>`,
-    footerHTML: `<button class="btn" data-close>关闭</button>`,
+    bodyHTML: '<div id="sched-body"></div>',
+    footerHTML: '<button class="btn" data-close>关闭</button>',
   });
-  m.q('[data-close]').onclick = () => m.close();
-  // 任何排入动作后重绘面板内容（不关窗，方便连续排）
-  const redraw = () => {
-    const host = m.q('#sched-body');
-    if (host) host.innerHTML = renderBody();
-  };
-  m.el.addEventListener('click', () => setTimeout(redraw, 0));
+  // openModal 只给第一个 [data-close]（头部 ✕）绑了关闭；底部的要自己绑，否则点了没反应
+  m.qa('[data-close]').forEach((b) => { b.onclick = () => m.close(); });
+
+  const host = m.q('#sched-body');
+  const paint = (keys) => { host.innerHTML = renderBody(keys || null); };
+  paint();
+
+  // 单点委托：一个监听器管完所有行内动作，重绘不会丢绑定
+  host.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-sched]');
+    if (!btn) return;
+    e.preventDefault();
+    const act = btn.dataset.sched;
+    if (act === 'edit') {
+      const id = btn.dataset.id;
+      m.close();
+      setTimeout(() => { try { openActModal(id); } catch (err) { toast(`打不开编辑：${(err && err.message) || err}`, 'err'); } }, 200);
+      return;
+    }
+    const keys = readOpenKeys(host);
+    if (act === 'fill') {
+      fillToday();
+      paint(keys);
+      return;
+    }
+    const offset = act === 'tomorrow' ? 1 : 0;
+    const r = scheduleOne(btn.dataset.id, offset);
+    if (r.ok) {
+      const hm = String(r.to || '').split('T')[1] || '';
+      toast(`已排到${offset ? '明天' : '今天'}${hm ? ` ${hm}` : ''}`, 'ok');
+    }
+    paint(keys);
+  });
+
   return m;
 }
 
