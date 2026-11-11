@@ -1,179 +1,251 @@
 # Personal ERP · 个人经济系统
 
-> **自包含单机「个人经济系统 ERP」**：把个人的时间 / 精力 / 金钱统一建模为**资源账户**，
-> 一切行为（活动、兑换、消费）都必须经过**领域引擎**记账，形成可审计的账本。
-> 无后端、无服务器，全部数据存 WebView `localStorage` + 原生 `SharedPreferences` 双份。
+> **把时间、精力、金钱统一成一套账本的个人 ERP。**
+> 目标 → 计划 → 活动三层规划，日记与记账器都能用 Markdown 直接「写」进系统，
+> 排程有工作流、有约束、有冲突仲裁；数据全部留在本地，同时可以被 AI / MCP 安全读写。
+
+无后端、无账号、无云同步。数据存在浏览器 `localStorage` + 原生 `SharedPreferences` / 本地 JSON 文件里，
+Web、Android、Windows 桌面共用同一份前端代码。
 
 ---
 
-## ✨ 这是什么
+## 它不是又一个待办清单
 
-Personal ERP 是一个**严格账簿**的个人管理系统。它的核心不是「记待办」，而是：
+普通待办只回答「做什么」。Personal ERP 回答的是：
 
-- 把时间 / 精力 / 金钱都当成**可度量的资源货币**
-- 每次行动（开始一个活动、兑换、消费）都**必产生流水**，账实相符
-- 由**领域引擎**强制六条**全局不变量**，普通 CRUD 修不掉的漏洞在这里被挡在门外
+- **这件事花掉了我多少资源？**（时间 / 精力 / 金钱都建模为资源账户）
+- **它服务于哪个目标？**（Goal → Plan → Activity 三层，不允许悬空任务）
+- **钱和事对得上吗？**（完成活动必须带流水与产出，账实相符）
+- **现在这一刻最适合做什么？**（时段、地点、通勤、预算、注意力一起参与排程）
 
-一句话：**这是「个人经济系统」，不只「个人待办清单」。**
+领域层（`src/domain/engine.js`）强制**六条全局不变量**，绕过 UI 的 CRUD 也改不出坏账：
 
----
-
-## 🧱 技术栈
-
-| 层       | 选型                                           |
-| -------- | ---------------------------------------------- |
-| 构建     | Vite 6 + 原生 JS（ESM，无框架）                |
-| 移动端   | Capacitor 8（Android）                         |
-| 测试     | Node 内置 test runner（`node --test`）       |
-| 代码量级 | 约 40 个源码模块，构建产物 ~136KB（gzip 42KB） |
-| 编辑器   | Vditor 4（Markdown 速录）                      |
+1. 余额 = 初始 + Σ借 − Σ贷（冲正也是真实分录）
+2. 完成活动必须产生流水与产出
+3. 产出归档自动生成待反馈价值流
+4. 计划预算耗尽 → 冻结该计划下的活动开始/完成
+5. 冲正只追加新流水，绝不 UPDATE / DELETE 历史
+6. 失败不堆积（只有完成 / 失败会衍生下一期）
 
 ---
 
-## 📁 目录结构
+## 功能全景
 
-```
-personal-erp/
-├─ src/
-│  ├─ main.js              # 装配根：db(store)+engine(domain)+views(ui)→window.App；render 入口
-│  ├─ store/
-│  │  ├─ db.js             # localStorage 持久化(personal_erp_db_v1)、seedDB、ensureSeq
-│  │  └─ prefs.js          # 用户偏好(lastMinutes/lastRepeat/widgetEnabled...)
-│  ├─ domain/              # ★ 纯函数领域层（UI 只准调这里）
-│  │  ├─ entities.js       # 实体工厂 newActivity/newTx...（字段契约注释齐全）
-│  │  ├─ engine.js         # 引擎：createActivity/startActivity/completeActivity/
-│  │  │                    #   时间原子性(activityWindow/findConflicts/findFreeSlot/applyAtomicity)
-│  │  │                    #   循环任务 spawnRecurrence、商品 consumeGood、备份合并
-│  │  ├─ importMerge.js    # 备份增量合并（同名资源复用、按 id 去重、引用重映射）
-│  │  ├─ report.js         # 周报/月报（纯函数 buildReport，L1 去身份契约）
-│  │  ├─ learn.js          # L2 学习引擎（extractFeatures → FeatureSet）
-│  │  ├─ recommend.js      # L3 推荐机（scheduleScore / slotIntoFreeTime / UCB 探索）
-│  │  ├─ signature.js      # L4 轨迹签名（encodeTrajectory / k-匿名抑制）
-│  │  └─ taskStateMachine.js # 解耦任务状态机（PENDING...TIMEOUT + Lease）
-│  ├─ views/               # 视图层（每个 Tab 一个模块，onclick 走全局 App.*）
-│  │  ├─ overview.js       # 活动 Tab：资源卡/看板(五态)/表单(含原子性预览)/价值流
-│  │  ├─ calendar.js       # 日历+当日日程（时间段显示、⚠冲突标记）+ 周视图时间网格
-│  │  ├─ goals.js / stats.js / setup.js（首次引导）/ dayGuide.js（新一天五步向导）
-│  │  ├─ timer.js          # 全屏番茄钟：时间戳锚定 + 原生通知 + 跨进程双写持久化
-│  │  ├─ workspace.js      # 单一 Vditor 编辑器（Markdown 双向速录）
-│  │  ├─ mdviews.js        # md 组织器（🗂目标 / 📅日 / 🗓周 / 📆月）
-│  │  ├─ reportSlides.js   # L1 智能简报 6 页滑动 deck + PPTX/PDF 导出
-│  │  └─ topbar.js         # 顶栏（计时按钮红色 .timer-btn）
-│  ├─ services/
-│  │  ├─ backup.js         # 导出/导入/自动备份 ⚠ 见「已知问题#1」
-│  │  ├─ widget.js         # 小组件数据桥（pushData/pullFromNative，rev 修订号）
-│  │  ├─ ics.js            # ICS 日历导出（循环系列展开 occurrences）
-│  │  ├─ pptx.js           # 纯前端 .pptx 生成（OOXML + ZIP 容器，零依赖）
-│  │  ├─ agentMCP.js       # L4.1 agent MCP 适配器（6 只只读工具，去身份边界）
-│  │  ├─ notifications.js / system.js / scheduler.js / sync.js
-│  └─ ui/helpers.js        # openModal/toast/badge/esc 等 UI 原语
-├─ android/app/src/main/java/com/personal/erp/
-│  ├─ MainActivity.java    # 启动页（erpLaunchTab 事件跳转小组件点击）
-│  ├─ widget/              # WidgetPlugin / WidgetStore(SharedPreferences) / 四类 WidgetProvider
-│  └─ sync/                # SyncPlugin.java + MiniHttpServer.java（安卓内置 HTTP 接收）
-├─ tests/*.test.js         # 领域层测试（node --test，目前 248 条全绿）
-├─ docs/                   # 契约文档（api/）、蓝图、perp-project 产物
-├─ android/personal-erp.keystore  # ★ 发布签名（密码在 build.gradle 明文，勿丢）
-├─ HANDOVER.md             # 项目交接文档（接手必读，含已知问题与事故记录）
-└─ 启动.bat                # 一键 npm run dev
+| 模块 | 你能做什么 |
+| --- | --- |
+| **活动看板** | 五态流转（待办 / 进行中 / 完成 / 复盘 / 失败 / 归档）、拖拽、计时、冲突提示 |
+| **今日日程** | 时间轴 + 周视图；到期自动进入进行中；进行中的延期任务永远置顶 |
+| **日记** | 每天一篇 Markdown；在代码块里写 `- [ ] 活动 @9:00 30分钟 (计划)`、`-8 早餐 @现金`，一键解析注入 |
+| **记账器** | 一行一笔的纯文本流水（`-8 早餐` / `+100 工资`），键盘、模板、冲正、预算占用 |
+| **目标与计划** | 三层规划、计划染色/图片背景、预算硬约束、阶段模板、聚合进度 |
+| **排程工作流** | 新一天五步向导、批量排程、排满整天、未指派积压面板、自动顺延 |
+| **统计 / 复盘** | 周报月报、6 页滑动简报、PPTX / PDF 导出、去身份 |
+| **模板** | 内置阶段模板链 + Markdown 模板导入导出 + 给 AI 的模板提示词 |
+| **智能推荐** | L1 报告 → L2 学习 → L3 推荐 → L4 匿名轨迹签名 |
+| **AI / MCP** | 外部 MCP 服务（stdio / 安卓 HTTP），只追加的写工具 + 只读分析工具 |
+| **Android** | 7 个桌面小组件、锁屏常驻通知 / 开屏、精确闹钟、地理围栏 |
+| **Windows** | Tauri 2 桌面壳，复用同一份 `dist/` |
+
+---
+
+## 一、日记：每天唯一入口
+
+日记不是备忘录，而是**当天的命令入口**：
+
+```markdown
+## 今天
+
+上午写完了 README，下午去实验室。
+
+~~~erp
+- [ ] 写 README @09:00 90分钟 (个人 ERP)
+- [x] 跑步 @18:00 30分钟
+-8 早餐 @现金
++100 稿费
+~~~
 ```
 
+- **只有代码块会被解析**，正文叙述永远不会误伤；
+- 活动行支持 `@时间`、`分钟数`、`(计划名)`、`#标签`、循环；
+- 流水行走同一套记账语法，资源名可省略；
+- 解析靠**外部快照 + 内容指纹**保证幂等：同一块不会重复注入，删除不会回滚已记账；
+- 已注入的块保持原样，想追加就新开一块——文本里零标记、可随意编辑。
+
+「写日记」和「维护系统」是同一个动作。
+
+## 二、记账器：纯文本，但账是硬的
+
+- 一行一笔：`-8 早餐 @现金`、`+100 工资`、`-5.5 咖啡 @灵感`；
+- 支持多资源、兑换规则、商品多资源成本、预算与资本锁定；
+- 所有修正走**冲正**（生成反向分录），历史流水不可改不可删；
+- 键盘、快捷模板、分类统计与「资源不足允许借贷」提示；
+- 活动完成时可原子写入本次支出/收入/产出，避免事后补账。
+
+## 三、排程工作流：从「一堆事」到「今天做什么」
+
+1. **新一天向导**：每天首次打开，按目标/计划梳理今日安排；
+2. **未指派积压面板**：按「目标 → 计划」折叠列出所有没排期的活动，可一键排满整天；
+3. **批量排程**：从起始时间开始逐条追加，改起始时间整体重排；
+4. **自动进入进行中**：到期/超期活动在进入活动页时自动切换状态；
+5. **时间原子性**：固定时段不允许重叠，冲突可顺延到最近空槽或手动捆绑仲裁；
+6. **地点与通勤**：地点约束 + 通勤时间参与可行性判断，安卓端支持地理围栏；
+7. **注意力模型**：按专注曲线、深度阈值给出当日 ρ（负荷）报告与改道建议。
+
+## 四、Markdown 双向速录
+
+- 工作区内置 Vditor，四种组织视图：目标层级 / 日 / 周 / 月；
+- 直接编辑 Markdown 即可增删改目标、计划、活动，实时回写领域层；
+- 实体行带隐藏 ID 标记，重命名不丢引用；缺失即删、改写即更新；
+- 同一份 Markdown 也能作为**导入格式**：备份、迁移、AI 生成都能直接喂进来。
+
+## 五、模板：把「怎么规划」也存下来
+
+- **内置阶段模板**：学生 / 学术 / 产品 / 健康等，按阶段链逐步展开，不会一上来铺满预算；
+- **自定义模板**：目标级 / 计划级快照，Markdown 导入导出，多文件、一文件多模板；
+- **模板提示词**：一键复制给大模型，多轮问答后让 AI 输出可直接导入的模板 Markdown。
+
+## 六、AI 与 MCP：可读、可写、但有边界
+
+**给 AI 的输入契约**
+- 日记解析、模板、工作区语法都提供可复制的 schema 提示词；
+- 模型只需要输出 Markdown，剩下的解析、校验、幂等注入由本地完成；
+- 解析失败只影响当次，不会污染已有数据。
+
+**给 AI 的运行时接口**
+
+| 形态 | 入口 | 说明 |
+| --- | --- | --- |
+| 桌面 / CLI | `npm run mcp` | MCP stdio（JSON-RPC 2.0），可挂到 Trae / Claude 等客户端 |
+| Android | `POST /mcp` | App 内置 HTTP 端点，需在数据里显式开启 `mcp.enabled` |
+| 应用内分析 | `services/agentMCP.js` | 报告 / 特征 / 推荐 / 轨迹签名 四层管线的只读适配 |
+
+工具集（10 个）：
+`erp.status`、`erp.goals`、`erp.activities`、`erp.transactions`、`erp.journal`
+（只读）+ `erp.add_goal`、`erp.add_plan`、`erp.add_activity`、`erp.add_tx`、`erp.append_journal`（只追加）。
+
+**没有 update / delete**：AI 只能追加，修正仍要人来冲正。结果统一用 `{ok, tool, version, data|error}` 信封。
+
+## 七、设备集成（Android）
+
+- **7 个桌面小组件**：当日日程（紧凑）、今日开屏（大卡）、资源余额、目标进度、物品库存、任务倒计时、专注停表；
+- **锁屏 / 开屏**：常驻通知列出今日安排，Android 14+ 可申请全屏通知整页展示；
+- **到点提醒**：精确闹钟 + 循环铃声 + 震动 + 全屏通知（含「停止响铃」），倒计时归零与日程到点共用一套；
+- **数据同步**：App 每次渲染把 db 推给原生，桌面上的独立操作通过 `rev` 修订号回读合并；
+- **地理围栏**：地点进出事件、通勤时间、后台定位（可选）。
+
+## 八、桌面端（Tauri）
+
+`tauri-desktop/` 是 Tauri 2 外壳，直接加载 `dist/`，提供标准窗口、单实例、通知与文件对话框；
+Rust 侧不复制业务逻辑，前端仍是同一套领域层。
+
 ---
 
-## 📦 安装与启动
+## 快速开始
 
 ```bash
-npm install          # 安装依赖
-npm run dev          # 开发（http://localhost:5173）
-npm test             # 领域层测试（node --test tests/*.test.js，248 条）
-npm run build        # 产出 dist/
+npm install
+npm run dev        # http://localhost:5173
+npm test           # 405 条领域层测试
+npm run build      # 产出 dist/
 ```
 
-### 打包（Android APK）
-
-> ⚠️ 改了 `src` 之后打包三步缺一不可：`npm run build` → `npx cap sync android` → `gradlew assemble*`。
+### Android
 
 ```bash
 npm run build
 npx cap sync android
-cd android && gradlew assembleDebug     # 调试包
-cd android && gradlew assembleRelease   # 签名发布包 → app/release/app-release.apk
+cd android && ./gradlew assembleRelease   # 需 local.properties 里的签名配置
 ```
 
----
+> 改完 `src` 必须走完 `build → cap sync → gradle` 三步，否则 APK 里还是旧前端。
 
-## 🔒 领域模型
-
-```
-Goal 1:N Plan M:N Activity 1:1 Output 0:1 ValueFlow
-Resource 与 Tx(流水) 构成账本
-Goods（商品）含 costs[] 多资源成本，快速消费生成 credit 流水
-```
-
-### 活动六态状态机
-
-```
-Planned → Started → Completed → Reviewed → Archived  +  Failed(终态，不堆积)
-```
-
-转移表 `ACTIVITY_TRANSITION_TABLE` 为单一真源（显式规则，无隐藏魔法）。
-
-### 六条全局不变量（engine 强制，测试覆盖）
-
-1. **余额** = `initial + Σdebit − Σcredit`（冲正也是真实分录）
-2. **Complete 必带流水与产出**（否则拒绝）
-3. **Output Archived 自动生成 ValueFlow(Pending, +7天)**
-4. **计划预算硬约束**（预算耗尽 → 冻结活动开始/完成）
-5. **冲正生成新流水且余额回补**（绝对禁止 UPDATE/DELETE）
-6. **Failed 不堆积**（仅 Completed/Failed(循环) 衍生下一期）
-
-### 时间原子性
-
-有 `planned_start` 且时长 > 0 的活动占固定时段，**一律禁止重叠**；冲突默认自动顺延到最近空闲槽（上限 30 天），也可「坚持此时间」捆绑仲裁。
-
-### 计时器跨进程持久化
-
-时间戳锚定 `endTs−now`，**double-write** 到 `localStorage` + 原生 `SharedPreferences`；启动 `restore()` 快路径 + `restoreNative()` 兜底（抗 ROM 清理）。
-
----
-
-## 📊 智能推荐机 L1–L4（前瞻蓝图，已落地）
-
-四层严格依赖：L1 报告塑型 → L2 学习引擎 → L3 推荐机 → L4 社区接缝。
-
-| 层 | 名称     | 内容                                                                                 | 契约                                 |
-| -- | -------- | ------------------------------------------------------------------------------------ | ------------------------------------ |
-| L1 | 报告塑型 | 周/月报 + 活动级明细 + 6 页滑动 deck + PPTX/PDF 导出 + `stripIdentity` 去身份      | `docs/api/report-v2.md`            |
-| L2 | 学习引擎 | `extractFeatures` → biasK 模型（n 置信权重）+ UCB 探索                            | `docs/api/feature-set.md`          |
-| L3 | 推荐机   | `scheduleScore` 0~100 + `slotIntoFreeTime` 空闲插入 + opt-in 弹窗（可关/可停用） | `docs/api/recommendation.md`       |
-| L4 | 社区接缝 | 匿名轨迹签名（事件序列编码 + k-匿名抑制）· pattern-matching 非 people-matching      | `docs/api/trajectory-signature.md` |
-
-> 完整蓝图见 `docs/blueprint-L1-L4.md`（含对抗性评审 8 项修复）。
-> 隐私铁律：**永不暴露原始账本 / 余额 / 身份**；导出去身份默认；社区只共享匿名化归一化的顺序模式签名。
-
----
-
-## 🧪 测试
+### Windows 桌面
 
 ```bash
-npm test   # node --test tests/*.test.js，目前 248 条全绿
+cd tauri-desktop
+npm install
+npm run build:exe    # NSIS 安装包 → src-tauri/target/release/bundle/nsis/
 ```
 
-覆盖：领域层引擎 38 条、时间原子性、`report`/`learn`/`recommend`/`signature`、`agentMCP` 13 条、`mdimport`/`mdapply`/`mdview`、任务状态机等。
+### MCP
+
+```bash
+npm run mcp          # stdio 服务
+npm run mcp:tools    # 列出工具
+node mcp/server.mjs call erp.status
+```
+
+数据文件默认 `%LOCALAPPDATA%\com.personal.erp.desktop\erp-db.json`，可用 `ERP_DB` 覆盖。
 
 ---
 
-## ⚠️ 已知问题（重要，见 HANDOVER.md §六）
+## 一天可以这样用
 
-1. **同文件并行编辑竞态**：同一文件的多处局部替换会「后写覆盖先写」→ **要么一次全量 Write，要么严格串行**。
+1. 早上打开 → **新一天向导** 过一遍目标与计划；
+2. 在**日记**里写下今天要做的事和预计花费，一键注入；
+3. **活动看板**里开始做事，计时器自动记录；到点有闹钟，锁屏能看到今日安排；
+4. 花钱时在**记账器**记一行，或直接在日记代码块里写；
+5. 完成活动时顺手写产出，系统自动生成待反馈价值流；
+6. 周末打开**统计**，导出周报 / 简报，看看预算与时间都去了哪。
+
+---
+
+## 架构
+
+```
+src/
+├─ main.js                 # 装配根：db(store) + engine(domain) + views(ui) → window.App
+├─ store/                  # localStorage 持久化、偏好、序号
+├─ domain/                 # ★ 纯函数领域层（UI 只能调这里）
+│  ├─ engine.js            # 状态机、六条不变量、时间原子性、循环、预算、价值流
+│  ├─ entities.js          # 实体工厂与字段契约
+│  ├─ journal.js           # 日记：代码块提取 / 快照 diff / 幂等注入
+│  ├─ ledger.js            # 一行一笔的流水语法与冲正
+│  ├─ mdimport.js / mdapply.js   # Markdown ↔ 领域对象
+│  ├─ templates.js / builtinTemplates.js  # 阶段模板链
+│  ├─ plangen.js / schedule.js / attention.js / places.js / activitygraph.js
+│  ├─ report.js / learn.js / recommend.js / signature.js   # L1–L4
+│  └─ capital.js / taskStateMachine.js
+├─ views/                  # 活动 / 日记 / 资源 / 目标 / 统计 / 工作区 / 计时 / 简报
+├─ services/               # 闹钟、通知、锁屏、小组件、同步、MCP、备份、导出
+└─ ui/                     # 弹窗、Toast、图标、主题等原语
+android/                   # Capacitor 壳：小组件、锁屏、闹钟、围栏、内置 MCP
+tauri-desktop/             # Tauri 2 桌面壳
+mcp/                       # MCP stdio 服务与工具实现
+tests/                     # node --test，405 条
+```
+
+**设计纪律**
+
+- UI 不直接改 db；所有写操作走 `App.engine.*`，统一返回 `{ ok, error }`；
+- 规则先写进领域层与测试，UI 只是壳；
+- 重要状态双写（WebView + 原生），抗 ROM 清理；
+- 图标统一走内联 SVG / vector drawable，不依赖字体或图片资源。
 
 ---
 
-## 📜 设计约定速查
+## 数据与隐私
 
-- **UI 层禁止直改 db**，一切写操作走 `App.engine.*`，返回 `{ok,error}` 统一处理
-- 领域层是宪法：任何新功能先把规则写进 `engine.js` + 测试，UI 只是壳
-- **双端一致性**：重要状态走原生 SharedPreferences（参考 timer.js 双写模式）
-- **打包三步曲别偷懒**：build → sync → gradle
+- **默认全本地**：没有服务器、没有账号体系，不会上传任何数据；
+- **备份**：可导出 / 导入 JSON，支持自动备份；合并按 id 去重、引用重映射；
+- **对外接口默认关闭**：Android MCP 端点需要显式打开；MCP 只提供追加与只读；
+- **分析可脱敏**：报告与轨迹签名支持去身份，社区只共享匿名化的顺序模式。
 
 ---
+
+## 测试与构建
+
+```bash
+npm test    # 405 条：领域引擎、时间原子性、Markdown 解析、日记注入、模板、MCP、主题校验…
+```
+
+Web 产物约 400 KB（gzip ≈ 129 KB），无运行时框架依赖。
+
+---
+
+## 版本
+
+当前发布：[v1.0.0](https://github.com/chronoload/Personal-ERP2/releases)（Android APK）。
+桌面安装包随 Release 一同发布。
+
+> 个人项目，按「先能长期用，再谈抽象」的原则演进；接口与数据结构以领域层测试为准。
