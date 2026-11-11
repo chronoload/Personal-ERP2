@@ -131,10 +131,13 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
     rv.setEmptyView(R.id.widget_goods_list, R.id.widget_goods_empty);
 
     // 行内「消费」按钮：模板 PendingIntent + 行 fill-in 的 good_id
+    // ★ 必须是 MUTABLE：每行的 good_id 靠 setOnClickFillInIntent 填进模板里，
+    //   IMMUTABLE 会把这些 extras 丢掉，收到广播时 goodId == null → 点了完全没反应
     Intent tpl = new Intent(ctx, GoodsWidgetProvider.class);
     tpl.setAction(ACTION_CONSUME);
+    tpl.setData(android.net.Uri.parse("erp://widget/goods/consume"));
     PendingIntent template = PendingIntent.getBroadcast(ctx, 90, tpl,
-        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
     rv.setPendingIntentTemplate(R.id.widget_goods_list, template);
 
     Intent open = new Intent(ctx, MainActivity.class);
@@ -151,13 +154,17 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
     super.onReceive(context, intent);
     if (ACTION_CONSUME.equals(intent.getAction())) {
       String goodId = intent.getStringExtra(EXTRA_GOOD_ID);
-      if (goodId != null) {
-        String err = consume(context, goodId);
-        try {
-          android.widget.Toast.makeText(context, err == null ? "已消费并入账" : err,
-              android.widget.Toast.LENGTH_SHORT).show();
-        } catch (Exception ignored) {}
+      String err;
+      if (goodId == null || goodId.isEmpty()) {
+        // 之前这里静默 return，点击像「死键」；现在明确报出来
+        err = "消费失败：没取到商品";
+      } else {
+        err = consume(context, goodId); // 内部已 refreshAll
       }
+      try {
+        android.widget.Toast.makeText(context, err == null ? "已消费并入账" : err,
+            android.widget.Toast.LENGTH_SHORT).show();
+      } catch (Exception ignored) {}
     }
   }
 

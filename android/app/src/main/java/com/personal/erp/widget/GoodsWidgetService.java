@@ -72,9 +72,11 @@ public class GoodsWidgetService extends RemoteViewsService {
       rv.setInt(R.id.widget_goods_item_btn, "setBackgroundResource",
           dark ? R.drawable.widget_act_bg_dark : R.drawable.widget_add_bg);
 
-      // 列表项点击由 Provider 的 PendingIntent 模板接住，这里只填商品 id
+      // 列表项点击由 Provider 的 PendingIntent 模板接住，这里只填商品 id。
+      // 卡片和按钮都挂同一份 fill-in：只挂按钮时，点名字/空白处会像「没反应」。
       Intent fill = new Intent();
       fill.putExtra(GoodsWidgetProvider.EXTRA_GOOD_ID, g.optString("id"));
+      rv.setOnClickFillInIntent(R.id.widget_goods_item_card, fill);
       rv.setOnClickFillInIntent(R.id.widget_goods_item_btn, fill);
       return rv;
     }
