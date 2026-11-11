@@ -79,6 +79,40 @@ export const Widget = {
     } catch (e) { return { changed: false }; }
   },
 
+  /**
+   * 原生待回读流水：不依赖 rev / db 覆盖，取走即清空，按 id 去重合并进本地库。
+   * 桌面记账、快速消费、充值都走这条通道，保证一定进流水。
+   */
+  async pullPending() {
+    if (!this.nativeAvailable()) return { changed: false };
+    try {
+      const P = Capacitor.registerPlugin('Widget');
+      const r = await P.getPendingTxs();
+      const list = JSON.parse(r.txs || '[]');
+      if (!Array.isArray(list) || !list.length) return { changed: false };
+      const raw = localStorage.getItem('personal_erp_db_v1');
+      if (!raw) return { changed: false };
+      const db = JSON.parse(raw);
+      db.txs = db.txs || [];
+      const have = new Set(db.txs.map((t) => t && t.id));
+      let added = 0;
+      let maxSeq = (db.seq && db.seq.t) || 0;
+      for (const t of list) {
+        if (!t || !t.id || have.has(t.id)) continue;
+        db.txs.push(t);
+        have.add(t.id);
+        added++;
+        const n = parseInt(String(t.id).replace(/\D/g, ''), 10) || 0;
+        if (n > maxSeq) maxSeq = n;
+      }
+      if (!added) return { changed: false };
+      db.seq = db.seq || {};
+      db.seq.t = maxSeq;
+      localStorage.setItem('personal_erp_db_v1', JSON.stringify(db));
+      return { changed: true };
+    } catch (e) { return { changed: false }; }
+  },
+
   async refreshNative() {
     try {
       // 不设 enabled 门槛：桌面可能直接添加小组件而没进 App 设置开启；

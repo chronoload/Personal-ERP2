@@ -81,6 +81,7 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
         tx.put("reversal_of", JSONObject.NULL);
         tx.put("created", System.currentTimeMillis());
         txs.put(tx);
+        WidgetStore.appendPending(ctx, new JSONObject(tx.toString()));
         // 登记为原生独立流水：JS 下次 pushData 时回合并，防止被旧数据覆盖
         if (nativeIds == null) { nativeIds = new org.json.JSONArray(); db.put("native_txs", nativeIds); }
         nativeIds.put("t" + nextT);

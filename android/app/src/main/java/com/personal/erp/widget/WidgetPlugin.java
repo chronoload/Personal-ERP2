@@ -104,6 +104,14 @@ public class WidgetPlugin extends Plugin {
     call.resolve(ret);
   }
 
+  /** 取走原生独立产生的待回读流水（取完即清空），JS 合并进本地库后回推即可 */
+  @PluginMethod
+  public void getPendingTxs(PluginCall call) {
+    JSObject ret = new JSObject();
+    ret.put("txs", WidgetStore.drainPending(getContext()).toString());
+    call.resolve(ret);
+  }
+
   @PluginMethod
   public void refresh(PluginCall call) {
     try {

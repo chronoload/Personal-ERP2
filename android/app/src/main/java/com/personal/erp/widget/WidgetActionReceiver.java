@@ -185,6 +185,7 @@ public class WidgetActionReceiver extends BroadcastReceiver {
       nativeIds.put("t" + nextT);
 
       WidgetStore.writeDB(ctx, db);
+      WidgetStore.appendPending(ctx, tx); // 另一条不依赖 rev 的回传通道
       return null;
     } catch (Exception e) {
       return e.getMessage() == null ? "操作失败" : e.getMessage();

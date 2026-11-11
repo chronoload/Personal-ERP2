@@ -38,6 +38,16 @@ public class MainActivity extends BridgeActivity {
     handleLaunchExtras(intent);
   }
 
+  /**
+   * 回前台：WebView 的 visibilitychange 在部分 ROM 上不可靠，
+   * 这里显式通知 JS 拉一次桌面小组件写入的流水（与 main.js 的 erpResume 监听对应）。
+   */
+  @Override
+  public void onResume() {
+    super.onResume();
+    postJSEvent("erpResume", "{}");
+  }
+
   private void handleLaunchExtras(Intent intent) {
     if (intent == null) return;
     // 桌面小组件点击跳转：PendingIntent 带 erp_tab / erp_fresh extra，

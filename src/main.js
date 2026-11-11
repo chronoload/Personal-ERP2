@@ -428,15 +428,19 @@ if (Capacitor.isNativePlatform() && CapApp.addListener) {
 // 用原生数据覆盖本地并重渲染。pushData 的 txs 合并负责反方向，二者互补成闭环。
 async function syncFromNative() {
   try {
+    // 1) 先取原生待回读流水（不依赖 rev，最可靠）
+    const p = await Widget.pullPending();
+    // 2) 再按修订号拉整库（其他桌面操作：开始任务、主题等）
     const r = await Widget.pullFromNative();
-    // rev 更新即原生库较新：重载内存库再渲染，否则 render 的 saveDB 会把旧内存库回写、吞掉原生侧变更
-    if (r.changed) { App.db = loadDB(); App.render(false); }
+    if (p.changed || r.changed) { App.db = loadDB(); App.render(false); }
     // 回前台立即把最新 db 推给小组件（「核心 → 小组件」即时同步，不等下一次渲染）
     Widget.refreshNative();
   } catch (e) {}
 }
 syncFromNative();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) syncFromNative(); });
+// 安卓回前台：MainActivity.onResume 显式触发（visibilitychange 在部分 ROM 上不可靠）
+window.addEventListener('erpResume', () => syncFromNative());
 
 // 计时器跨进程恢复：被杀后台后按时间戳相对计时，重启自动接续；
 // restoreNative 兜底 WebView 存储被系统清理的场景（从 SharedPreferences 回捞）

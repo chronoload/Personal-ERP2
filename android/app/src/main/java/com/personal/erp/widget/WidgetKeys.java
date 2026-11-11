@@ -13,6 +13,8 @@ public final class WidgetKeys {
   public static final String KEY_SNAP = "widget_snapshot";
   public static final String KEY_CONFIG = "widget_config";
   public static final String KEY_REV = "widget_db_rev";
+  // 原生待回读流水：App 回前台一次性取走并清空（不依赖 rev / db 覆盖，最可靠的回传通道）
+  public static final String KEY_PENDING = "widget_pending_txs";
   // 计时器跨进程锚点（JSON：target/sec/sessionStart/mode/endTs/remainingMs/ts）
   public static final String KEY_TIMER = "personal_erp_timer";
   private WidgetKeys() {}

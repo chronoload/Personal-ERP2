@@ -35,6 +35,28 @@ public class WidgetStore {
     return null;
   }
 
+  /** 原生独立操作产生的待回读流水（App 一回前台就取走并清空） */
+  static JSONArray drainPending(Context ctx) {
+    try {
+      SharedPreferences sp = ctx.getSharedPreferences(WidgetKeys.PREFS_FILE, Context.MODE_PRIVATE);
+      String raw = sp.getString(WidgetKeys.KEY_PENDING, null);
+      sp.edit().remove(WidgetKeys.KEY_PENDING).apply();
+      if (raw != null) return new JSONArray(raw);
+    } catch (Exception ignored) {}
+    return new JSONArray();
+  }
+
+  static void appendPending(Context ctx, org.json.JSONObject tx) {
+    try {
+      SharedPreferences sp = ctx.getSharedPreferences(WidgetKeys.PREFS_FILE, Context.MODE_PRIVATE);
+      JSONArray arr;
+      String raw = sp.getString(WidgetKeys.KEY_PENDING, null);
+      arr = raw == null ? new JSONArray() : new JSONArray(raw);
+      arr.put(tx);
+      sp.edit().putString(WidgetKeys.KEY_PENDING, arr.toString()).apply();
+    } catch (Exception ignored) {}
+  }
+
   /** 小组件配置（配置页保存）：{ dark: bool }，缺省浅色 */
   static JSONObject readConfig(Context ctx) {
     try {
