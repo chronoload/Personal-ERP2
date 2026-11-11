@@ -19,6 +19,6 @@
     <string name="widget_resources_desc">资源状态 · 余额一览</string>
     <string name="widget_goals_desc">目标与计划 · 进度概览</string>
     <string name="widget_goods_desc">物品库存 · 一键消耗</string>
-    <string name="widget_countdown_desc">盯一个任务的时间点：下一个 / 指定 / 自定义</string>
+    <string name="widget_countdown_desc">盯一个任务的时间点：下一个 / 指定 / 自定义；底部列出接下来的等待队列</string>
     <string name="widget_stopwatch_desc">手动专注计时：25/45 分一键开跑，开始 · 暂停 · 重置</string>
 </resources>

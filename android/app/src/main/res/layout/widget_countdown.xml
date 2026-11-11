@@ -108,4 +108,105 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <!-- 等待队列：接下来还有哪些已排期任务（高度不足时按 widget 尺寸自动隐藏） -->
+    <View
+        android:id="@+id/cd_queue_divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:background="#E5E8EE"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/cd_queue_head"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:singleLine="true"
+        android:text="接下来"
+        android:textColor="#8A93A3"
+        android:textSize="10sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/cd_queue_row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/cd_queue_time1"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:textColor="#6B7482"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/cd_queue_title1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="#4A5260"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/cd_queue_row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/cd_queue_time2"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:textColor="#6B7482"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/cd_queue_title2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="#4A5260"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/cd_queue_row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/cd_queue_time3"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:textColor="#6B7482"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/cd_queue_title3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="#4A5260"
+            android:textSize="11sp" />
+    </LinearLayout>
+
 </LinearLayout>

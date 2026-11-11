@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -45,6 +46,12 @@ public class CountdownWidgetProvider extends AppWidgetProvider {
   @Override
   public void onDeleted(Context context, int[] ids) {
     for (int id : ids) cancelFinish(context, id);
+  }
+
+  /** 拖动改尺寸后立即重排队列条数（否则要等下一次数据刷新） */
+  @Override
+  public void onAppWidgetOptionsChanged(Context context, AppWidgetManager mgr, int widgetId, Bundle newOptions) {
+    try { updateOne(context, mgr, widgetId); } catch (Exception ignored) {}
   }
 
   static void updateOne(Context ctx, AppWidgetManager mgr, int widgetId) {
@@ -181,9 +188,84 @@ public class CountdownWidgetProvider extends AppWidgetProvider {
       }
     }
 
+    // 底部等待队列：接下来还有哪些已排期任务（按组件高度决定显示 0–3 条）
+    renderQueue(ctx, rv, widgetId, db, activityId);
+
     PendingIntent open = openApp(ctx, 4300 + widgetId);
     rv.setOnClickPendingIntent(R.id.cd_root, open);
     rv.setOnClickPendingIntent(R.id.cd_clock, open);
+  }
+
+  // ---------------- 等待队列 ----------------
+
+  /** 组件实际高度 → 队列可放几条（4×2 默认给 1 条，拉高后自动变多） */
+  private static int queueRows(Context ctx, int widgetId) {
+    int h = 110;
+    try {
+      Bundle o = AppWidgetManager.getInstance(ctx).getAppWidgetOptions(widgetId);
+      // 取 min/max 的较大值：不同启动器上报的可用高度不一致，宁可少裁一条
+      h = Math.max(o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110),
+          o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 110));
+    } catch (Exception ignored) {}
+    if (h >= 220) return 3;
+    if (h >= 175) return 2;
+    if (h >= 125) return 1;
+    return 0;
+  }
+
+  /** 未来已排期、未开始、未完成的活动（排除当前倒计时绑定的那条），按时间升序 */
+  private static JSONArray upcomingQueue(JSONObject db, String excludeId, int limit) {
+    JSONArray out = new JSONArray();
+    if (db == null || limit <= 0) return out;
+    try {
+      JSONArray acts = db.optJSONArray("activities");
+      if (acts == null) return out;
+      long now = System.currentTimeMillis();
+      java.util.List<JSONObject> list = new java.util.ArrayList<>();
+      for (int i = 0; i < acts.length(); i++) {
+        JSONObject a = acts.optJSONObject(i);
+        if (!WidgetStore.isOpenActivity(a)) continue;
+        if ("Started".equals(a.optString("status")) || isRunning(a)) continue;
+        if (excludeId != null && excludeId.equals(a.optString("id"))) continue;
+        long t = WidgetStore.parseDateTimeMs(a.optString("planned_start", ""));
+        if (t <= now) continue; // 只排未来；已到点/延期的不进队列
+        list.add(a);
+      }
+      java.util.Collections.sort(list, (a, b) -> Long.compare(
+          WidgetStore.parseDateTimeMs(a.optString("planned_start", "")),
+          WidgetStore.parseDateTimeMs(b.optString("planned_start", ""))));
+      for (int i = 0; i < list.size() && out.length() < limit; i++) out.put(list.get(i));
+    } catch (Exception ignored) {}
+    return out;
+  }
+
+  private static void renderQueue(Context ctx, RemoteViews rv, int widgetId, JSONObject db, String currentId) {
+    int[] rowIds = {R.id.cd_queue_row1, R.id.cd_queue_row2, R.id.cd_queue_row3};
+    int[] timeIds = {R.id.cd_queue_time1, R.id.cd_queue_time2, R.id.cd_queue_time3};
+    int[] titleIds = {R.id.cd_queue_title1, R.id.cd_queue_title2, R.id.cd_queue_title3};
+
+    JSONArray q = upcomingQueue(db, currentId, queueRows(ctx, widgetId));
+    boolean has = q.length() > 0;
+    rv.setViewVisibility(R.id.cd_queue_divider, has ? View.VISIBLE : View.GONE);
+    rv.setViewVisibility(R.id.cd_queue_head, has ? View.VISIBLE : View.GONE);
+
+    for (int i = 0; i < 3; i++) {
+      boolean show = i < q.length();
+      rv.setViewVisibility(rowIds[i], show ? View.VISIBLE : View.GONE);
+      if (!show) continue;
+      JSONObject a = q.optJSONObject(i);
+      if (a == null) { rv.setViewVisibility(rowIds[i], View.GONE); continue; }
+      rv.setTextViewText(timeIds[i], clockOnly(a.optString("planned_start", "")));
+      rv.setTextViewText(titleIds[i], a.optString("title", "—"));
+      rv.setOnClickPendingIntent(rowIds[i], openApp(ctx, 4400 + widgetId * 3 + i));
+    }
+  }
+
+  /** "2026-11-11T09:00" → "09:00" */
+  private static String clockOnly(String ps) {
+    if (ps == null) return "";
+    int t = ps.indexOf('T');
+    return t >= 0 && t + 1 < ps.length() ? ps.substring(t + 1) : "";
   }
 
   // ---------------- 到点闹钟 ----------------
@@ -302,5 +384,14 @@ public class CountdownWidgetProvider extends AppWidgetProvider {
     rv.setTextColor(R.id.cd_status, dark ? 0xFFA8B0BD : 0xFF6B7482);
     rv.setTextColor(R.id.cd_action, dark ? 0xFF8FB8E8 : 0xFF4A7FBF);
     rv.setInt(R.id.cd_action, "setBackgroundResource", dark ? R.drawable.widget_act_bg_dark : R.drawable.widget_add_bg);
+    // 等待队列
+    rv.setInt(R.id.cd_queue_divider, "setBackgroundColor", dark ? 0xFF2A3242 : 0xFFE5E8EE);
+    rv.setTextColor(R.id.cd_queue_head, dark ? 0xFFA8B0BD : 0xFF8A93A3);
+    rv.setTextColor(R.id.cd_queue_time1, dark ? 0xFFA8B0BD : 0xFF6B7482);
+    rv.setTextColor(R.id.cd_queue_time2, dark ? 0xFFA8B0BD : 0xFF6B7482);
+    rv.setTextColor(R.id.cd_queue_time3, dark ? 0xFFA8B0BD : 0xFF6B7482);
+    rv.setTextColor(R.id.cd_queue_title1, dark ? 0xFFE8EBF0 : 0xFF4A5260);
+    rv.setTextColor(R.id.cd_queue_title2, dark ? 0xFFE8EBF0 : 0xFF4A5260);
+    rv.setTextColor(R.id.cd_queue_title3, dark ? 0xFFE8EBF0 : 0xFF4A5260);
   }
 }
