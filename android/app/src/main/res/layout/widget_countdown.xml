@@ -108,8 +108,9 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- 等待队列：接下来还有哪些已排期任务（高度不足时按 widget 尺寸自动隐藏） -->
-    <View
+    <!-- 等待队列：接下来还有哪些已排期任务（高度不足时按 widget 尺寸自动隐藏）
+         RemoteViews 不支持裸 View，分隔线用空 TextView 实现 -->
+    <TextView
         android:id="@+id/cd_queue_divider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
