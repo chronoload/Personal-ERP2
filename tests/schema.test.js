@@ -19,7 +19,7 @@ globalThis.localStorage = {
 // ---- seedDB / resetDB：产出必须带当前版本戳 ----
 test('seedDB：全新种子库盖章 schemaVersion = SCHEMA_VERSION', () => {
   const db = seedDB();
-  assert.equal(SCHEMA_VERSION, 3);
+  assert.equal(SCHEMA_VERSION, 6);
   assert.equal(db.schemaVersion, SCHEMA_VERSION);
 });
 
@@ -36,6 +36,12 @@ test('normalizeDB：遗留库补齐修复并盖章为当前版本', () => {
   // 修复语义保持不变：缺集合补空数组、实体字段补安全默认值
   assert.deepEqual(legacy.rules, []);
   assert.deepEqual(legacy.goods, []);
+  assert.deepEqual(legacy.journals, []); // v4 新增：日记池补齐为空数组
+  assert.deepEqual(legacy.places, []);   // v5 新增：地点池补齐为空数组
+  assert.deepEqual(legacy.commutes, []); // v5 新增：通勤矩阵补齐为空数组
+  assert.equal(legacy.currentPlaceId, null);
+  assert.deepEqual(legacy.templates, []); // v6 新增：自定义模板池
+  assert.equal(legacy.capitalLock, false); // v6 新增：资本准入锁
   assert.equal(legacy.resources[0].name, ''); // 非字符串名 → 安全默认值
   assert.equal(legacy.resources[0].status, 'Active');
   assert.deepEqual(legacy.activities[0].plan_ids, []);
@@ -62,6 +68,11 @@ test('loadDB：空存储返回种子库且版本为当前版', () => {
   assert.equal(db.schemaVersion, SCHEMA_VERSION);
   assert.deepEqual(db.resources, []);
   assert.deepEqual(db.txs, []);
+  assert.deepEqual(db.places, []);
+  assert.deepEqual(db.commutes, []);
+  assert.equal(db.currentPlaceId, null);
+  assert.deepEqual(db.templates, []);
+  assert.equal(db.capitalLock, false);
 });
 
 // ---- normalizeDB：目标 status 缺省回落 Active（幂等，不依赖版本号）----

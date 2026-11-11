@@ -21,6 +21,21 @@ export const Widget = {
     } catch (e) {}
   },
 
+  // 开屏首页 · 今日日程（大卡片）：缺省开启；关闭后原生卡片只显示「已在设置中关闭」
+  homeEnabled() {
+    const v = Prefs.load().homeTodayWidget;
+    return v === undefined ? true : !!v;
+  },
+
+  async setHomeEnabled(v) {
+    Prefs.set({ homeTodayWidget: !!v });
+    try {
+      if (!Capacitor.isNativePlatform()) return;
+      const P = Capacitor.registerPlugin('Widget');
+      await P.setHomeTodayEnabled({ enabled: !!v });
+    } catch (e) {}
+  },
+
   // 小组件深色主题（安卓端写入原生配置并立即刷新；web 端仅记忆偏好）
   async setDarkTheme(dark) {
     Prefs.set({ widgetDark: !!dark });

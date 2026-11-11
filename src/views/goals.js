@@ -6,6 +6,7 @@
 import { esc, fmtNum, badge, openModal, toast } from '../ui/helpers.js';
 import { PLAN_COLORS } from '../domain/engine.js';
 import { Prefs } from '../store/prefs.js';
+import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone, safeTheme } from '../ui/themes.js';
 
 // 折叠状态（目标/计划可收起展开，跨会话记忆）
 const collapsedGoals = new Set(Prefs.load().collapsedGoals || []);
@@ -108,18 +109,46 @@ export function openGoalMenu(gid) {
 }
 export function openGoalModal(editId) {
   const g = editId ? App.db.goals.find((x) => x.id === editId) : null;
+  let chosenColor = safeColor(g?.color) || null;
+  let chosenTheme = g && g.theme ? safeTheme(g.theme) : null;
   const m = openModal({
     title: g ? '编辑目标' : '新建目标',
     bodyHTML: `
       <div class="field"><label>目标名称 *</label><input id="f-gname" value="${esc(g?.title || '')}" placeholder="例：写一本书"></div>
-      <div class="field"><label>描述</label><input id="f-gdesc" value="${esc(g?.desc || '')}"></div>`,
+      <div class="field"><label>描述</label><input id="f-gdesc" value="${esc(g?.desc || '')}"></div>
+      <div class="field"><label>目标颜色（左侧色条 · 新建计划时继承为默认色）</label>
+        <div class="color-row" id="f-gcolors">
+          <button type="button" class="swatch ${chosenColor ? '' : 'on'}" data-c="" title="不染色" style="background:#fff"></button>
+          ${PLAN_COLORS.map((c) => `<button type="button" class="swatch ${c === chosenColor ? 'on' : ''}" data-c="${c}" style="background:${c}"></button>`).join('')}
+        </div>
+      </div>
+      <div class="field"><label>卡片背景（渐变 / 图片，可留空）</label>
+        <div id="f-gtheme"></div>
+      </div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>保存</button>`,
+  });
+  const tp = m.q('#f-gtheme');
+  tp.innerHTML = themePickerHTML({ chosen: chosenTheme });
+  bindThemePicker(tp, {
+    onPick: (t) => { chosenTheme = t; },
+    onUpload: (f) => readImageAsDataURL(f, (url) => { if (url) chosenTheme = { type: 'image', url }; }),
+  });
+  m.qa('#f-gcolors .swatch').forEach((s) => {
+    s.onclick = () => {
+      m.qa('#f-gcolors .swatch').forEach((x) => x.classList.remove('on'));
+      s.classList.add('on');
+      chosenColor = s.dataset.c || null;
+    };
   });
   m.q('[data-cancel]').onclick = () => m.close();
   m.q('[data-save]').onclick = () => {
+    const payload = {
+      title: m.q('#f-gname').value, desc: m.q('#f-gdesc').value,
+      color: chosenColor, theme: chosenTheme,
+    };
     const r = g
-      ? App.engine.updateGoal(App.db, g.id, { title: m.q('#f-gname').value, desc: m.q('#f-gdesc').value })
-      : App.engine.createGoal(App.db, { title: m.q('#f-gname').value, desc: m.q('#f-gdesc').value });
+      ? App.engine.updateGoal(App.db, g.id, payload)
+      : App.engine.createGoal(App.db, payload);
     if (!r.ok) return toast(r.error, 'err');
     m.close(); App.refresh();
   };
@@ -143,7 +172,9 @@ export function openPlanModal(goalId, editId) {
   const p = editId ? App.db.plans.find((x) => x.id === editId) : null;
   const goalOpts = App.db.goals.map((g) =>
     `<option value="${g.id}" ${g.id === (p ? p.goal_id : goalId) ? 'selected' : ''}>${esc(g.title)}</option>`).join('');
-  const defColor = p?.color || PLAN_COLORS[0];
+  // 计划色优先级：已有计划色 > 所属目标色 > 默认色（目标染色即「这个目标下的活」的统一识别色）
+  const parentGoal = App.db.goals.find((x) => x.id === (p ? p.goal_id : goalId));
+  const defColor = p?.color || safeColor(parentGoal?.color) || PLAN_COLORS[0];
   const activeRes = App.db.resources.filter((r) => r.status === 'Active');
   const resOptsPlan = (sel) => activeRes.map((r) =>
     `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}</option>`).join('')
@@ -329,21 +360,48 @@ export function render(App, el) {
           <div class="plan-list">${archPlans.map((p) => planCard(App, p)).join('')}</div>
         </div>
       </div>` : '';
+    const gtheme = safeTheme(g.theme);
+    const gth = themeStyle(gtheme);
+    const gtone = themeTone(gtheme);
+    const gcolor = safeColor(g.color);
+    // 进度摘要：活动完成比优先（真实工作量），没有活动则退回计划完成比
+    const planDone = plans.filter((p) => p.status === 'Completed').length;
+    const planIds = new Set(plans.map((p) => p.id));
+    const goalActs = db.activities.filter((a) => (a.plan_ids || []).some((id) => planIds.has(id)));
+    const actTotal = goalActs.filter((a) => a.status !== 'Archived').length;
+    const actDone = goalActs.filter((a) => a.status === 'Completed' || a.status === 'Reviewed').length;
+    const doneCount = actTotal ? actDone : planDone;
+    const totalCount = actTotal || plans.length;
+    const pct = totalCount ? Math.round((doneCount * 100) / totalCount) : 0;
+    const meta = [];
+    if (g.desc) meta.push(esc(g.desc));
+    meta.push(`计划 ${planDone}/${plans.length}`);
+    if (actTotal) meta.push(`活动 ${actDone}/${actTotal}`);
+    if (archPlans.length) meta.push(`${archPlans.length} 归档`);
+    // 有背景主题时进度条交给 CSS 定色（浅色底用目标色 / 深色底自动转白），保证可读
+    const barColor = gth ? '' : (gcolor || '');
+    const hasPlanContent = plans.length || archPlans.length;
+    const guideStyle = hasPlanContent
+      ? (gcolor ? `border-left-color:${gcolor};` : '')
+      : 'border-left:none;margin-left:0;padding-left:0;';
+    const gheadStyle = `${gth ? `background:${gth};background-size:cover;background-position:center;` : ''}${gcolor ? `border-left:4px solid ${gcolor};` : ''}`;
     return `
       <div class="goal-block ${gcoll ? 'collapsed' : ''}" data-gid="${jsStr(g.id)}">
-        <div class="goal-head" data-gid="${jsStr(g.id)}" title="点击收起 / 展开 · 长按 状态 / 归档">
+        <div class="goal-head ${gth ? 'themed' : ''} ${gtone === 'light' ? 'tone-light' : ''}" data-gid="${jsStr(g.id)}" ${gth && gtone === null ? 'data-await-tone="1"' : ''} style="${gheadStyle}" title="点击收起 / 展开 · 长按 状态 / 归档">
+          ${gth ? `<div class="gh-bg" style="background:${gth}"></div>` : ''}
           <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleGoal('${jsStr(g.id)}')" aria-label="收起/展开">${gcoll ? '▸' : '▾'}</button>
           <div class="grow">
             <b class="goal-title">🎯 ${esc(g.title)}</b>
-            <span class="muted">${esc(g.desc || '')} · ${plans.length} 个计划${archPlans.length ? ` · ${archPlans.length} 归档` : ''}</span>
+            <span class="muted">${meta.join(' · ')}</span>
           </div>
           <div class="row-gap" onclick="event.stopPropagation()">
             <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 计划</button>
             <button class="btn sm" onclick="App.goals.openGoalModal('${jsStr(g.id)}')">编辑</button>
             <button class="btn sm danger" onclick="App.goals.delGoal('${jsStr(g.id)}')">删除</button>
           </div>
+          ${totalCount ? `<div class="goal-bar" title="完成度 ${pct}%（${doneCount}/${totalCount}）"><i style="width:${pct}%;${barColor ? `background:${barColor};` : ''}"></i></div>` : ''}
         </div>
-        <div class="goal-plans ${gcoll ? 'hidden' : ''}">
+        <div class="goal-plans ${gcoll ? 'hidden' : ''}" style="${guideStyle}">
         ${plans.length ? `<div class="plan-list">${plans.map((p) => planCard(App, p)).join('')}</div>` : (archPlans.length ? '' : `<div class="plan-add" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 点击添加计划</div>`)}
         ${archPlansHTML}
         </div>
@@ -358,7 +416,7 @@ export function render(App, el) {
         <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleArchived()" aria-label="展开/收起">${archivedExpanded ? '▾' : '▸'}</button>
         <div class="grow"><b class="goal-title">📦 已归档（${archivedGoals.length}）</b><span class="muted">目标 · 历史存档，默认从主视图隐藏</span></div>
       </div>
-      <div class="goal-plans ${archivedExpanded ? '' : 'hidden'}">
+      <div class="goal-plans ${archivedExpanded ? '' : 'hidden'}" style="border-left:none;margin-left:0;padding-left:0">
         <div class="plan-list" style="opacity:.8">${archivedGoals.map(goalBlock).join('')}</div>
       </div>
     </div>` : '';
@@ -396,5 +454,13 @@ export function render(App, el) {
     });
     head.addEventListener('pointercancel', cancel);
     head.addEventListener('pointerleave', cancel);
+  });
+  // 图片背景：异步采样亮度后补 tone-light（白字），与活动卡片共用同一套对比度规则
+  el.querySelectorAll('.goal-head[data-await-tone="1"]').forEach((head) => {
+    const g = db.goals.find((x) => x.id === head.dataset.gid);
+    sampleImageTone(g ? safeTheme(g.theme) : null, (tone) => {
+      if (tone === 'light') head.classList.add('tone-light');
+      head.removeAttribute('data-await-tone');
+    });
   });
 }

@@ -4,7 +4,21 @@
     <string name="title_activity_main">Personal ERP</string>
     <string name="package_name">com.personal.erp</string>
     <string name="custom_url_scheme">com.personal.erp</string>
-    <string name="widget_today_desc">当日日程 · 今日前 4 项活动</string>
+
+    <!-- 小组件统一命名：ERP · 名称；长按桌面添加时按此排序展示 -->
+    <string name="widget_today_label">ERP · 当日日程（紧凑）</string>
+    <string name="widget_home_label">ERP · 今日开屏（大卡）</string>
+    <string name="widget_resources_label">ERP · 资源余额</string>
+    <string name="widget_goals_label">ERP · 目标进度</string>
+    <string name="widget_goods_label">ERP · 物品库存</string>
+    <string name="widget_countdown_label">ERP · 任务倒计时</string>
+    <string name="widget_stopwatch_label">ERP · 专注停表</string>
+
+    <string name="widget_today_desc">今日前 4 项活动；全部完成后自动补延期与待排任务</string>
+    <string name="widget_home_desc">今日日程大卡；含「＋ 添加今日日程」直达新建</string>
     <string name="widget_resources_desc">资源状态 · 余额一览</string>
     <string name="widget_goals_desc">目标与计划 · 进度概览</string>
+    <string name="widget_goods_desc">物品库存 · 一键消耗</string>
+    <string name="widget_countdown_desc">盯一个任务的时间点：下一个 / 指定 / 自定义</string>
+    <string name="widget_stopwatch_desc">手动专注计时：25/45 分一键开跑，开始 · 暂停 · 重置</string>
 </resources>

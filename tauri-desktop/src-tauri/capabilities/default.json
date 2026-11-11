@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "default",
+  "description": "主窗口：系统通知 + 文件选择对话框",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "notification:allow-notify",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission",
+    "dialog:allow-open"
+  ]
+}

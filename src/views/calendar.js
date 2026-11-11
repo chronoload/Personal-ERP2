@@ -10,6 +10,8 @@ import { activityWindow } from '../domain/engine.js';
 
 let calYear, calMonth, calSelected = null;
 let calMode = 'month'; // 'month' | 'week'
+// 多视图联动焦点：看板/HUD 点击活动 → 记录其日期与 id，渲染时加亮
+let calFocusId = null, calFocusK = null;
 
 // 周视图时间轴可见范围与行高
 const WK_START = 6;   // 6:00 起
@@ -99,7 +101,7 @@ function agendaRow(App, a, t, occ, virtual) {
   if (occ && occ.status !== 'pending') {
     const done = occ.status === 'done';
     return `
-      <div class="agenda-row">
+      <div class="agenda-row${a.id === calFocusId ? ' focus' : ''}" data-id="${jsStr(a.id)}">
         <div class="agenda-time" style="color:${pcolor}">${done ? '✓' : '✕'} ${span}</div>
         <div class="grow">
           <div class="agenda-title"><span class="plan-chip" style="background:${pcolor}"></span>${esc(a.title)} <span class="badge ${done ? 'b-green' : 'b-gray'}">${done ? '已办' : '跳过'}</span></div>
@@ -110,7 +112,7 @@ function agendaRow(App, a, t, occ, virtual) {
   // 未来 pending 期次行：可跳过 / 可查看期次 / 可编辑系列
   if (occ && virtual) {
     return `
-      <div class="agenda-row clickable" data-edit="${jsStr(a.id)}" title="点击编辑系列">
+      <div class="agenda-row clickable focusable${a.id === calFocusId ? ' focus' : ''}" data-id="${jsStr(a.id)}" data-edit="${jsStr(a.id)}" title="点击编辑系列">
         <div class="agenda-time" style="color:${pcolor}">${span}</div>
         <div class="grow">
           <div class="agenda-title"><span class="plan-chip" style="background:${pcolor}"></span>${esc(a.title)} <span class="badge b-amber">待</span><span class="muted"> · 未来期次</span></div>
@@ -129,7 +131,7 @@ function agendaRow(App, a, t, occ, virtual) {
     .filter((o) => o && o.status === 'Planned' && overlapWin(activityWindow(a), activityWindow(o)));
   const warn = rivals.length ? `<span title="与 ${rivals.map((o) => esc(o.title)).join('、')} 时间重叠（捆绑，开始时仲裁）">⚠</span> ` : '';
   return `
-    <div class="agenda-row clickable" data-edit="${jsStr(a.id)}" title="点击编辑">
+    <div class="agenda-row clickable focusable${a.id === calFocusId ? ' focus' : ''}" data-id="${jsStr(a.id)}" data-edit="${jsStr(a.id)}" title="点击编辑">
       <div class="agenda-time" style="color:${pcolor}">${warn}${span}</div>
       <div class="grow">
         <div class="agenda-title"><span class="plan-chip" style="background:${pcolor}"></span>${esc(a.title)} ${badge(a.status)}${a.planned_minutes ? `<span class="muted"> · ${a.planned_minutes}m</span>` : ''}</div>
@@ -207,7 +209,7 @@ function renderMonth(App, host, byDay, todayK, resync) {
     const acts = byDay[k] || [];
     const cost = acts.reduce((s, it) => s + (it.virtual ? 0 : App.engine.activityCost(db, it.a.id)), 0);
     grid += `
-      <div class="cal-day ${k === todayK ? 'today' : ''} ${calSelected === k ? 'selected' : ''}" data-k="${k}">
+      <div class="cal-day ${k === todayK ? 'today' : ''} ${calSelected === k ? 'selected' : ''} ${calFocusK === k ? 'focus' : ''}" data-k="${k}">
         <div class="cal-d">${d}</div>
         ${acts.length ? `<div class="cal-cnt">${acts.length} 活动</div>` : ''}
         ${cost ? `<div class="cal-cost">-${cost}</div>` : ''}
@@ -304,13 +306,13 @@ function renderWeek(App, host, byDay, todayK, resync) {
       </div>
       <div class="week-head">
         <div class="week-head-spacer"></div>
-        ${cols.map((dy) => `<div class="week-head-day ${dy.today ? 'today' : ''} ${dy.sel ? 'selected' : ''}" data-k="${dy.key}"><b>${dy.dow}</b><span>${dy.d}</span></div>`).join('')}
+        ${cols.map((dy) => `<div class="week-head-day ${dy.today ? 'today' : ''} ${dy.sel ? 'selected' : ''} ${calFocusK === dy.key ? 'focus' : ''}" data-k="${dy.key}"><b>${dy.dow}</b><span>${dy.d}</span></div>`).join('')}
       </div>
       <div class="week-grid" style="--allH:${allH}px;--canvasH:${canvasH}px">
         <div class="week-axis">${axis.join('')}</div>
         <div class="week-cols">
           ${cols.map((dy) => `
-            <div class="week-col" data-k="${dy.key}">
+            <div class="week-col ${calFocusK === dy.key ? 'focus' : ''}" data-k="${dy.key}">
               <div class="week-all">${dy.allDay.join('') || ''}</div>
               <div class="week-canvas">${dy.blocks.join('')}</div>
             </div>`).join('')}
@@ -359,3 +361,21 @@ export function renderSection(App, host) {
   if (calMode === 'week') return renderWeek(App, host, byDay, todayK, resync);
   return renderMonth(App, host, byDay, todayK, resync);
 }
+
+// 多视图联动：看板/HUD 广播 app:focus-activity → 日历跳到该活动所在日期并加亮
+export function focusActivity(id) {
+  const app = window.App;
+  const db = app && app.db;
+  if (!db) return;
+  const a = db.activities.find((x) => x.id === id);
+  if (!a) return;
+  let k = a.repeat && a.planned_date ? a.planned_date : (actDate(a) || a.planned_date);
+  if (!k) return;
+  const kk = normDate(k);
+  calFocusId = id; calFocusK = kk;
+  const [y, m] = kk.split('-').map(Number);
+  calYear = y; calMonth = m - 1; calSelected = kk;
+  const host = document.querySelector('#calendar-section');
+  if (host) { renderSection(app, host); if (app.overview && app.overview.refreshPagerHeight) app.overview.refreshPagerHeight(); }
+}
+window.addEventListener('app:focus-activity', (e) => { if (e && e.detail && e.detail.id) focusActivity(e.detail.id); });

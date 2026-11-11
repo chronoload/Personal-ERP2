@@ -35,14 +35,17 @@ public class AlarmReceiver extends BroadcastReceiver {
     }
     if (!ACTION_FIRE.equals(action)) return;
 
-    int id = intent.getIntExtra("id", 0);
-    String title = intent.getStringExtra("title");
-    String body = intent.getStringExtra("body");
+    fire(context, intent.getIntExtra("id", 0),
+        intent.getStringExtra("title"), intent.getStringExtra("body"));
+  }
 
-    // 到点：响铃 + 震动
+  /**
+   * 到点即响：循环铃 + 震动 + 高优常驻通知（带「停止响铃」）。
+   * 日程闹钟、桌面倒计时到点、停表完成共用这一套，保证「到时间一定有提醒」。
+   */
+  public static void fire(Context context, int id, String title, String body) {
     AlarmTonePlayer.play(context);
 
-    // 全屏高优通知（锁屏/后台也全屏亮屏显示）+ 停止响铃按钮
     ensureChannel(context);
     PendingIntent open = openApp(context, id);
     NotificationCompat.Builder b = new NotificationCompat.Builder(context, CHANNEL_ID)
@@ -61,7 +64,7 @@ public class AlarmReceiver extends BroadcastReceiver {
     nm.notify(FULLSCREEN_NOTIF_ID, b.build());
   }
 
-  private void ensureChannel(Context context) {
+  private static void ensureChannel(Context context) {
     if (Build.VERSION.SDK_INT >= 26) {
       android.app.NotificationChannel ch = new android.app.NotificationChannel(
           CHANNEL_ID, "日程提醒闹钟", android.app.NotificationManager.IMPORTANCE_HIGH);
@@ -73,7 +76,7 @@ public class AlarmReceiver extends BroadcastReceiver {
     }
   }
 
-  private PendingIntent openApp(Context context, int id) {
+  private static PendingIntent openApp(Context context, int id) {
     Intent i = new Intent(context, MainActivity.class);
     i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     i.putExtra("alarm_action", "open");
@@ -82,7 +85,7 @@ public class AlarmReceiver extends BroadcastReceiver {
     return PendingIntent.getActivity(context, 1000 + id, i, flags);
   }
 
-  private PendingIntent stopAction(Context context, int id) {
+  private static PendingIntent stopAction(Context context, int id) {
     Intent i = new Intent(context, AlarmReceiver.class);
     i.setAction(ACTION_STOP);
     i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -90,7 +93,7 @@ public class AlarmReceiver extends BroadcastReceiver {
     return PendingIntent.getBroadcast(context, 2000 + id, i, flags);
   }
 
-  private void cancelNotif(Context context) {
+  private static void cancelNotif(Context context) {
     try {
       NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
       nm.cancel(FULLSCREEN_NOTIF_ID);

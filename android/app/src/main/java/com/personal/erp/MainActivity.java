@@ -7,6 +7,8 @@ import com.personal.erp.alarm.AlarmPlugin;
 import com.personal.erp.widget.WidgetPlugin;
 import com.personal.erp.sync.SyncPlugin;
 import com.personal.erp.timer.TimerPlugin;
+import com.personal.erp.geofence.GeofencePlugin;
+import com.personal.erp.lockscreen.LockScreenPlugin;
 
 public class MainActivity extends BridgeActivity {
   // ★ Capacitor 8 关键：桥在 BridgeActivity.onCreate 内同步构建（super.onCreate → this.load() → bridgeBuilder.create()）。
@@ -18,6 +20,8 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(SyncPlugin.class);   // 局域网同步服务（start/stop/status/ping）
     registerPlugin(TimerPlugin.class);  // 番茄钟控制栏 + 铃声（showControls/ring）
     registerPlugin(AlarmPlugin.class);  // 闹钟桥（日程提醒：后台响铃 + 锁屏全屏 + 重启恢复）
+    registerPlugin(GeofencePlugin.class); // 地理围栏桥（地点进/出事件 + 一次性定位）
+    registerPlugin(LockScreenPlugin.class); // 锁屏 / 开屏桥（常驻通知 + 亮屏整页）
     super.load();
   }
 
@@ -41,7 +45,9 @@ public class MainActivity extends BridgeActivity {
     if (intent.hasExtra("erp_tab")) {
       final String tab = intent.getStringExtra("erp_tab");
       final boolean fresh = intent.getBooleanExtra("erp_fresh", false);
-      postJSEvent("erpLaunchTab", "{\"tab\":\"" + tab + "\",\"fresh\":" + fresh + "}");
+      final String freshDate = intent.getStringExtra("erp_fresh_date");
+      postJSEvent("erpLaunchTab", "{\"tab\":\"" + tab + "\",\"fresh\":" + fresh
+          + (freshDate != null ? ",\"date\":\"" + freshDate + "\"" : "") + "}");
     }
     // 番茄钟控制栏按钮：暂停/继续/结束 → JS window 事件 timerControl
     if (intent.hasExtra("timer_action")) {

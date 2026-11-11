@@ -318,19 +318,22 @@ export function consumeGood(db, id, { qty = 1, note = '' } = {}) {
 
 // ---------- 目标 (Goal) ----------
 
-export function createGoal(db, { title, desc, _id }) {
+export function createGoal(db, { title, desc, color = null, theme = null, _id }) {
   if (!title || !title.trim()) return fail('目标名称必填');
-  const g = newGoal({ title: title.trim(), desc: (desc || '').trim() });
+  const g = newGoal({ title: title.trim(), desc: (desc || '').trim(), color, theme });
   g.id = _id || nextId(db, 'g'); // _id：mdapply 用 hash 稳定 id（可幂等回写）
   db.goals.push(g);
   return ok();
 }
 
-export function updateGoal(db, id, { title, desc }) {
+export function updateGoal(db, id, { title, desc, color = undefined, theme = undefined }) {
   const g = db.goals.find((x) => x.id === id);
   if (!g) return fail('目标不存在');
   if (!title || !title.trim()) return fail('目标名称必填');
   g.title = title.trim(); g.desc = (desc || '').trim();
+  // 染色/背景只在显式传入时更新：mdapply 等只改标题的调用不会误清空外观
+  if (color !== undefined) g.color = color;
+  if (theme !== undefined) g.theme = theme;
   return ok();
 }
 
@@ -413,7 +416,8 @@ export const PLAN_COLORS = ['#4a7fbf', '#3da06a', '#d97706', '#7c3aed', '#dc2626
 
 // ---------- 计划 (Plan) ----------
 
-export function createPlan(db, { goal_id, title, budget, color, default_expenses, default_incomes, _id }) {
+export function createPlan(db, { goal_id, title, budget, color, priority = 3, horizonMonths = 3, default_expenses, default_incomes, _id }) {
+  if (db.capitalLock) return fail('资本锁定中：请先清理死账或归档/完成部分计划');
   if (!title || !title.trim()) return fail('计划名称必填');
   if (!db.goals.some((g) => g.id === goal_id)) return fail('所属目标不存在');
   if (budget !== null && !(Number(budget) >= 0)) return fail('预算必须 ≥ 0');
@@ -425,6 +429,8 @@ export function createPlan(db, { goal_id, title, budget, color, default_expenses
   const p = newPlan({
     goal_id, title: title.trim(), budget: budget === null ? null : Number(budget),
     color: color || PLAN_COLORS[db.plans.length % PLAN_COLORS.length],
+    priority: Math.min(5, Math.max(1, Math.round(Number(priority) || 3))),
+    horizonMonths: Math.min(36, Math.max(1, Math.round(Number(horizonMonths) || 3))),
   });
   p.default_expenses = de; p.default_incomes = di;
   p.id = _id || nextId(db, 'p'); // _id：mdapply 用 hash 稳定 id（可幂等回写）
@@ -432,7 +438,7 @@ export function createPlan(db, { goal_id, title, budget, color, default_expenses
   return ok();
 }
 
-export function updatePlan(db, id, { title, budget, color, default_expenses, default_incomes }) {
+export function updatePlan(db, id, { title, budget, color, priority, horizonMonths, default_expenses, default_incomes }) {
   const p = db.plans.find((x) => x.id === id);
   if (!p) return fail('计划不存在');
   if (!title || !title.trim()) return fail('计划名称必填');
@@ -444,8 +450,20 @@ export function updatePlan(db, id, { title, budget, color, default_expenses, def
   } catch (e) { return fail(e.message); }
   p.title = title.trim(); p.budget = budget === null ? null : Number(budget);
   if (color !== undefined) p.color = color || null;
+  if (priority !== undefined) p.priority = Math.min(5, Math.max(1, Math.round(Number(priority) || 3)));
+  if (horizonMonths !== undefined) p.horizonMonths = Math.min(36, Math.max(1, Math.round(Number(horizonMonths) || 3)));
   if (default_expenses !== undefined) p.default_expenses = de;
   if (default_incomes !== undefined) p.default_incomes = di;
+  return ok();
+}
+
+// 资本准入轴（独立于 status 状态机）：手动冻结/解冻
+export function setPlanBudgetState(db, id, state) {
+  const p = db.plans.find((x) => x.id === id);
+  if (!p) return fail('计划不存在');
+  if (state !== 'active' && state !== 'frozen') return fail('未知预算状态');
+  p.budgetState = state;
+  p.frozenAt = state === 'frozen' ? Date.now() : null;
   return ok();
 }
 
@@ -656,13 +674,17 @@ function applyAtomicity(db, a, { keepConflict = false } = {}) {
   return {};
 }
 
-export function createActivity(db, { title, note, plan_ids, planned_date = null, planned_start = null, planned_minutes = 0, repeat = null, repeat_until = null, theme = null, keep_conflict = false, preset_expenses, preset_incomes, _id }) {
+export function createActivity(db, { title, note, plan_ids, planned_date = null, planned_start = null, planned_minutes = 0, repeat = null, repeat_until = null, theme = null, keep_conflict = false, preset_expenses, preset_incomes, place_id = null, depth = null, _id }) {
+  if (db.capitalLock) return fail('资本锁定中：请先清理死账或归档/完成部分计划');
   if (!title || !title.trim()) return fail('活动名称必填');
   if (planned_start != null && planned_start !== '' && !validPlannedStart(planned_start)) {
     return fail(`计划时间无效：${planned_start}（需 YYYY-MM-DDTHH:MM 且各部分真实存在）`);
   }
   const ids = plan_ids || [];
   for (const pid of ids) if (!db.plans.some((p) => p.id === pid)) return fail('关联计划不存在');
+  if (place_id != null && place_id !== '' && !(db.places || []).some((p) => p.id === place_id)) {
+    return fail('地点不存在');
+  }
   let pe, pi;
   try {
     pe = sanitizePresets(db, preset_expenses, '预设支出');
@@ -674,6 +696,8 @@ export function createActivity(db, { title, note, plan_ids, planned_date = null,
     planned_start: planned_start || null,
     planned_minutes: Number(planned_minutes) || 0,
     repeat, repeat_until: repeat_until || null, theme: theme || null,
+    place_id: place_id || null,
+    depth: depth === true ? true : (depth === false ? false : null),
   });
   a.preset_expenses = pe; a.preset_incomes = pi;
   a.id = _id || nextId(db, 'a'); // _id：mdapply 用 hash 稳定 id（可幂等回写）
@@ -689,7 +713,7 @@ export function createActivity(db, { title, note, plan_ids, planned_date = null,
   return ok({ ...atom, spawned });
 }
 
-export function updateActivity(db, id, { title, note, plan_ids, planned_date, planned_start, planned_minutes, repeat, repeat_until, theme, keep_conflict, preset_expenses, preset_incomes }) {
+export function updateActivity(db, id, { title, note, plan_ids, planned_date, planned_start, planned_minutes, repeat, repeat_until, theme, keep_conflict, preset_expenses, preset_incomes, place_id, depth }) {
   const a = db.activities.find((x) => x.id === id);
   if (!a) return fail('活动不存在');
   if (!title || !title.trim()) return fail('活动名称必填');
@@ -718,6 +742,15 @@ export function updateActivity(db, id, { title, note, plan_ids, planned_date, pl
     a.planned_date = planned_date || fallbackSeriesDate(a);
   }
   if (planned_minutes !== undefined) a.planned_minutes = Number(planned_minutes) || 0;
+  // 地点约束：'' / null 表示解除约束（任何地点可行）；显式提供且非法 id 则拒绝
+  if (place_id !== undefined) {
+    if (place_id !== null && place_id !== '' && !(db.places || []).some((p) => p.id === place_id)) {
+      return fail('地点不存在');
+    }
+    a.place_id = place_id || null;
+  }
+  // 深度专注：true/false 显式覆盖，null 回落自动判定（planned_minutes ≥ 45）
+  if (depth !== undefined) a.depth = depth === true ? true : (depth === false ? false : null);
   // 时间窗被触碰 → 重跑原子性（顺延或按 keep_conflict 捆绑；挪走则自动解除旧捆绑）
   if (planned_start !== undefined || planned_minutes !== undefined) {
     atom = applyAtomicity(db, a, { keepConflict: !!keep_conflict });
@@ -1156,6 +1189,8 @@ export function updateSeries(db, id, scope, payload) {
       theme: payload.theme !== undefined ? payload.theme : a.theme,
       keep_conflict: payload.keep_conflict,
       preset_expenses: payload.preset_expenses, preset_incomes: payload.preset_incomes,
+      place_id: payload.place_id !== undefined ? payload.place_id : a.place_id,
+      depth: payload.depth !== undefined ? payload.depth : a.depth,
     });
     if (!r.ok) return r;
     const ex = db.activities[db.activities.length - 1];
@@ -1240,6 +1275,70 @@ export function setActivityStatus(db, id, next) {
   a.status = next;
   if (!OCCUPY_STATUSES.includes(next)) cleanConflictsFor(db, id); // B6：离开时间线即解除全部捆绑
   return ok();
+}
+
+// 本地日键（不补零，与日记/日历同款）
+function dayKeyOfMs(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+function normDayKey(s) {
+  const m = String(s || '').match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  return m ? `${+m[1]}-${+m[2]}-${+m[3]}` : null;
+}
+// 日键 → 可比较的整数（YYYYMMDD）。必须走数值：'2026-11-9' 与 '2026-11-10'
+// 的字符串序是反的（'9' > '1'），直接用 compareTo/localeCompare 会把昨天判成未来。
+function dayKeyNum(s) {
+  const m = String(s || '').match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  return m ? (+m[1]) * 10000 + (+m[2]) * 100 + (+m[3]) : null;
+}
+
+/**
+ * 到期自动进入「进行中」：活动页每次进入时扫一遍。
+ *   · 到期：planned_start 已过当前时刻（有钟点的那种固定日程）
+ *   · 超期：planned_date 早于今天（昨天没做完、延期留下来的）
+ * 只处理 Planned；被预算冻结的计划跳过（与 startActivity 的硬约束一致）。
+ * 不伪造 actual_start——它表示「真的开始计时」，自动切换只是承认已到期。
+ * @returns {{ok:true, count:number, ids:string[]}}
+ */
+export function autoStartDue(db, now = Date.now()) {
+  const todayNum = dayKeyNum(dayKeyOfMs(now));
+  const ids = [];
+  for (const a of db.activities || []) {
+    if (!a || a.status !== 'Planned') continue;
+    if (!checkTransition(ACTIVITY_TRANSITIONS, a.status, 'Started')) continue;
+    if (anyPlanBlocked(db, a.plan_ids)) continue;
+    const startMs = parseDt(a.planned_start);
+    const byClock = !!startMs && startMs <= now;
+    const dayNum = dayKeyNum(normDayKey(a.planned_date) || (a.planned_start ? normDayKey(a.planned_start) : null));
+    const byDate = dayNum !== null && dayNum < todayNum;
+    if (!byClock && !byDate) continue;
+    a.status = 'Started';
+    pruneStaleConflicts(db, a); // 进入进行中即离开可捆绑池
+    ids.push(a.id);
+  }
+  return ok({ count: ids.length, ids });
+}
+
+/**
+ * 「未指派时间」的活动：既没有具体时段（planned_start），也没有排到某天（planned_date）。
+ * 这些是「规划好了但还没排进日程」的积压项，供排程面板一次性排满。
+ */
+export function unscheduledActivities(db) {
+  return (db.activities || []).filter((a) => a
+    && a.status === 'Planned'
+    && !a.planned_start
+    && !a.planned_date);
+}
+
+/** 超期延留：有排期但早于今天、仍未完成（不含归档/失败） */
+export function overdueActivities(db, now = Date.now()) {
+  const todayNum = dayKeyNum(dayKeyOfMs(now));
+  return (db.activities || []).filter((a) => {
+    if (!a || !['Planned', 'Started'].includes(a.status)) return false;
+    const dayNum = dayKeyNum(normDayKey(a.planned_date) || (a.planned_start ? normDayKey(a.planned_start) : null));
+    return dayNum !== null && dayNum < todayNum;
+  });
 }
 
 // 已开始活动的顺延（服务层定时任务调用）：把 Started 活动的固定窗口整体搬到 now，

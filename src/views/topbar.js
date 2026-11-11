@@ -64,6 +64,7 @@ export function renderTabs(App) {
   const items = [
     { id: 'overview', label: '活动' },
     { id: 'finance', label: '资源' },
+    { id: 'diary', label: '日记' },
     { id: 'goals', label: '目标与计划' },
     { id: 'stats', label: '统计' },
   ];

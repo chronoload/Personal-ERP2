@@ -3,12 +3,13 @@
 // 装配根：db(store) + engine(domain) + views(ui) → window.App
 // 自包含单机应用：无后端，数据在 localStorage。
 // ============================================================
-import { loadDB, saveDB, resetDB, ensureSeq, normalizeDB } from './store/db.js';
+import { loadDB, saveDB, resetDB, ensureSeq, normalizeDB, initErpFileSync, flushErpFile, setExternalChangeHandler } from './store/db.js';
 import { Prefs } from './store/prefs.js';
 import { bgStyle } from './ui/themes.js';
 import { openModal, toast, esc, fmtNum } from './ui/helpers.js';
 import * as engine from './domain/engine.js';
 import { Widget } from './services/widget.js';
+import { LockScreen } from './services/lockScreen.js';
 import { System } from './services/system.js';
 import { Notifications } from './services/notifications.js';
 import { Backup } from './services/backup.js';
@@ -17,6 +18,7 @@ import { Sync } from './services/sync.js';
 import { ICS } from './services/ics.js';
 import { AutoPilot } from './services/autoPilot.js';
 import { ErrorLog } from './services/errorLog.js';
+import { Geo } from './services/geo.js';
 import * as AlarmService from './services/alarm.js';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
@@ -68,8 +70,25 @@ function widgetSnapshot(App) {
   };
 }
 
-const TAB_VIEWS = { overview, finance, goals, stats };
-const TAB_ORDER = ['overview', 'finance', 'goals', 'stats'];
+// 日记页懒加载：Vditor 整包只在首次进入「日记」Tab 时拉取，首屏不再背负它
+let diaryMod = null;
+const diaryLazy = {
+  render(App, el) {
+    if (diaryMod) return diaryMod.render(App, el);
+    el.innerHTML = '<div class="card"><div class="muted" style="padding:12px">加载日记编辑器…</div></div>';
+    import('./views/diary.js').then((m) => {
+      diaryMod = m;
+      m.render(App, el);
+    }).catch((e) => {
+      el.innerHTML = `<div class="card"><div class="fb warn">日记页加载失败：${esc(e && e.message || e)}</div></div>`;
+    });
+  },
+  refresh() { if (diaryMod && diaryMod.refresh) diaryMod.refresh(); },
+};
+
+const TAB_VIEWS = { overview, diary: diaryLazy, finance, goals, stats };
+// 日记放在「资源」之后：先看账户，再用叙述记录当天（资源 → 日记 → 目标）
+const TAB_ORDER = ['overview', 'finance', 'diary', 'goals', 'stats'];
 
 // ---- Tab 视图缓存（初次懒加载 + 持久容器）----
 // 每个 tab 一个永久容器：首次进入才渲染（懒加载），切回只切换显隐、不重建。
@@ -112,6 +131,17 @@ function renderViewInto(App, id) {
 
 // 激活指定 tab：首次懒渲染，之后只显隐；forceRenderId 命中时强制重建（数据刷新）
 function activateTab(App, id) {
+  // 活动页每次进入：先把「到期 / 超期」的活动推进到进行中（再渲染，避免闪一下旧状态）
+  if (id === 'overview') {
+    try {
+      const r = engine.autoStartDue(App.db, Date.now());
+      if (r.ok && r.count) {
+        saveDB(App.db);
+        forceRenderId = 'overview'; // 数据已变，强制重建当前视图
+        toast(`${r.count} 个到期活动已自动进入进行中`, 'info');
+      }
+    } catch (e) { /* 扫描失败不阻塞渲染 */ }
+  }
   const c = viewContainer(id);
   const mustForce = forceRenderId === id;
   if (forceRenderId) forceRenderId = null;
@@ -134,9 +164,9 @@ const App = {
   tab: 'overview',
   tabOrder: TAB_ORDER, // 全局 Tab 序（overview 轮播右边界滑入「下一个 Tab」用，勿再硬编码）
   // 系统服务接口（预留：小组件 / 系统提示 / 系统通知 / 备份）
-  widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS,
+  widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS, geo: Geo, lockScreen: LockScreen,
   // 视图扁平暴露给内联 handler（App.calendar.open() 等）
-  overview, finance, goals, stats, calendar, timer, dayGuide, hud, reportSlides,
+  overview, diary: diaryLazy, finance, goals, stats, calendar, timer, dayGuide, hud, reportSlides,
   setTab(id) { this.tab = id; this.render(true); window.scrollTo({ top: 0 }); },
   // 统一启动入口：撞上捆绑冲突时弹三选一仲裁（先做这个 / 让对方先 / 取消）
   startAct(id) {
@@ -211,7 +241,10 @@ const App = {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', dark ? '#131722' : '#f4f5f7');
     // Vditor 编辑器背景即时跟随（编辑器常驻缓存，不重建；setTheme 切换 vditor--dark 类）
+    // 两个编辑器各自注册钩子：活动工作台（__wsApplyTheme）+ 日记页（__diaryApplyTheme）。
+    // 二者共用同一个 Vditor 实例池但归属不同视图，所以不能只广播一个。
     if (window.__wsApplyTheme) { try { window.__wsApplyTheme(dark); } catch (e) { /* 忽略 */ } }
+    if (window.__diaryApplyTheme) { try { window.__diaryApplyTheme(dark); } catch (e) { /* 忽略 */ } }
   },
   // 刷新保留滚动位置，避免点击后页面跳顶/脱离焦点；不重放入场动画。
   // 置 forceRenderId：本次渲染强制重建当前 tab（数据刷新），其余 tab 容器保持不变缓存。
@@ -289,6 +322,7 @@ const App = {
     AlarmService.syncAlarms(this.db);        // 日程提醒闹钟：为 Planned 活动到点响铃（diff 幂等）
     syncTopbarDock();                         // 上部布局：顶栏紧凑 / 侧边栏 / 完全收起
     hud.refresh();                            // HUD 侧边栏数据同步（仅开启时渲染）
+    Geo.sync(this.db);                        // 地点变更 → 幂等重注册原生围栏（无变化直接跳过）
   },
 };
 
@@ -336,6 +370,20 @@ function syncTopbarDock() {
 
 window.App = App;
 App.errorLogExport = () => ErrorLog.export(); // 渲染降级卡片的日志导出入口（只挂一次）
+
+// 地理围栏对账：原生事件到达 / App 回前台时排空队列，按序更新 currentPlaceId。
+// Doze 或进程被杀期间的事件落在原生 SharedPreferences 队列里，不会丢。
+Geo.listen(() => {
+  Geo.reconcile(App.db).then((r) => { if (r) App.refresh(); }).catch(() => {});
+});
+System.onResume(() => {
+  Geo.reconcile(App.db)
+    .then((r) => { if (r) App.refresh(); })
+    .catch(() => {})
+    .finally(() => Geo.sync(App.db));
+});
+Geo.reconcile(App.db).then((r) => { if (r) App.refresh(); }).catch(() => {});
+Geo.sync(App.db);
 
 // Android 硬件返回键闭环：返回键优先逐层退出浮层（弹窗 → 引导 → 计时 → 确认/提示/推荐条），
 // 再回退 Tab（非首页 → 首页），最后才退出应用。没有它，任何弹窗打开时按返回 = 直接杀掉 App。
@@ -394,11 +442,18 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sync
 timer.restore();
 timer.restoreNative();
 
-// 桌面小组件点击跳转：MainActivity 触发 window 事件，切到对应 Tab（fresh=直接弹新建）
+// 桌面小组件点击跳转：MainActivity 触发 window 事件，切到对应 Tab（fresh=直接弹新建，date=预填日期）
 window.addEventListener('erpLaunchTab', (e) => {
   const d = e.detail || {};
   if (d.tab && TAB_ORDER.includes(d.tab)) App.setTab(d.tab);
-  if (d.fresh) setTimeout(() => overview.openActModal(), 350);
+  if (d.fresh) {
+    const pad = (k) => {
+      const m = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(k || ''));
+      return m ? `${m[1]}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}` : null;
+    };
+    const start = pad(d.date) ? `${pad(d.date)}T09:00` : null;
+    setTimeout(() => overview.openActModal(null, null, start), 350);
+  }
 });
 
 // 系统深浅偏好变化：仅「跟随系统」模式实时切换，手动选择后不打扰
@@ -409,10 +464,33 @@ window.addEventListener('erpLaunchTab', (e) => {
   else if (mq.addListener) mq.addListener(onChange);
 })();
 
+// 桌面 Tauri：启用 erp-db.json 文件后端（外部程序 / 定时任务热加载）。
+// 启动时若 erp-db.json 存在（MCP 已写入微信巡检事项），用其覆盖内存库并刷新；
+// 之后每 5s 轮询，外部改动自动并入并热刷新 UI。web / 原生环境自动跳过（isTauri 为 false）。
+setExternalChangeHandler(() => App.render(false));
+initErpFileSync()
+  .then(async (fileDb) => {
+    if (fileDb) { App.db = fileDb; App.render(false); }
+    // 安卓：外部访问开关打开时，启动即拉起本机 MCP 端点（开关即启停，与设置页同一语义）
+    if (App.db.mcp && App.db.mcp.enabled && App.sync.nativeAvailable()) {
+      const flushed = await flushErpFile(App.db);
+      if (!flushed) console.warn('[mcp] erp-db.json 写入失败，端点可能读不到数据');
+      try {
+        const r = await App.sync.startServer(6920);
+        if (r && r.ok) console.info(`[mcp] 已启动：http://${r.ip}:${r.port}/mcp`);
+        else console.warn('[mcp] 启动失败：', r && r.error);
+      } catch (e) { console.warn('[mcp] 启动异常：', e); }
+    }
+  })
+  .catch((e) => console.error('[erp-file] 引导失败，回落 localStorage：', e));
+
 App.render(true);
 
 // 新一天引导：每天首次启动弹出（模块内部自带「当天已展示」与「未初始化」短路）
 dayGuide.maybeShow(App);
+
+// 待排程面板：每个 App 进程启动后自动弹一次（有「未指派时间」的活动才弹；有别的模态时排队）
+overview.maybeOpenSchedulerBoard();
 
 // 自动驾驶巡检：到点询问 / 提前提醒 / 收尾超时提示（模块内自带防重入与静默纪律）
 AutoPilot.start(App);

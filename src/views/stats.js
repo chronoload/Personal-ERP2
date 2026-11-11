@@ -9,6 +9,7 @@ import { Prefs } from '../store/prefs.js';
 import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL } from '../ui/themes.js';
 import { ErrorLog } from '../services/errorLog.js';
 import { buildReport, REPORT_MODULES, REPORT_MODULE_LABEL, periodRange } from '../domain/report.js';
+import { flushErpFile } from '../store/db.js';
 
 // ---------- 全局外观主题（图片 / 渐变） ----------
 export function setGlobalTheme(theme) {
@@ -128,6 +129,15 @@ export async function syncStop() {
   const r = await App.sync.stopServer();
   toast(r.ok ? '服务已停止' : r.error, r.ok ? 'ok' : 'err');
   App.refresh();
+}
+
+// 锁屏 · 开屏：立即发一条预览通知（开启全屏且系统允许时会盖在锁屏上）
+export async function lockPreview() {
+  const r = await App.lockScreen.preview();
+  if (!r || r.ok === false) {
+    return toast((r && r.error) || '先打开「常驻锁屏通知」再预览', 'warn');
+  }
+  toast(r.canFullScreen ? '已发送预览（本次会尝试整页开屏）' : '已发送预览；系统未允许全屏通知，仅显示通知', 'ok');
 }
 
 export async function syncPush() {
@@ -487,8 +497,44 @@ export function render(App, el) {
     <div class="card">
       <div class="card-head"><h3>桌面小组件</h3><span class="muted">安卓 AppWidget · 当日日程 / 资源状态 / 目标与计划（需在安卓桌面添加）</span></div>
       <label class="row-gap" style="align-items:center"><input type="checkbox" id="w-enabled" ${App.widget.enabled() ? 'checked' : ''}> 启用桌面小组件（关闭可恢复未改前的稳态）</label>
+      <label class="row-gap" style="align-items:center;margin-top:6px"><input type="checkbox" id="w-home" ${App.widget.homeEnabled() ? 'checked' : ''}> 开屏首页 · 今日日程大片（显示今日安排，点「＋ 添加今日日程」直达新建）</label>
       <label class="row-gap" style="align-items:center;margin-top:6px"><input type="checkbox" id="w-dark" ${prefs.widgetDark ? 'checked' : ''}> 深色主题（添加小组件时也可在配置页选择）</label>
       <div class="muted" style="margin-top:6px">点击小组件任意行可直接跳转 App 对应页面；当日日程显示每项已计时长。</div>
+      <div class="muted" style="margin-top:10px;line-height:1.7">
+        <b>可添加的组件</b>（长按桌面 → 小组件 → 本应用，按名字排序）：<br>
+        ERP · 当日日程（紧凑 4×1）· ERP · 今日开屏（大卡 4×4）<br>
+        ERP · 任务倒计时（盯时间点）· ERP · 专注停表（25/45 分一键开跑）<br>
+        ERP · 资源余额 · ERP · 目标进度 · ERP · 物品库存<br>
+        添加时系统会展示每个组件的真实布局预览。
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>锁屏 · 开屏</h3><span class="muted">常驻通知 + 亮屏整页 · 每天 07:00 自动更新</span></div>
+      ${App.sync.nativeAvailable() ? `
+      <label class="row-gap" style="align-items:center"><input type="checkbox" id="lock-enabled" ${App.lockScreen.enabled() ? 'checked' : ''}> 常驻锁屏通知：显示今天的安排与待办数</label>
+      <label class="row-gap" style="align-items:center;margin-top:6px"><input type="checkbox" id="lock-full" ${App.lockScreen.full() ? 'checked' : ''}> 亮屏时整页展示今日日程（系统未允许「全屏通知」时自动降级为通知）</label>
+      <div class="row-gap" style="margin-top:8px">
+        <button class="btn sm" onclick="App.stats.lockPreview()">👀 预览一次</button>
+        <span class="muted">通知里可直接点「＋ 添加今日日程」</span>
+      </div>
+      <div class="callout" style="margin-top:8px">Android 14+ 需在系统设置里允许本应用「全屏通知」，否则只在锁屏显示通知卡片。锁屏内容默认公开，介意可在系统通知设置里改为隐藏内容。</div>
+      ` : '<div class="muted">仅安卓 App 内生效。</div>'}
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>外部访问 · MCP / 脚本</h3><span class="muted">默认关闭 · 开启后只能读 + 追加写，不改历史</span></div>
+      <label class="row-gap" style="align-items:center">
+        <input type="checkbox" id="mcp-enable" ${App.db.mcp && App.db.mcp.enabled ? 'checked' : ''}>
+        启用外部访问（模型工具 / 脚本可读写 erp-db.json）
+      </label>
+      <div class="muted" style="margin-top:6px">关闭时：MCP 服务拒绝一切工具调用，App 也不再把外部写入合并进内存库（脚本逻辑整体封闭）。</div>
+      <div class="callout" style="margin-top:8px">
+        ${App.sync.nativeAvailable()
+          ? '安卓：打开开关后会在 6920 端口自动启动本机 MCP 端点，模型客户端用 <code>http://&lt;手机IP&gt;:6920/mcp</code> 连接（Streamable HTTP，需同一局域网）。'
+          : '数据文件：<code>%LOCALAPPDATA%\\com.personal.erp.desktop\\erp-db.json</code>（桌面端）<br>命令行：<code>node mcp/server.mjs tools</code> · MCP：<code>node mcp/server.mjs --mcp</code>'}
+      </div>
+      <div class="muted" style="margin-top:6px">开关状态写在数据文件里，外部脚本读到 <code>mcp.enabled=false</code> 后立即自我封闭。</div>
     </div>
 
     <div class="card">
@@ -564,9 +610,57 @@ export function render(App, el) {
   const wcb = el.querySelector('#w-enabled');
   if (wcb) wcb.addEventListener('change', () => { App.widget.setEnabled(wcb.checked); App.widget.refreshNative(); toast(wcb.checked ? '已启用小组件' : '已关闭小组件', 'ok'); });
 
+  // 外部访问开关（MCP / 脚本）：开启需确认；状态写进 db.mcp，随 erp-db.json 落盘供外部脚本读取
+  const mcpCb = el.querySelector('#mcp-enable');
+  if (mcpCb) mcpCb.addEventListener('change', async () => {
+    if (mcpCb.checked) {
+      const ok = await App.system.confirm({
+        title: '开启外部访问',
+        message: '外部 MCP / 脚本将可以读取 erp-db.json 并追加写入（新增目标 / 计划 / 活动 / 流水 / 日记）。不能修改或删除已有内容。确定开启？',
+      });
+      if (!ok) { mcpCb.checked = false; return; }
+    }
+    App.db.mcp = { enabled: mcpCb.checked, updatedAt: Date.now() };
+    App.refresh();
+    toast(mcpCb.checked ? '外部访问已开启' : '外部访问已关闭，脚本写入将被拒绝', 'ok');
+    // 安卓：开关即启停本机 MCP 端点（桌面端由外部进程自行启动）
+    if (App.sync.nativeAvailable()) {
+      if (mcpCb.checked) {
+        const flushed = await flushErpFile(App.db);
+        if (!flushed) toast('数据文件写入失败，MCP 可能读不到数据', 'warn');
+        const r = await App.sync.startServer(6920);
+        if (r && r.ok) toast(`MCP 已启动：http://${r.ip}:${r.port}/mcp`, 'ok');
+        else toast((r && r.error) || 'MCP 服务启动失败', 'err');
+      } else {
+        await App.sync.stopServer();
+      }
+    }
+  });
+
   // 小组件深色主题
   const wdark = el.querySelector('#w-dark');
   if (wdark) wdark.addEventListener('change', () => { App.widget.setDarkTheme(wdark.checked); toast(wdark.checked ? '小组件已切换为深色' : '小组件已切换为浅色', 'ok'); });
+
+  // 开屏首页 · 今日日程大片：开关即刷新原生卡片（关闭后只显示提示，不读数据）
+  const whome = el.querySelector('#w-home');
+  if (whome) whome.addEventListener('change', async () => {
+    await App.widget.setHomeEnabled(whome.checked);
+    toast(whome.checked ? '开屏首页卡片已启用' : '开屏首页卡片已关闭', 'ok');
+  });
+
+  // 锁屏 · 开屏：常驻通知 / 亮屏整页
+  const lockEnable = el.querySelector('#lock-enabled');
+  if (lockEnable) lockEnable.addEventListener('change', async () => {
+    const r = await App.lockScreen.set({ enabled: lockEnable.checked });
+    if (r && r.ok === false && r.error) toast(r.error, 'err');
+    else toast(lockEnable.checked ? '已开启锁屏常驻通知（每天 07:00 更新）' : '已关闭锁屏通知', 'ok');
+  });
+  const lockFull = el.querySelector('#lock-full');
+  if (lockFull) lockFull.addEventListener('change', async () => {
+    const r = await App.lockScreen.set({ full: lockFull.checked });
+    if (r && r.ok === false && r.error) toast(r.error, 'err');
+    else toast(lockFull.checked ? '亮屏时将整页展示今日日程' : '亮屏时只保留锁屏通知', 'ok');
+  });
 
   // 上部整体布局：顶栏紧凑 / 左 / 右 / 完全收起
   el.querySelectorAll('[data-topbar-mode] input[name="topbar-mode"]').forEach((r) => {

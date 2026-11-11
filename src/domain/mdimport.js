@@ -121,7 +121,7 @@ function parseWhen(cmd, now) {
 // 解析活动行（标题 + @指令 + (计划) + 状态标记 + #标签）。
 // 指令顺序宽容：先分离 @ 指令（cmd），再从标题部分按任意顺序剥离
 // (计划) / 状态(进行中|失败|归档) / #标签 —— 避免指令混入活动名。
-function parseActLine(raw, { defaultPlan, defaultMinutes, now }) {
+export function parseActLine(raw, { defaultPlan, defaultMinutes, now }) {
   const out = { title: raw.trim(), note: '', planned_start: null, clock: null, minutes: defaultMinutes || null, planTitle: null, statusMark: null, warnings: [] };
   const strip = (s) => {
     // 循环剥离行尾指令（任意顺序）：(进行中|失败|归档) / (计划) / #标签 / ；备注 —— 避免混入活动名

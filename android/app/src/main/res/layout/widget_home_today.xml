@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 开屏首页 · 今日日程（大卡片）：日期/待办概览 + 最多 6 条今日安排 + 底部「＋ 添加今日日程」直达新建 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_home_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_home_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="今日日程"
+            android:textColor="#202631"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_home_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#6B7482"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_home_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="今日还没有安排"
+        android:textColor="#9AA3B2"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:id="@+id/widget_home_row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_home_glyph1"
+            android:layout_width="18dp"
+            android:layout_height="wrap_content"
+            android:text="○"
+            android:textColor="#4A7FBF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/widget_home_time1"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#6B7482"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_home_txt1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="#1F2430"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_home_row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_home_glyph2"
+            android:layout_width="18dp"
+            android:layout_height="wrap_content"
+            android:text="○"
+            android:textColor="#4A7FBF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/widget_home_time2"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#6B7482"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_home_txt2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="#1F2430"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_home_row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_home_glyph3"
+            android:layout_width="18dp"
+            android:layout_height="wrap_content"
+            android:text="○"
+            android:textColor="#4A7FBF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/widget_home_time3"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#6B7482"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_home_txt3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="#1F2430"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_home_row4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_home_glyph4"
+            android:layout_width="18dp"
+            android:layout_height="wrap_content"
+            android:text="○"
+            android:textColor="#4A7FBF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/widget_home_time4"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#6B7482"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_home_txt4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="#1F2430"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_home_row5"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_home_glyph5"
+            android:layout_width="18dp"
+            android:layout_height="wrap_content"
+            android:text="○"
+            android:textColor="#4A7FBF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/widget_home_time5"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#6B7482"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_home_txt5"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="#1F2430"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_home_row6"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_home_glyph6"
+            android:layout_width="18dp"
+            android:layout_height="wrap_content"
+            android:text="○"
+            android:textColor="#4A7FBF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/widget_home_time6"
+            android:layout_width="46dp"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#6B7482"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_home_txt6"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:text=""
+            android:textColor="#1F2430"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_home_add"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_add_bg"
+        android:gravity="center"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp"
+        android:text="＋ 添加今日日程"
+        android:textColor="#4A7FBF"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

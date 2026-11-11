@@ -42,5 +42,13 @@ public class BootReceiver extends BroadcastReceiver {
         }
       } catch (Exception ignored) {}
     }
+    // 锁屏常驻通知：重启后系统会清掉通知，重新发一条并排下一次每日更新
+    try {
+      if (com.personal.erp.widget.WidgetStore.isLockEnabled(context)) {
+        com.personal.erp.lockscreen.LockScreenNotifier.ensureChannel(context);
+        com.personal.erp.lockscreen.LockScreenNotifier.scheduleDaily(context);
+        com.personal.erp.lockscreen.LockScreenNotifier.post(context, false);
+      }
+    } catch (Exception ignored) {}
   }
 }

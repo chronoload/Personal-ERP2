@@ -43,18 +43,27 @@ public class TodayWidgetProvider extends AppWidgetProvider {
       for (int i = 1; i <= 4; i++) hideRow(ctx, rv, i);
       bindOpen(ctx, rv, R.id.widget_today_empty);
     } else {
-      JSONArray today = WidgetStore.getActivitiesForToday(db);
-      int n = today.length();
-      int pending = 0;
+      JSONArray board = WidgetStore.getBoard(db);
+      int n = board.length();
+      int todayCount = 0;
       for (int i = 0; i < n; i++) {
-        JSONObject x = today.optJSONObject(i);
-        String st = x != null ? x.optString("status", "") : "";
-        if (!"Completed".equals(st) && !"Reviewed".equals(st) && !"Archived".equals(st)) pending++;
+        JSONObject it = board.optJSONObject(i);
+        if (it != null && "today".equals(it.optString("kind"))) todayCount++;
       }
-      rv.setTextViewText(R.id.widget_today_title,
-          n == 0 ? "当日日程 · 全部完成 🎉" : "当日日程 " + done(n, pending));
+      int runningN = WidgetStore.boardRunningCount(board);
+      int pendingN = WidgetStore.boardPendingCount(board);
+      int backlog = WidgetStore.backlogCount(db);
+      String title;
+      if (n == 0) title = "当日日程";
+      else if (runningN > 0) title = pendingN > 0 ? "进行中 " + runningN + " · 待办 " + pendingN : "进行中 " + runningN;
+      else if (pendingN == 0 && todayCount == 0) title = "今日无安排 · 待排 " + backlog;
+      else if (pendingN == 0) title = backlog > 0 ? "今日已完成 · 待排 " + backlog : "今日已完成 🎉";
+      else title = "当日日程 " + done(todayCount, pendingN);
+      rv.setTextViewText(R.id.widget_today_title, title);
 
       if (n == 0) {
+        // 真正空：今天没任务、也没有待排/延期 → 只给添加引导
+        rv.setTextViewText(R.id.widget_today_empty, "快来添加今天的日程 →");
         rv.setViewVisibility(R.id.widget_today_empty, View.VISIBLE);
         for (int i = 1; i <= 4; i++) hideRow(ctx, rv, i);
         bindOpen(ctx, rv, R.id.widget_today_empty);
@@ -62,8 +71,8 @@ public class TodayWidgetProvider extends AppWidgetProvider {
         rv.setViewVisibility(R.id.widget_today_empty, View.GONE);
         int show = Math.min(4, n);
         for (int i = 0; i < 4; i++) {
-          JSONObject a = i < show ? today.optJSONObject(i) : null;
-          renderRow(ctx, rv, i + 1, a, dark);
+          JSONObject it = i < show ? board.optJSONObject(i) : null;
+          renderRow(ctx, rv, i + 1, it, dark);
         }
       }
     }
@@ -82,25 +91,37 @@ public class TodayWidgetProvider extends AppWidgetProvider {
     return pending == 0 ? "" : "（待办 " + pending + "/" + n + "）";
   }
 
-  /** 单行渲染：act=状态圆钮（Planned 可点开始），txt=时间+标题+计时 */
-  private static void renderRow(Context ctx, RemoteViews rv, int pos, JSONObject a, boolean dark) {
+  /** 单行渲染：act=状态圆钮（today 且 Planned 可点开始），txt=时间+标题+计时 */
+  private static void renderRow(Context ctx, RemoteViews rv, int pos, JSONObject item, boolean dark) {
     int row = rowId(ctx, pos), act = actId(ctx, pos), txt = txtId(ctx, pos);
+    if (item == null) { hideRow(ctx, rv, pos); return; }
+    String kind = item.optString("kind", "today");
+    JSONObject a = item.optJSONObject("act");
     if (a == null) { hideRow(ctx, rv, pos); return; }
 
     String status = a.optString("status", "Planned");
-    String time = extractTime(a.optString("planned_start", ""));
+    String time = extractTime(WidgetStore.clockOf(a));
     String title = a.optString("title", "—");
     int tracked = WidgetStore.trackedMinutes(a);
     StringBuilder line = new StringBuilder();
     if (!time.isEmpty()) line.append(time).append("  ");
+    // 非今日项加来源前缀，避免误以为是今天的任务
+    if ("running".equals(kind)) line.append("● 进行中 · ");
+    else if ("overdue".equals(kind)) line.append("↩ 延期 · ");
+    else if ("unscheduled".equals(kind)) line.append("· 待排 · ");
     line.append(title);
     if (tracked > 0) line.append("  ⏱").append(tracked).append("m");
 
     String glyph; int color; boolean canStart = false;
-    switch (status) {
-      case "Started": glyph = "●"; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; break;
-      case "Completed": case "Reviewed": case "Archived": glyph = "✓"; color = dark ? 0xFF8A93A3 : 0xFF9AA3B2; break;
-      default: glyph = "▶"; color = dark ? 0xFF8FB8E8 : 0xFF4A7FBF; canStart = true; break;
+    if ("running".equals(kind) || "Started".equals(status)) { glyph = "●"; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; }
+    else if ("overdue".equals(kind)) { glyph = "↩"; color = dark ? 0xFFE0B27A : 0xFFC8892F; }
+    else if ("unscheduled".equals(kind)) { glyph = "·"; color = dark ? 0xFFA8B0BD : 0xFF8A93A3; }
+    else {
+      switch (status) {
+        case "Started": glyph = "●"; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; break;
+        case "Completed": case "Reviewed": case "Archived": glyph = "✓"; color = dark ? 0xFF8A93A3 : 0xFF9AA3B2; break;
+        default: glyph = "▶"; color = dark ? 0xFF8FB8E8 : 0xFF4A7FBF; canStart = true; break;
+      }
     }
 
     rv.setViewVisibility(row, View.VISIBLE);

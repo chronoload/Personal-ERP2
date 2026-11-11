@@ -1,0 +1,21 @@
+{
+  "name": "personal-erp-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal ERP · Tauri 2 桌面壳（标准窗口承载完整前端）",
+  "scripts": {
+    "build:app": "tauri build",
+    "build:exe": "tauri build --target nsis",
+    "build:debug": "tauri build --debug",
+    "dev": "tauri dev",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-notification": "^2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

@@ -134,6 +134,32 @@ public class WidgetPlugin extends Plugin {
     call.resolve(ret);
   }
 
+  /** 开屏首页 · 今日日程卡片开关：写进 prefs 供 Provider 读取，并立即刷新已添加的实例 */
+  @PluginMethod
+  public void setHomeTodayEnabled(PluginCall call) {
+    try {
+      Boolean v = call.getBoolean("enabled");
+      boolean on = v == null || v;
+      SharedPreferences sp = getContext().getSharedPreferences(WidgetKeys.PREFS_FILE, Context.MODE_PRIVATE);
+      String raw = sp.getString(WidgetKeys.KEY_PREFS, null);
+      org.json.JSONObject o;
+      try { o = raw != null ? new org.json.JSONObject(raw) : new org.json.JSONObject(); } catch (Exception e) { o = new org.json.JSONObject(); }
+      o.put("homeTodayWidget", on);
+      sp.edit().putString(WidgetKeys.KEY_PREFS, o.toString()).apply();
+      refreshAll();
+      JSObject ret = new JSObject();
+      ret.put("enabled", on);
+      call.resolve(ret);
+    } catch (Exception e) { call.reject(e.getMessage()); }
+  }
+
+  @PluginMethod
+  public void getHomeTodayEnabled(PluginCall call) {
+    JSObject ret = new JSObject();
+    ret.put("enabled", WidgetStore.isHomeTodayEnabled(getContext()));
+    call.resolve(ret);
+  }
+
   // 计时器跨进程锚点：写入原生 SharedPreferences，抗 WebView 数据清理；
   // 独立键、不 bump rev、不刷新小组件（纯 App 侧恢复用）。
   @PluginMethod
@@ -180,9 +206,14 @@ public class WidgetPlugin extends Plugin {
   private void refreshAll() {
     AppWidgetManager mgr = AppWidgetManager.getInstance(getContext());
     refreshOne(mgr, TodayWidgetProvider.class);
+    refreshOne(mgr, HomeTodayWidgetProvider.class);
     refreshOne(mgr, ResourcesWidgetProvider.class);
     refreshOne(mgr, GoalsWidgetProvider.class);
     refreshOne(mgr, GoodsWidgetProvider.class);
+    refreshOne(mgr, CountdownWidgetProvider.class); // 倒计时跟随任务改期
+    refreshOne(mgr, FocusStopwatchProvider.class);  // 停表独立计时，推送时顺带校正
+    // 锁屏常驻通知跟随同一份数据刷新（未开启时内部直接跳过）
+    try { com.personal.erp.lockscreen.LockScreenNotifier.post(getContext(), false); } catch (Exception ignored) {}
   }
 
   private void refreshOne(AppWidgetManager mgr, Class<?> cls) {
@@ -192,6 +223,12 @@ public class WidgetPlugin extends Plugin {
       if (ids.length == 0) return;
       if (cls == TodayWidgetProvider.class) {
         for (int id : ids) TodayWidgetProvider.updateOne(getContext(), mgr, id);
+      } else if (cls == HomeTodayWidgetProvider.class) {
+        for (int id : ids) HomeTodayWidgetProvider.updateOne(getContext(), mgr, id);
+      } else if (cls == CountdownWidgetProvider.class) {
+        for (int id : ids) CountdownWidgetProvider.updateOne(getContext(), mgr, id);
+      } else if (cls == FocusStopwatchProvider.class) {
+        for (int id : ids) FocusStopwatchProvider.refreshOne(getContext(), id);
       } else if (cls == ResourcesWidgetProvider.class) {
         for (int id : ids) ResourcesWidgetProvider.updateOne(getContext(), mgr, id);
       } else if (cls == GoalsWidgetProvider.class) {

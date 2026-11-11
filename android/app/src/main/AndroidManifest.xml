@@ -36,30 +36,48 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <receiver android:name=".widget.TodayWidgetProvider" android:exported="true">
+        <receiver android:name=".widget.TodayWidgetProvider" android:exported="true" android:label="@string/widget_today_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_today_info" />
         </receiver>
-        <receiver android:name=".widget.ResourcesWidgetProvider" android:exported="true">
+        <receiver android:name=".widget.ResourcesWidgetProvider" android:exported="true" android:label="@string/widget_resources_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_resources_info" />
         </receiver>
-        <receiver android:name=".widget.GoalsWidgetProvider" android:exported="true">
+        <receiver android:name=".widget.GoalsWidgetProvider" android:exported="true" android:label="@string/widget_goals_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_goals_info" />
         </receiver>
-        <receiver android:name=".widget.GoodsWidgetProvider" android:exported="true">
+        <receiver android:name=".widget.GoodsWidgetProvider" android:exported="true" android:label="@string/widget_goods_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.personal.erp.widget.ACTION_CONSUME" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_goods_info" />
+        </receiver>
+        <receiver android:name=".widget.HomeTodayWidgetProvider" android:exported="true" android:label="@string/widget_home_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_home_today_info" />
+        </receiver>
+        <receiver android:name=".widget.CountdownWidgetProvider" android:exported="true" android:label="@string/widget_countdown_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_countdown_info" />
+        </receiver>
+        <receiver android:name=".widget.FocusStopwatchProvider" android:exported="true" android:label="@string/widget_stopwatch_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_stopwatch_info" />
         </receiver>
         <receiver android:name=".widget.WidgetActionReceiver" android:exported="false">
             <intent-filter>
@@ -83,6 +101,25 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+        <receiver android:name=".geofence.GeofenceReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.personal.erp.geofence.EVENT" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".lockscreen.LockScreenDailyReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.personal.erp.lockscreen.DAILY" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name=".lockscreen.LockScreenActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:turnScreenOn="true" />
 
         <activity
             android:name=".widget.WidgetConfigureActivity"
@@ -100,6 +137,13 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- 闹钟生态：精确闹钟（Android 12+ 特殊权限，无则自动降级）+ 锁屏全屏提醒 + 重启恢复 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Android 13+ 自动授予的精确闹钟权限：SCHEDULE_EXACT_ALARM 在 targetSdk 33+ 默认被拒，
+         不补这条会让「到点提醒」退化成 Doze 下的延迟闹钟（表现为到点不响） -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 地理围栏：前台定位用于手动对账；后台定位用于 App 不在前台时收进/出事件 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 </manifest>

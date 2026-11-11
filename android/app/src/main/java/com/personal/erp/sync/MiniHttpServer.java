@@ -32,6 +32,7 @@ public class MiniHttpServer {
   private final int port;
   private ServerSocket server;
   private volatile boolean running = false;
+  private volatile McpEndpoint mcp;
 
   public MiniHttpServer(Context ctx, int port) {
     this.ctx = ctx;
@@ -65,24 +66,31 @@ public class MiniHttpServer {
   private void handle(Socket s) {
     try {
       s.setSoTimeout(5000);
-      BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
-      String line = in.readLine();
-      if (line == null) { s.close(); return; }
-      String[] parts = line.split(" ");
+      // 按字节读：请求头是 ASCII，正文按 Content-Length（字节数）截取再按 UTF-8 解码。
+      // 若用 Reader 按字符读，Content-Length 与字符数不一致（中文多字节）会导致读不满而阻塞超时。
+      java.io.InputStream in = new java.io.BufferedInputStream(s.getInputStream());
+      String firstLine = readLine(in);
+      if (firstLine == null) { s.close(); return; }
+      String[] parts = firstLine.split(" ");
       String method = parts[0];
       String path = parts.length > 1 ? parts[1] : "/";
       int contentLength = 0;
       String h;
-      while ((h = in.readLine()) != null && !h.isEmpty()) {
+      while ((h = readLine(in)) != null && !h.isEmpty()) {
         if (h.toLowerCase().startsWith("content-length:")) {
           contentLength = Integer.parseInt(h.substring(15).trim());
         }
       }
       String body = "";
       if (contentLength > 0) {
-        char[] buf = new char[contentLength];
-        int n = in.read(buf, 0, contentLength);
-        if (n > 0) body = new String(buf, 0, n);
+        byte[] buf = new byte[contentLength];
+        int off = 0;
+        while (off < contentLength) {
+          int n = in.read(buf, off, contentLength - off);
+          if (n <= 0) break;
+          off += n;
+        }
+        body = new String(buf, 0, off, StandardCharsets.UTF_8);
       }
       String resp = route(method, path, body);
       byte[] out = resp.getBytes(StandardCharsets.UTF_8);
@@ -95,12 +103,32 @@ public class MiniHttpServer {
     } catch (Exception ignored) {}
   }
 
+  /** 读一行 ASCII（到 \n，吞掉 \r）；EOF 返回 null */
+  private static String readLine(java.io.InputStream in) throws Exception {
+    StringBuilder sb = new StringBuilder();
+    int c;
+    while ((c = in.read()) != -1) {
+      if (c == '\n') return sb.toString();
+      if (c != '\r') sb.append((char) c);
+    }
+    return sb.length() == 0 ? null : sb.toString();
+  }
+
   private String route(String method, String path, String body) {
     try {
       String p = path.split("\\?")[0];
       boolean force = path.contains("force=1");
       if ("GET".equals(method) && p.equals("/health")) {
         return "{\"ok\":true,\"time\":" + System.currentTimeMillis() + "}";
+      }
+      // MCP 端点（Streamable HTTP 的最简形态：单次 POST → 单次 JSON 响应）
+      if (p.equals("/mcp")) {
+        if (mcp == null) mcp = new McpEndpoint(ctx);
+        if ("GET".equals(method)) {
+          return "{\"ok\":true,\"endpoint\":\"/mcp\",\"protocol\":\"mcp\",\"hint\":\"POST JSON-RPC 2.0 到此地址\"}";
+        }
+        if ("POST".equals(method)) return mcp.handle(body);
+        return "{\"error\":\"method not allowed\"}";
       }
       if ("GET".equals(method) && p.equals("/backup")) {
         File f = latestFile();

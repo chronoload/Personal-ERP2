@@ -6,6 +6,8 @@
     android:targetCellWidth="4"
     android:targetCellHeight="1"
     android:updatePeriodMillis="0"
+    android:previewLayout="@layout/widget_goals"
+    android:description="@string/widget_goals_desc"
     android:initialLayout="@layout/widget_goals"
     android:configure="com.personal.erp.widget.WidgetConfigureActivity"
     android:resizeMode="horizontal|vertical"

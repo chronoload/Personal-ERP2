@@ -21,6 +21,38 @@ export function themeStyle(theme) {
   return null;
 }
 
+// ---------------- 主题校验（纯函数，可单测） ----------------
+const COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+// 允许所有字母（角度单位 deg/turn/grad 里有 d-e-g 之外的字），
+// 真正的注入面由 BAD_CSS 拦截，而不是靠缩小字符白名单。
+const GRADIENT_RE = /^linear-gradient\([0-9a-zA-Z#,.%\s()\/-]+\)$/i;
+const BAD_CSS = /url\s*\(|expression\s*\(|;|["'\\<>]/i;
+
+export function safeGradient(v) {
+  if (typeof v !== 'string' || !v || v.length > 300) return null;
+  if (GRADIENT_RE.test(v) === false) return null;
+  if (BAD_CSS.test(v) || /[\r\n]/.test(v)) return null;
+  const hexes = v.match(/#[0-9a-fA-F]+/g) || [];
+  if ((v.match(/#/g) || []).length !== hexes.length) return null;
+  return hexes.every((h) => COLOR_RE.test(h)) ? v : null;
+}
+
+export function safeTheme(t) {
+  if (!t || typeof t !== 'object') return null;
+  if (t.type === 'gradient') {
+    const v = safeGradient(t.value);
+    return v ? { type: 'gradient', value: v } : null;
+  }
+  if (t.type === 'image') {
+    const url = t.url;
+    if (typeof url === 'string' && url.startsWith('data:image/') && url.length <= 3000000) {
+      return { type: 'image', url };
+    }
+    return null;
+  }
+  return null;
+}
+
 // 全局背景：图片固定铺满（随屏滚动跟随），渐变直接平铺
 export function bgStyle(theme) {
   if (!theme) return null;

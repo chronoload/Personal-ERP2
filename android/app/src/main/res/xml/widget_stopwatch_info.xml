@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 专注停表：4×2；时长预设直接摆在组件上，无需添加配置；主题在配置页选 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_stopwatch"
+    android:previewLayout="@layout/widget_stopwatch"
+    android:description="@string/widget_stopwatch_desc"
+    android:configure="com.personal.erp.widget.WidgetConfigureActivity"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

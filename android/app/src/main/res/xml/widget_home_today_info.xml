@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 开屏首页 · 今日日程（大卡片）：4x4，可纵向拉伸；更新由 App 推送触发 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="180dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
+    android:updatePeriodMillis="0"
+    android:previewLayout="@layout/widget_home_today"
+    android:description="@string/widget_home_desc"
+    android:initialLayout="@layout/widget_home_today"
+    android:configure="com.personal.erp.widget.WidgetConfigureActivity"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

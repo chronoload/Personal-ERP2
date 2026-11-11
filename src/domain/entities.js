@@ -84,7 +84,7 @@ export function nextId(db, key) {
 }
 
 // ---- 通用实体工厂 -----------------------------------------------------
-export function newActivity({ title, note = '', plan_ids = [], planned_date = null, planned_start = null, planned_minutes = 0, repeat = null, repeat_until = null, time_logs = [], theme = null }) {
+export function newActivity({ title, note = '', plan_ids = [], planned_date = null, planned_start = null, planned_minutes = 0, repeat = null, repeat_until = null, time_logs = [], theme = null, place_id = null, depth = null }) {
   return {
     title,
     note,
@@ -97,6 +97,8 @@ export function newActivity({ title, note = '', plan_ids = [], planned_date = nu
     occurrences: [],    // 期次数组（循环容器）：[{ date:'YYYY-M-D', status:'pending'|'done'|'skipped', completedAt? }]
     time_logs,          // 按任务计时 [{ start, end? }]，未关 end 表示运行中
     theme,              // 卡片虚化主题背景：null | {type:'gradient'|'image', value/url}
+    place_id,           // 地点约束：null=任何地点可行；否则须在该地点（排班寻路 / 提醒门控的输入）
+    depth,              // 深度专注：null=按 planned_minutes 自动判定(≥45)；true/false=显式覆盖
     preset_expenses: [],  // 预设支出（多资源，同 Goods.costs）：[{resource_id, amount, note}]
     preset_incomes: [],   // 预设收入（多资源）：[{resource_id, amount, note}]
     conflicts: [],      // 冲突捆绑：显式保留的时间重叠对手 id 列表（执行时仲裁）
@@ -114,16 +116,26 @@ export function newOutput({ title, tags = [], note = '' }) {
   return { title, tags, note, status: 'Draft', created: Date.now() };
 }
 
-export function newPlan({ goal_id, title, budget = null, color = null }) {
+export function newPlan({ goal_id, title, budget = null, color = null, priority = 3, horizonMonths = 3 }) {
   return {
-    goal_id, title, budget, color, status: 'Incubating', created: Date.now(),
+    goal_id, title, budget, color,
+    priority,             // 1=最高 … 5=最低；预算冻结按它排序
+    horizonMonths,        // 规划周期（月）：越长越先被冻结
+    budgetState: 'active', // 资本准入轴：active | frozen（独立于 status 状态机）
+    frozenAt: null,
+    status: 'Incubating', created: Date.now(),
     default_expenses: [], // 计划级默认预设支出（多资源，新建该计划下活动时继承）
     default_incomes: [],  // 计划级默认预设收入（多资源）
   };
 }
 
-export function newGoal({ title, desc = '' }) {
-  return { title, desc, status: 'Active', created: Date.now() };
+export function newGoal({ title, desc = '', color = null, theme = null }) {
+  return {
+    title, desc,
+    color,               // 目标染色：左侧色条 + 计划默认色（null = 不染色）
+    theme,               // 目标卡片背景：null | {type:'gradient'|'image', value/url}（同活动卡片）
+    status: 'Active', created: Date.now(),
+  };
 }
 
 export function newResource({ name, unit = '', initial = 0, color = null }) {

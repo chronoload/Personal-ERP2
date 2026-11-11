@@ -2,7 +2,7 @@
 // 预设收支（多资源，同 Goods.costs）+ 一键完成 + 改账 + 自动失败（TDD）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedDB, normalizeDB } from '../src/store/db.js';
+import { seedDB, normalizeDB, SCHEMA_VERSION } from '../src/store/db.js';
 import * as E from '../src/domain/engine.js';
 import { newActivity, newPlan } from '../src/domain/entities.js';
 import { scanDueEvents } from '../src/domain/schedule.js';
@@ -265,7 +265,7 @@ test('normalizeDB: v2 单资源预设迁移为多资源数组', () => {
     activities: [{ id: 'a1', title: 't', note: '', plan_ids: [], planned_date: null, planned_start: null, planned_minutes: 0, repeat: null, repeat_until: null, time_logs: [], theme: null, preset_expense: { resource_id: 'r1', amount: 3 }, conflicts: [], actual_start: null, actual_end: null, status: 'Planned', created: 0 }],
   };
   normalizeDB(legacy);
-  assert.equal(legacy.schemaVersion, 3);
+  assert.equal(legacy.schemaVersion, SCHEMA_VERSION);
   // 迁移仅做包装（保留原字段），不补 note
   assert.equal(legacy.plans[0].default_expenses.length, 1);
   assert.equal(legacy.plans[0].default_expenses[0].resource_id, 'r1');

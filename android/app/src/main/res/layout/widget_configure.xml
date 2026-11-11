@@ -1,54 +1,142 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 小组件配置页：添加小组件时选择主题（浅色/深色） -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- 小组件配置页：主题（全部）+ 倒计时来源（仅倒计时组件显示） -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:fillViewport="true">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="小组件设置"
-        android:textColor="#1F2430"
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:orientation="vertical"
+        android:padding="24dp">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:text="主题"
-        android:textColor="#4A5260"
-        android:textSize="14sp" />
-
-    <RadioGroup
-        android:id="@+id/cfg_theme"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp">
-
-        <RadioButton
-            android:id="@+id/cfg_theme_light"
-            android:layout_width="wrap_content"
+        <TextView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:checked="true"
-            android:text="浅色（默认）"
-            android:textColor="#1F2430" />
+            android:id="@+id/cfg_title"
+            android:text="小组件设置"
+            android:textColor="#1F2430"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
-        <RadioButton
-            android:id="@+id/cfg_theme_dark"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:id="@+id/cfg_countdown_box"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="深色"
-            android:textColor="#1F2430" />
-    </RadioGroup>
+            android:orientation="vertical"
+            android:visibility="gone">
 
-    <Button
-        android:id="@+id/cfg_save"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="保存" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="倒计时目标"
+                android:textColor="#4A5260"
+                android:textSize="14sp" />
 
-</LinearLayout>
+            <RadioGroup
+                android:id="@+id/cfg_cd_mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp">
+
+                <RadioButton
+                    android:id="@+id/cfg_cd_next"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="下一个任务（自动跟随）"
+                    android:textColor="#1F2430" />
+
+                <RadioButton
+                    android:id="@+id/cfg_cd_task"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="指定任务"
+                    android:textColor="#1F2430" />
+
+                <RadioButton
+                    android:id="@+id/cfg_cd_custom"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="自定义时间"
+                    android:textColor="#1F2430" />
+            </RadioGroup>
+
+            <Spinner
+                android:id="@+id/cfg_cd_spinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/cfg_cd_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:hint="标题，如：期末答辩"
+                android:inputType="text"
+                android:textColor="#1F2430"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/cfg_cd_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:hint="目标时间，如 2026-11-12 09:00"
+                android:inputType="text"
+                android:textColor="#1F2430"
+                android:visibility="gone" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="手动计时请改用「ERP · 专注停表」组件：时长预设直接摆在组件上，无需配置。"
+                android:textColor="#8A93A3"
+                android:textSize="12sp"
+                android:visibility="gone"
+                android:id="@+id/cfg_cd_manual_hint" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="主题"
+            android:textColor="#4A5260"
+            android:textSize="14sp" />
+
+        <RadioGroup
+            android:id="@+id/cfg_theme"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <RadioButton
+                android:id="@+id/cfg_theme_light"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="浅色（默认）"
+                android:textColor="#1F2430" />
+
+            <RadioButton
+                android:id="@+id/cfg_theme_dark"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="深色"
+                android:textColor="#1F2430" />
+        </RadioGroup>
+
+        <Button
+            android:id="@+id/cfg_save"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="保存" />
+    </LinearLayout>
+</ScrollView>

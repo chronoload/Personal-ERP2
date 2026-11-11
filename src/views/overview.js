@@ -7,7 +7,7 @@
 import { esc, fmtNum, fmtDate, fmtDateTime, badge, openModal, closeModal, toast, btn, empty, resColor } from '../ui/helpers.js';
 import * as calendar from './calendar.js';
 import { Prefs } from '../store/prefs.js';
-import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone } from '../ui/themes.js';
+import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone, safeTheme } from '../ui/themes.js';
 import { defaultStartPrefill } from '../domain/schedule.js';
 
 // 批量排程入口：re-export 后自动挂到 App.overview.openBatchCreate
@@ -72,30 +72,6 @@ function safeColor(c) {
   return COLOR_RE.test(t) ? t : null;
 }
 
-function safeGradient(v) {
-  if (typeof v !== 'string' || !v || v.length > 300) return null;
-  if (!/^linear-gradient\([0-9a-fA-F#,.\s%()-]+\)$/i.test(v)) return null;
-  const hexes = v.match(/#[0-9a-fA-F]+/g) || [];
-  if ((v.match(/#/g) || []).length !== hexes.length) return null;
-  return hexes.every((h) => COLOR_RE.test(h)) ? v : null;
-}
-
-function safeTheme(t) {
-  if (!t || typeof t !== 'object') return null;
-  if (t.type === 'gradient') {
-    const v = safeGradient(t.value);
-    return v ? { type: 'gradient', value: v } : null;
-  }
-  if (t.type === 'image') {
-    const url = t.url;
-    if (typeof url === 'string' && url.startsWith('data:image/') && url.length <= 3000000) {
-      return { type: 'image', url };
-    }
-    return null;
-  }
-  return null;
-}
-
 
 
 
@@ -139,6 +115,18 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
     db.plans.map((p) =>
       `<label class="chk"><input type="checkbox" value="${esc(p.id)}" ${selected.has(p.id) ? 'checked' : ''}> ${esc(p.title)}</label>`
     ).join('') || '<div class="muted">请先创建计划</div>';
+  // 地点约束 + 深度标记（排班/提醒的输入参数；无地点时只提示不阻塞）
+  const places = db.places || [];
+  const curPlace = a && a.place_id ? db.places.find((p) => p.id === a.place_id) : null;
+  const defPlace = curPlace ? curPlace.id : '';
+  const placeOptsHTML = () => '<option value="">任何地点</option>'
+    + places.map((p) => `<option value="${esc(p.id)}" ${p.id === defPlace ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  // 深度三态：自动（按分钟判定）/ 深度 / 浅层
+  const defDepth = a && a.depth === true ? 'deep' : (a && a.depth === false ? 'shallow' : 'auto');
+  const depthOptsHTML = () => `
+    <option value="auto" ${defDepth === 'auto' ? 'selected' : ''}>自动（≥45 分钟算深度）</option>
+    <option value="deep" ${defDepth === 'deep' ? 'selected' : ''}>深度专注</option>
+    <option value="shallow" ${defDepth === 'shallow' ? 'selected' : ''}>浅层事务</option>`;
   const goalOptsHTML = (selectedId) =>
     db.goals.map((g) => `<option value="${esc(g.id)}" ${g.id === selectedId ? 'selected' : ''}>${esc(g.title)}</option>`).join('')
     || '<option value="">（请先创建目标）</option>';
@@ -175,6 +163,11 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
         <div class="field"><label>计划开始时间（分钟级）</label><input id="f-ps" type="datetime-local" value="${esc(defStart)}"></div>
         <div class="field"><label>计划投入（分钟）</label><input id="f-apmin" type="number" min="0" value="${esc(defMin)}"></div>
       </div>
+      <div class="grid2">
+        <div class="field"><label>地点约束（用于排班寻路与提醒门控）</label><select id="f-aplace">${placeOptsHTML()}</select></div>
+        <div class="field"><label>专注类型（注意力预算）</label><select id="f-adepth">${depthOptsHTML()}</select></div>
+      </div>
+      ${places.length ? '' : '<div class="muted" style="font-size:12px;margin:-2px 0 6px">尚无地点：可在「☰ → 📍 地点」添加后再指定</div>'}
       <div id="atomic-preview" class="muted" style="display:none;font-size:12px;margin:2px 0 4px"></div>
       <label class="chk" id="keep-conflict-row" style="display:none;margin:0 0 8px"><input type="checkbox" id="f-keepconflict"> 坚持此时间（与冲突活动捆绑，开始时仲裁先后）</label>
       <div class="grid2">
@@ -329,6 +322,7 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
         note: row.querySelector('.pr-note').value,
       }));
     };
+    const depthSel = m.q('#f-adepth') ? m.q('#f-adepth').value : 'auto';
     const payload = {
       title: m.q('#f-aname').value, note: m.q('#f-anote').value, plan_ids,
       planned_start: m.q('#f-ps').value || null,
@@ -339,6 +333,8 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
       keep_conflict: m.q('#f-keepconflict') ? m.q('#f-keepconflict').checked : false,
       preset_expenses: readPresetRows('pe-rows'),
       preset_incomes: readPresetRows('pi-rows'),
+      place_id: m.q('#f-aplace') ? (m.q('#f-aplace').value || null) : null,
+      depth: depthSel === 'deep' ? true : (depthSel === 'shallow' ? false : null),
     };
     const r = a
       ? (a.repeat && seriesScope !== 'all' ? engine.updateSeries(db, a.id, seriesScope, payload) : engine.updateActivity(db, a.id, payload))
@@ -572,6 +568,11 @@ function activityCard(App, a) {
   const stheme = safeTheme(a.theme);
   const th = themeStyle(stheme);
   const tone = themeTone(stheme); // 'dark' | 'light' | null(图片待采样)
+  // 主题直接写进卡片背景：绝对定位的 .kc-bg 只是「虚化层」，
+  // 即使它被卡片自身背景的层级盖住，颜色也仍然生效。
+  const cardBg = th
+    ? `;background:${th};background-size:cover;background-position:center`
+    : (pcolor ? `;background:${hexToRgba(pcolor, 0.05)}` : '');
 
   // 信息量压缩：归属/日期/循环 三行 meta 合一；实际起止移入 title（编辑弹窗/日历里仍可见）；
   // 计时进度条只在有实际计时值时出现（没开始计时的卡片不占一整行 0%）。
@@ -590,7 +591,7 @@ function activityCard(App, a) {
   const occOpen = expandedSeries.has(a.id);
 
   return `
-    <div class="kanban-card ${blocked ? 'warned' : ''} ${th ? 'themed' : ''} ${tone === 'light' ? 'tone-light' : ''}" draggable="true" data-id="${esc(a.id)}" ${th && tone === null ? 'data-await-tone="1"' : ''} onclick="App.overview.editActivityCard('${jsStr(a.id)}', event)" title="${esc(a.title)}${a.actual_start ? ` · 开始 ${fmtDateTime(a.actual_start)}` : ''}${a.actual_end ? ` · 结束 ${fmtDateTime(a.actual_end)}` : ''}" style="border-left:4px solid ${pcolor || '#e5e8ee'}${!th && pcolor ? `;background:${hexToRgba(pcolor, 0.05)}` : ''}">
+    <div class="kanban-card ${blocked ? 'warned' : ''} ${th ? 'themed' : ''} ${tone === 'light' ? 'tone-light' : ''}" draggable="true" data-id="${esc(a.id)}" ${th && tone === null ? 'data-await-tone="1"' : ''} onclick="App.overview.editActivityCard('${jsStr(a.id)}', event)" title="${esc(a.title)}${a.actual_start ? ` · 开始 ${fmtDateTime(a.actual_start)}` : ''}${a.actual_end ? ` · 结束 ${fmtDateTime(a.actual_end)}` : ''}" style="border-left:4px solid ${pcolor || '#e5e8ee'}${cardBg}">
       ${th ? `<div class="kc-bg" style="background:${th}"></div>` : ''}
       <div class="kc-head">
         <span class="kc-title">${esc(a.title)}</span>
@@ -787,6 +788,8 @@ export function refreshPagerHeight() {
 export function editActivityCard(id, ev) {
   if (wasDragging) return;
   if (ev && ev.target && ev.target.closest('button, input, select, textarea, .kc-out')) return;
+  // 多视图联动（高维感知 · 上下文保持）：点看板卡片 → 广播焦点，日历同日/计划定位、HUD 高亮对应活动
+  try { window.dispatchEvent(new CustomEvent('app:focus-activity', { detail: { id } })); } catch (e) {}
   openActModal(id);
 }
 
@@ -894,11 +897,7 @@ const COLUMNS = [
 const DONE_PREVIEW = 3;
 let doneExpanded = false;
 // 活动级归档 = 隐藏：Archived 活动从五态看板退场，收进「📦 已归档」折叠区（可展开查看历史）
-let archivedShown = false;
-export function toggleArchived() {
-  archivedShown = !archivedShown;
-  renderKanbanRoot(App);
-}
+
 
 // 看板按计划过滤：'all'=全部 | 'none'=未关联 | planId（内存态，渲染重建保留）
 let kanbanPlanFilter = 'all';
@@ -922,9 +921,10 @@ export function setKanbanGroup(g) {
 }
 // 看板分组切换条（待办 / 进行中 / 已完成 —— 每次只看一个视图）
 function kanbanGroupsBar() {
-  if (!isCarousel()) return ''; // 桌面三组并列展示，无需切换条
+  if (!isCarousel()) return ''; // 桌面多列自适应并列，无需切换条
+  // 完整六态一维轴：待办/进行中/已完成/失败/已归档 —— 移动端每次看一屏，可探察全部状态维度
   return `<div class="kanban-groups">` +
-    [{ g: 'todo', l: '📋 待办' }, { g: 'doing', l: '⚡ 进行中' }, { g: 'done', l: '✅ 已完成' }]
+    [{ g: 'todo', l: '📋 待办' }, { g: 'doing', l: '⚡ 进行中' }, { g: 'done', l: '✅ 已完成' }, { g: 'failed', l: '❌ 失败' }, { g: 'archived', l: '📦 已归档' }]
       .map((x) => `<button type="button" class="${kanbanGroup === x.g ? 'on' : ''}" data-group="${x.g}" onclick="App.overview.setKanbanGroup('${x.g}')">${x.l}</button>`).join('') +
     `</div>`;
 }
@@ -1031,14 +1031,20 @@ function kanbanHTML(App) {
     return (a.plan_ids || []).includes(kanbanPlanFilter);
   };
   // 三分组：待办 / 进行中 / 已完成。桌面(≥861px)三组并列自适应；移动端每次只看当前组
+  // 完整六态可探察投影（LangDriven：状态空间 6 维 → 感知面不缺维）：
+  //  todo(Planned) / doing(Started) / done(Completed|Reviewed) / failed(Failed 终态) / archived(Archived 终态)
+  //  Failed 不再无处安放：显式终态列，防「一旦失败就从视野消失」的维度丢失。
+  //  Archived 从 done 底部折叠区提升为独立投影位：carousel 时独占一屏，桌面时紧随其后。
   const groups = [
     { key: 'todo', label: '📋 待办', colKey: 'Planned', match: (a) => a.status === 'Planned' },
     { key: 'doing', label: '⚡ 进行中', colKey: 'Started', match: (a) => a.status === 'Started' },
     { key: 'done', label: '✅ 已完成', colKey: 'Done', match: (a) => a.status === 'Completed' || a.status === 'Reviewed' },
+    { key: 'failed', label: '❌ 失败', colKey: 'Failed', match: (a) => a.status === 'Failed' },
+    { key: 'archived', label: '📦 已归档', colKey: 'Archived', match: (a) => a.status === 'Archived' },
   ];
   const shown = isCarousel() ? groups.filter((g) => g.key === kanbanGroup) : groups;
   const cols = shown.map((g) => {
-    let items = db.activities.filter((a) => a.status !== 'Archived' && g.match(a) && byPlan(a));
+    let items = db.activities.filter((a) => g.match(a) && byPlan(a));
     let more = '';
     if (g.key === 'done') {
       items = items.sort((x, y) => (y.actual_end || y.created || 0) - (x.actual_end || x.created || 0));
@@ -1047,29 +1053,18 @@ function kanbanHTML(App) {
       more = (hidden > 0 || doneExpanded) && items.length > DONE_PREVIEW
         ? `<button class="btn sm" style="margin:8px auto 0;display:block;width:auto" onclick="App.overview.toggleDone()">${doneExpanded ? '⬆ 收起，只看最近 ' + DONE_PREVIEW + ' 条' : `⬇ 展开更早的 ${hidden} 条`}</button>` : '';
       items = vis;
+    } else if (g.key === 'archived' || g.key === 'failed') {
+      items = items.sort((x, y) => (y.actual_end || y.created || 0) - (x.actual_end || x.created || 0));
     }
+    const addBtn = (g.key === 'todo' || g.key === 'doing')
+      ? `<button class="btn sm" title="快速添加待办" onclick="App.overview.openActModal()">＋</button>` : '';
     return `
-      <div class="kanban-col" data-col="${g.colKey}">
-        <div class="kanban-head">${g.label} <span class="cnt">${items.length}</span>
-          <button class="btn sm" title="快速添加待办" onclick="App.overview.openActModal()">＋</button>
-        </div>
+      <div class="kanban-col ${g.key === 'failed' ? 'col-failed' : ''} ${g.key === 'archived' ? 'col-archived' : ''}" data-col="${g.colKey}">
+        <div class="kanban-head">${g.label} <span class="cnt">${items.length}</span>${addBtn}</div>
         <div class="kanban-body">${items.map((a) => activityCard(App, a)).join('') || '<div class="kanban-add">＋ 点击添加待办</div>'}${more}</div>
       </div>`;
   }).join('');
-  // 归档折叠区：桌面随行显示；移动端仅「已完成」组
-  const archived = db.activities.filter((a) => a.status === 'Archived' && byPlan(a));
-  const archivedHTML = archived.length && (isCarousel() ? kanbanGroup === 'done' : true) ? `
-    <div class="kanban-arch">
-      <div class="kanban-arch-head" onclick="App.overview.toggleArchived()">
-        <span class="collapse-btn">${archivedShown ? '▾' : '▸'}</span>
-        <b>📦 已归档（${archived.length}）</b>
-        <span class="muted">活动 · 历史存档，默认从视图隐藏</span>
-      </div>
-      <div class="kanban-arch-body" style="${archivedShown ? '' : 'display:none'}">
-        ${archived.map((a) => activityCard(App, a)).join('') || ''}
-      </div>
-    </div>` : '';
-  return cols + archivedHTML;
+  return cols;
 }
 
 export function toggleDone() {
@@ -1095,7 +1090,8 @@ function setupDrag(App) {
     };
   });
   content.querySelectorAll('.kanban-card').forEach((c) => {
-    if (c.closest('.kanban-arch')) { c.draggable = false; return; } // 归档区卡片只读，禁止拖回看板
+    const inTerminal = c.closest('.kanban-col[data-col="Archived"],.kanban-col[data-col="Failed"]');
+    if (inTerminal) { c.draggable = false; return; } // 终态列(失败/归档)卡片只读，禁止拖回看板
     c.ondragstart = () => { dragId = c.dataset.id; wasDragging = true; c.classList.add('dragging'); };
     c.ondragend = () => { c.classList.remove('dragging'); dragId = null; wasDragging = false; content.querySelectorAll('.kanban-col').forEach((x) => x.classList.remove('drag-over')); };
   });
@@ -1121,6 +1117,188 @@ function setupDrag(App) {
 
 
   // ---------------- 主渲染 ----------------
+// ============================================================
+// 待排程面板：把「规划好但没排时间」的活动一次性排进日程。
+// 目标→计划 两层可折叠分组；支持单条排今天/明天，以及「排满今天」。
+// 每次 App 进程启动自动弹一次（模块级标记，WebView 重载即重置）。
+// ============================================================
+let schedulerShownThisProcess = false;
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function dtStr(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function msOf(dt) { return new Date(String(dt).replace(' ', 'T')).getTime() || 0; }
+function dayAt(offset, hour = 9) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  d.setHours(hour, 0, 0, 0);
+  return d.getTime();
+}
+
+// 未指派时间的活动按 目标 → 计划 分组（计划缺失归「未归计划」）
+function groupUnscheduled(db) {
+  const list = App.engine.unscheduledActivities(db);
+  const goalMap = new Map();
+  const planOf = (id) => (db.plans || []).find((p) => p.id === id) || null;
+  const goalOf = (id) => (db.goals || []).find((g) => g.id === id) || null;
+  for (const a of list) {
+    const pid = (a.plan_ids || [])[0] || null;
+    const plan = pid ? planOf(pid) : null;
+    const goal = plan ? goalOf(plan.goal_id) : null;
+    const gKey = goal ? goal.id : '__nog';
+    const pKey = plan ? plan.id : '__nop';
+    if (!goalMap.has(gKey)) goalMap.set(gKey, { title: goal ? goal.title : '未归目标', plans: new Map() });
+    const g = goalMap.get(gKey);
+    if (!g.plans.has(pKey)) g.plans.set(pKey, { title: plan ? plan.title : '未归计划', items: [] });
+    g.plans.get(pKey).items.push(a);
+  }
+  return Array.from(goalMap.values()).map((g) => ({ title: g.title, plans: Array.from(g.plans.values()) }));
+}
+
+/**
+ * 单条排进某天：交给引擎（含冲突顺延与 planned_end 重算）。
+ * @returns {ok:boolean, to?:string, error?:string}
+ */
+export function scheduleOne(activityId, offset = 0) {
+  const a = App.db.activities.find((x) => x.id === activityId);
+  if (!a) return { ok: false, error: '活动不存在' };
+  const r = App.engine.updateActivity(App.db, activityId, {
+    title: a.title,
+    planned_start: dtStr(dayAt(offset)),
+    planned_minutes: Number(a.planned_minutes) || 30,
+  });
+  if (!r.ok) return r;
+  return { ok: true, to: a.planned_start };
+}
+
+/** 排满今天：从 09:00（或当前时刻，取较晚）起按顺序塞进空档，到 23:00 停 */
+export function fillToday() {
+  const list = App.engine.unscheduledActivities(App.db);
+  if (!list.length) return toast('没有待排程的活动', 'info');
+  let cursor = Math.max(Date.now(), dayAt(0, 9));
+  const hardStop = dayAt(0, 23);
+  let placed = 0;
+  let skipped = 0;
+  for (const a of list) {
+    const mins = Number(a.planned_minutes) || 30;
+    if (cursor + mins * 60000 > hardStop) { skipped += 1; continue; }
+    const r = App.engine.updateActivity(App.db, a.id, {
+      title: a.title,
+      planned_start: dtStr(cursor),
+      planned_minutes: mins,
+    });
+    if (!r.ok) { skipped += 1; continue; }
+    const after = App.db.activities.find((x) => x.id === a.id);
+    const end = msOf(after && after.planned_end);
+    cursor = end > cursor ? end : cursor + mins * 60000;
+    placed += 1;
+  }
+  App.refresh();
+  toast(`已排入今天 ${placed} 条${skipped ? `，${skipped} 条今天放不下` : ''}`, placed ? 'ok' : 'warn');
+  return { placed, skipped };
+}
+
+export function openSchedulerBoard() {
+  const renderBody = () => {
+    const db = App.db;
+    const list = App.engine.unscheduledActivities(db);
+    const overdue = App.engine.overdueActivities(db);
+    if (!list.length && !overdue.length) {
+      return `<div class="muted" style="padding:12px 0">没有待排或延期的活动——今天的日程已经排好了。</div>`;
+    }
+    const total = list.reduce((s, a) => s + (Number(a.planned_minutes) || 0), 0);
+    const groups = groupUnscheduled(db);
+    const groupHTML = groups.map((g, gi) => `
+      <details class="sched-group" ${gi < 2 ? 'open' : ''}>
+        <summary><b>${esc(g.title)}</b><span class="muted"> · ${g.plans.reduce((s, p) => s + p.items.length, 0)} 条</span></summary>
+        ${g.plans.map((p, pi) => `
+          <details class="sched-plan" ${pi < 2 ? 'open' : ''}>
+            <summary>${esc(p.title)}<span class="muted"> · ${p.items.length} 条</span></summary>
+            ${p.items.map((a) => `
+              <div class="sched-row">
+                <span class="sched-title">${esc(a.title)}</span>
+                <span class="muted sched-min">${Number(a.planned_minutes) || 0} 分钟</span>
+                <button class="btn sm" onclick="App.overview.scheduleOne('${jsStr(a.id)}',0)">今天</button>
+                <button class="btn sm" onclick="App.overview.scheduleOne('${jsStr(a.id)}',1)">明天</button>
+                <button class="btn sm" onclick="App.overview.openActModal('${jsStr(a.id)}')">编辑</button>
+              </div>`).join('')}
+          </details>`).join('')}
+      </details>`).join('');
+
+    // 延期：有排期但已过期，仍未完成——也属于「该重新排进日程」的积压
+    const overdueHTML = overdue.length ? `
+      <details class="sched-group" open>
+        <summary><b>↩ 延期未完成</b><span class="muted"> · ${overdue.length} 条</span></summary>
+        ${overdue.map((a) => {
+          const dayKey = String(a.planned_start || a.planned_date || '').split('T')[0];
+          return `
+          <div class="sched-row">
+            <span class="sched-title">${esc(a.title)}</span>
+            <span class="muted sched-min">${esc(dayKey)} · ${Number(a.planned_minutes) || 0} 分钟</span>
+            <button class="btn sm" onclick="App.overview.scheduleOne('${jsStr(a.id)}',0)">今天</button>
+            <button class="btn sm" onclick="App.overview.scheduleOne('${jsStr(a.id)}',1)">明天</button>
+            <button class="btn sm" onclick="App.overview.openActModal('${jsStr(a.id)}')">编辑</button>
+          </div>`;
+        }).join('')}
+      </details>` : '';
+
+    return `
+      <div class="muted" style="font-size:12px;margin-bottom:8px">
+        ${list.length} 条未指派时间${overdue.length ? ` · ${overdue.length} 条延期` : ''}${total ? ` · 未指派合计 ${total} 分钟` : ''}。
+        这些都是已经规划、但还没落到具体时间上的活动。
+      </div>
+      <div class="row-gap" style="margin-bottom:8px">
+        <button class="btn primary sm" onclick="App.overview.fillToday()">⚡ 把未指派排满今天</button>
+        <span class="muted">从 09:00（或现在）开始依次塞进空档，到 23:00 停</span>
+      </div>
+      <div class="sched-groups">${overdueHTML}${groupHTML}</div>`;
+  };
+
+  const m = openModal({
+    title: '📋 待排程 · 把规划排进日程',
+    width: 720,
+    bodyHTML: `<div id="sched-body">${renderBody()}</div>`,
+    footerHTML: `<button class="btn" data-close>关闭</button>`,
+  });
+  m.q('[data-close]').onclick = () => m.close();
+  // 任何排入动作后重绘面板内容（不关窗，方便连续排）
+  const redraw = () => {
+    const host = m.q('#sched-body');
+    if (host) host.innerHTML = renderBody();
+  };
+  m.el.addEventListener('click', () => setTimeout(redraw, 0));
+  return m;
+}
+
+/** 进程启动自动弹一次（新的一天排程同款：有待排或延期就弹；已有别的模态时排队）
+ *  —— 交付口径：每次打开 App 进程都会看到这张「今天该排什么」的清单。 */
+export function maybeOpenSchedulerBoard() {
+  if (schedulerShownThisProcess) return;
+  schedulerShownThisProcess = true;
+  const hasWork = () => {
+    try {
+      return App.engine.unscheduledActivities(App.db).length > 0
+        || App.engine.overdueActivities(App.db).length > 0;
+    } catch (e) { return false; }
+  };
+  if (!hasWork()) return;
+  let tries = 0;
+  const tryOpen = () => {
+    tries += 1;
+    // 有别的模态开着（如每日引导）就先让路，最多等 8 秒
+    const busy = document.querySelector('#modal-root .modal-mask');
+    if (busy) {
+      if (tries < 8) setTimeout(tryOpen, 1000);
+      return;
+    }
+    if (!hasWork()) return;
+    try { openSchedulerBoard(); } catch (e) { /* 忽略 */ }
+  };
+  setTimeout(tryOpen, 1000);
+}
+
 export function render(App, el) {
   const { db } = App;
 
@@ -1137,6 +1315,7 @@ export function render(App, el) {
             <div class="card-head">
               <h3>活动看板</h3>
               <div class="row-gap">
+                <button class="btn sm" onclick="App.overview.openSchedulerBoard()" title="把规划好但没排时间的活动排进日程">📋 待排程</button>
                 <button class="btn sm primary" onclick="App.overview.openActModal()">＋ 活动</button>
               </div>
             </div>

@@ -1,8 +1,11 @@
 package com.personal.erp.widget;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -14,9 +17,17 @@ import org.json.JSONObject;
 public class WidgetActionReceiver extends BroadcastReceiver {
   public static final String ACTION_RECHARGE = "com.personal.erp.widget.ACTION_RECHARGE";
   public static final String ACTION_START = "com.personal.erp.widget.ACTION_START";
+  public static final String ACTION_CD_TOGGLE = "com.personal.erp.widget.ACTION_CD_TOGGLE";
+  public static final String ACTION_CD_RESET = "com.personal.erp.widget.ACTION_CD_RESET";
+  public static final String ACTION_CD_TICK = "com.personal.erp.widget.ACTION_CD_TICK";
+  public static final String ACTION_CD_FINISH = "com.personal.erp.widget.ACTION_CD_FINISH";
+  public static final String ACTION_CD_PRESET = "com.personal.erp.widget.ACTION_CD_PRESET";
   public static final String EXTRA_RESOURCE_ID = "resource_id";
   public static final String EXTRA_AMOUNT = "amount";
   public static final String EXTRA_ACTIVITY_ID = "activity_id";
+  public static final String EXTRA_WIDGET_ID = "widget_id";
+  public static final String EXTRA_KIND = "widget_kind";   // countdown | stopwatch：到点提醒的文案与归属
+  public static final String EXTRA_TITLE = "widget_title";  // 到点时通知标题（调度那一刻写死，避免读不到数据）
 
   @Override
   public void onReceive(Context context, Intent intent) {
@@ -29,8 +40,64 @@ public class WidgetActionReceiver extends BroadcastReceiver {
     } else if (ACTION_START.equals(action)) {
       String aid = intent.getStringExtra(EXTRA_ACTIVITY_ID);
       if (aid != null) startActivity(context, aid);
+      // 倒计时组件上的「提前开始」：任务已进入进行中，撤掉原到点闹钟，避免到点误报
+      int cwid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
+      if (cwid >= 0) {
+        CountdownWidgetProvider.cancelFinish(context, cwid);
+        CountdownWidgetProvider.refreshOne(context, cwid);
+      }
       GoodsWidgetProvider.refreshAll(context);
+    } else if (ACTION_CD_TOGGLE.equals(action)) {
+      int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
+      if (wid >= 0) FocusStopwatchProvider.toggleTimer(context, wid);
+    } else if (ACTION_CD_RESET.equals(action)) {
+      int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
+      if (wid >= 0) FocusStopwatchProvider.resetTimer(context, wid);
+    } else if (ACTION_CD_PRESET.equals(action)) {
+      int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
+      int mins = intent.getIntExtra(EXTRA_AMOUNT, 25);
+      if (wid >= 0) FocusStopwatchProvider.startPreset(context, wid, mins);
+    } else if (ACTION_CD_TICK.equals(action)) {
+      // 停表每分钟推进进度条；到点/停止后由渲染逻辑自行停止续排
+      int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
+      if (wid >= 0) FocusStopwatchProvider.refreshOne(context, wid);
+    } else if (ACTION_CD_FINISH.equals(action)) {
+      // 到点：先重渲染成「已到时间 / 完成」，再真正发出提醒（响铃 + 震动 + 通知）
+      int wid = intent.getIntExtra(EXTRA_WIDGET_ID, -1);
+      if (wid < 0) return;
+      String kind = intent.getStringExtra(EXTRA_KIND);
+      String title = intent.getStringExtra(EXTRA_TITLE);
+      if ("stopwatch".equals(kind)) {
+        FocusStopwatchProvider.refreshOne(context, wid);
+        fireAlert(context, 9300 + wid,
+            "⏱ " + (title == null || title.isEmpty() ? "专注结束" : title + " · 完成"),
+            "时间到！回来记录这次专注吧");
+      } else {
+        CountdownWidgetProvider.refreshOne(context, wid);
+        fireAlert(context, 9200 + wid,
+            "⏰ " + (title == null || title.isEmpty() ? "倒计时结束" : title),
+            "倒计时结束，开始行动吧");
+      }
     }
+  }
+
+  private static void fireAlert(Context ctx, int id, String title, String body) {
+    try {
+      com.personal.erp.alarm.AlarmReceiver.fire(ctx, id, title, body);
+    } catch (Exception ignored) {}
+  }
+
+  /** 精确闹钟：无精确权限时降级为「尽量准时」（Doze 下可能延迟） */
+  static void setExact(AlarmManager am, long at, PendingIntent pi) {
+    try {
+      if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) {
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+      } else if (Build.VERSION.SDK_INT >= 23) {
+        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+      } else {
+        am.setExact(AlarmManager.RTC_WAKEUP, at, pi);
+      }
+    } catch (Exception ignored) {}
   }
 
   /** 桌面一键开始：Planned → Started（Loop 式直接打勾；状态字段修改靠 rev 回读同步，不走 txs 合并） */
