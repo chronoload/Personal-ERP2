@@ -65,13 +65,16 @@ export const Widget = {
       const r = await P.getData();
       const nativeRev = Number(r.rev) || 0;
       const known = Number(localStorage.getItem(REV_KEY)) || 0;
-      if (!r.db || nativeRev <= known) return { changed: false };
+      if (!r.db) return { changed: false };
       const db = JSON.parse(r.db);
+      // 原生还挂着未回读的流水时，即使 rev 没变也要拉：避免被本地旧库覆盖
+      const hasNativeTx = Array.isArray(db.native_txs) && db.native_txs.length > 0;
+      if (nativeRev <= known && !hasNativeTx) return { changed: false };
       delete db.native_txs; // 合并机制产物，JS 库不需要
       const { ensureSeq } = await import('../store/db.js');
       ensureSeq(db);
       localStorage.setItem('personal_erp_db_v1', JSON.stringify(db));
-      localStorage.setItem(REV_KEY, String(nativeRev));
+      localStorage.setItem(REV_KEY, String(Math.max(nativeRev, known)));
       return { changed: true };
     } catch (e) { return { changed: false }; }
   },

@@ -119,8 +119,8 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
     boolean dark = WidgetStore.isDarkTheme(ctx);
     rv.setInt(R.id.widget_goods_root, "setBackgroundResource", dark ? R.drawable.widget_bg_dark : R.drawable.widget_bg);
     rv.setTextColor(R.id.widget_goods_title, dark ? 0xFFF0F2F5 : 0xFF202631);
+    rv.setTextColor(R.id.widget_goods_hint, dark ? 0xFFA8B0BD : 0xFF9AA3B2);
     rv.setTextColor(R.id.widget_goods_empty, dark ? 0xFFA8B0BD : 0xFF9AA3B2);
-    for (int i = 1; i <= 4; i++) rv.setTextColor(rowId(ctx, i), dark ? 0xFFE8EBF0 : 0xFF1F2430);
 
     JSONObject db = WidgetStore.readDB(ctx);
     JSONArray goods = db != null ? db.optJSONArray("goods") : null;
@@ -128,49 +128,55 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
       rv.setTextViewText(R.id.widget_goods_title, "快速消费");
       rv.setTextViewText(R.id.widget_goods_empty, "打开应用同步数据");
       rv.setViewVisibility(R.id.widget_goods_empty, View.VISIBLE);
-      for (int i = 1; i <= 4; i++) setRow(ctx, rv, i, "", null);
+      for (int i = 1; i <= 3; i++) setRow(ctx, rv, i, "", "", null, dark);
     } else if (goods == null || goods.length() == 0) {
       rv.setTextViewText(R.id.widget_goods_title, "快速消费");
       rv.setTextViewText(R.id.widget_goods_empty, "暂无商品 · 去应用里创建");
       rv.setViewVisibility(R.id.widget_goods_empty, View.VISIBLE);
-      for (int i = 1; i <= 4; i++) setRow(ctx, rv, i, "", null);
+      for (int i = 1; i <= 3; i++) setRow(ctx, rv, i, "", "", null, dark);
     } else {
       rv.setViewVisibility(R.id.widget_goods_empty, View.GONE);
-      int show = Math.min(4, goods.length());
-      for (int i = 0; i < 4; i++) {
+      int show = Math.min(3, goods.length());
+      for (int i = 0; i < 3; i++) {
         JSONObject g = i < show ? goods.optJSONObject(i) : null;
-        if (g == null) { setRow(ctx, rv, i + 1, "", null); continue; }
-        String cost = costSummary(g, db);
-        String label = g.optString("emoji", "🛍️") + " " + g.optString("name", "—")
-            + (cost.isEmpty() ? "" : " · " + cost) + "  ▸ 点此消费";
-        setRow(ctx, rv, i + 1, label, g.optString("id"));
+        if (g == null) { setRow(ctx, rv, i + 1, "", "", null, dark); continue; }
+        String name = g.optString("emoji", "🛍️") + " " + g.optString("name", "—");
+        setRow(ctx, rv, i + 1, name, costSummary(g, db), g.optString("id"), dark);
       }
     }
 
     Intent open = new Intent(ctx, MainActivity.class);
-    open.putExtra("erp_tab", "overview");
+    open.putExtra("erp_tab", "finance");
     PendingIntent po = PendingIntent.getActivity(ctx, 2, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     rv.setOnClickPendingIntent(R.id.widget_goods_title, po);
     mgr.updateAppWidget(widgetId, rv);
   }
 
-  private static void setRow(Context ctx, RemoteViews rv, int i, String text, String goodId) {
+  /** 一行：名称/成本 + 独立「消费」按钮；goodId 为空则整行隐藏 */
+  private static void setRow(Context ctx, RemoteViews rv, int i, String name, String cost,
+                             String goodId, boolean dark) {
     int row = rowId(ctx, i);
-    rv.setTextViewText(row, text);
-    if (goodId != null && !goodId.isEmpty()) {
-      Intent it = new Intent(ctx, GoodsWidgetProvider.class);
-      it.setAction(ACTION_CONSUME);
-      it.putExtra(EXTRA_GOOD_ID, goodId);
-      // requestCode 用行号区分，避免 extras 互相覆盖
-      PendingIntent pi = PendingIntent.getBroadcast(ctx, 100 + i, it,
-          PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-      rv.setOnClickPendingIntent(row, pi);
-      rv.setViewVisibility(row, View.VISIBLE);
-    } else if (text.isEmpty()) {
-      rv.setViewVisibility(row, View.GONE);
-    } else {
-      rv.setViewVisibility(row, View.VISIBLE);
-    }
+    int nameId = nameId(ctx, i);
+    int costId = costId(ctx, i);
+    int btnId = btnId(ctx, i);
+    boolean show = goodId != null && !goodId.isEmpty();
+    rv.setViewVisibility(row, show ? View.VISIBLE : View.GONE);
+    if (!show) return;
+
+    rv.setTextViewText(nameId, name);
+    rv.setTextColor(nameId, dark ? 0xFFF0F2F5 : 0xFF1F2430);
+    rv.setTextViewText(costId, cost.isEmpty() ? "未配置消耗" : "消耗 " + cost);
+    rv.setTextColor(costId, dark ? 0xFFA8B0BD : 0xFF6B7482);
+    rv.setInt(row, "setBackgroundResource", dark ? R.drawable.widget_goods_row_bg_dark : R.drawable.widget_goods_row_bg);
+    rv.setTextColor(btnId, dark ? 0xFF8FB8E8 : 0xFF4A7FBF);
+    rv.setInt(btnId, "setBackgroundResource", dark ? R.drawable.widget_act_bg_dark : R.drawable.widget_add_bg);
+
+    Intent it = new Intent(ctx, GoodsWidgetProvider.class);
+    it.setAction(ACTION_CONSUME);
+    it.putExtra(EXTRA_GOOD_ID, goodId);
+    PendingIntent pi = PendingIntent.getBroadcast(ctx, 100 + i, it,
+        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    rv.setOnClickPendingIntent(btnId, pi);
   }
 
   @Override
@@ -229,6 +235,18 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
 
   private static int rowId(Context ctx, int i) {
     return ctx.getResources().getIdentifier("widget_goods_row" + i, "id", ctx.getPackageName());
+  }
+
+  private static int nameId(Context ctx, int i) {
+    return ctx.getResources().getIdentifier("widget_goods_name" + i, "id", ctx.getPackageName());
+  }
+
+  private static int costId(Context ctx, int i) {
+    return ctx.getResources().getIdentifier("widget_goods_cost" + i, "id", ctx.getPackageName());
+  }
+
+  private static int btnId(Context ctx, int i) {
+    return ctx.getResources().getIdentifier("widget_goods_btn" + i, "id", ctx.getPackageName());
   }
 
   private static String fmt(double v) {

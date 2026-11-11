@@ -22,11 +22,20 @@ public class WidgetPlugin extends Plugin {
     try {
       String db = call.getString("db");
       String prefs = call.getString("prefs");
-      if (db != null) db = mergeNativeTxs(db);
+      boolean hasNativeTx = false;
+      if (db != null) {
+        db = mergeNativeTxs(db);
+        try {
+          org.json.JSONArray ids = new org.json.JSONObject(db).optJSONArray("native_txs");
+          hasNativeTx = ids != null && ids.length() > 0;
+        } catch (Exception ignored) {}
+      }
       SharedPreferences sp = getContext().getSharedPreferences(WidgetKeys.PREFS_FILE, Context.MODE_PRIVATE);
       SharedPreferences.Editor ed = sp.edit();
       if (db != null) ed.putString(WidgetKeys.KEY_DB, db);
       if (prefs != null) ed.putString(WidgetKeys.KEY_PREFS, prefs);
+      // 还有未回读的原生流水时递增修订号：JS 回前台会 pullFromNative 把它并进本地库
+      if (hasNativeTx) ed.putLong(WidgetKeys.KEY_REV, sp.getLong(WidgetKeys.KEY_REV, 0) + 1);
       ed.apply();
       refreshAll();
       JSObject ret = new JSObject();
@@ -75,7 +84,10 @@ public class WidgetPlugin extends Plugin {
       if (seq == null) { seq = new org.json.JSONObject(); js.put("seq", seq); }
       seq.put("t", Math.max(seq.optInt("t", 0), maxSeq));
     }
-    return js.toString(); // 合并后不携带 native_txs，下次桌面消费重新累积
+    // 保留 native_txs 标记：直到 JS 回读并确认（pullFromNative 会删掉它），
+    // 否则中间的任一次旧数据推送都会把这些流水覆盖掉（表现为「记了但没进流水」）。
+    js.put("native_txs", nativeIds);
+    return js.toString();
   }
 
   private static int seqNum(String id) {
