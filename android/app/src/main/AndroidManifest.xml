@@ -85,6 +85,10 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_ledger_info" />
         </receiver>
+        <!-- 快速消费列表数据源（RemoteViewsService：滚动列表必需） -->
+        <service android:name=".widget.GoodsWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
         <receiver android:name=".widget.WidgetActionReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.personal.erp.widget.ACTION_RECHARGE" />

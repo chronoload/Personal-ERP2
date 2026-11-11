@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 商品快速消费小组件（4×3）：每条商品独立卡片，右侧固定「消费」按钮 -->
+<!-- 快速消费小组件（4×3，可滚动列表）：标题 + ListView + 空态 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_goods_root"
     android:layout_width="match_parent"
@@ -33,184 +33,29 @@
             android:textSize="10sp" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/widget_goods_empty"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="暂无商品 · 去应用里创建"
-        android:textColor="#9AA3B2"
-        android:textSize="12sp" />
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp">
 
-    <LinearLayout
-        android:id="@+id/widget_goods_row1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="@drawable/widget_goods_row_bg"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingLeft="10dp"
-        android:paddingTop="8dp"
-        android:paddingRight="8dp"
-        android:paddingBottom="8dp">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/widget_goods_name1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:text=""
-                android:textColor="#1F2430"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_goods_cost1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:text=""
-                android:textColor="#6B7482"
-                android:textSize="10sp" />
-        </LinearLayout>
+        <ListView
+            android:id="@+id/widget_goods_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none" />
 
         <TextView
-            android:id="@+id/widget_goods_btn1"
-            android:layout_width="wrap_content"
+            android:id="@+id/widget_goods_empty"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/widget_add_bg"
-            android:paddingLeft="12dp"
-            android:paddingTop="5dp"
-            android:paddingRight="12dp"
-            android:paddingBottom="5dp"
-            android:text="消费"
-            android:textColor="#4A7FBF"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/widget_goods_row2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:background="@drawable/widget_goods_row_bg"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingLeft="10dp"
-        android:paddingTop="8dp"
-        android:paddingRight="8dp"
-        android:paddingBottom="8dp">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/widget_goods_name2"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:text=""
-                android:textColor="#1F2430"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_goods_cost2"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:text=""
-                android:textColor="#6B7482"
-                android:textSize="10sp" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/widget_goods_btn2"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/widget_add_bg"
-            android:paddingLeft="12dp"
-            android:paddingTop="5dp"
-            android:paddingRight="12dp"
-            android:paddingBottom="5dp"
-            android:text="消费"
-            android:textColor="#4A7FBF"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/widget_goods_row3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:background="@drawable/widget_goods_row_bg"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingLeft="10dp"
-        android:paddingTop="8dp"
-        android:paddingRight="8dp"
-        android:paddingBottom="8dp">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/widget_goods_name3"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:text=""
-                android:textColor="#1F2430"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_goods_cost3"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:text=""
-                android:textColor="#6B7482"
-                android:textSize="10sp" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/widget_goods_btn3"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/widget_add_bg"
-            android:paddingLeft="12dp"
-            android:paddingTop="5dp"
-            android:paddingRight="12dp"
-            android:paddingBottom="5dp"
-            android:text="消费"
-            android:textColor="#4A7FBF"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:text="暂无商品 · 去应用里创建"
+            android:textColor="#9AA3B2"
+            android:textSize="12sp" />
+    </FrameLayout>
 
 </LinearLayout>
