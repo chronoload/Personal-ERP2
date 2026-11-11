@@ -3,6 +3,7 @@
 // 顶栏：品牌 + 资源余额常驻（每资源独立配色圆点）+ 全局工具（计时）
 // ============================================================
 import { esc, fmtNum, resColor } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { Prefs } from '../store/prefs.js';
 
 // 颜色白名单（同 overview.js）：仅放行 #rgb~#rrggbbaa 十六进制，其余回落稳定配色，防 style 注入
@@ -38,9 +39,9 @@ export function renderTopbar(App) {
       </div>
       <div class="top-res">${pills}</div>
       <div class="actions">
-        <button class="btn" style="background:#171a21;color:#fff;border-color:#171a21" onclick="App.overview.openBatchCreate()" title="批量创建活动">⚡ 创建</button>
-        <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">☰</button>
-        <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">⏱ 计时</button>
+        <button class="btn" style="background:#171a21;color:#fff;border-color:#171a21" onclick="App.overview.openBatchCreate()" title="批量创建活动">${icon('bolt')} 创建</button>
+        <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">${icon('menu')}</button>
+        <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">${icon('clock')} 计时</button>
       </div>
     `;
     return;
@@ -51,9 +52,9 @@ export function renderTopbar(App) {
       <div class="logo" onclick="App.timer.open()" title="计时器">P</div>
     </div>
     <div class="actions">
-      <button class="btn" style="background:#171a21;color:#fff;border-color:#171a21" onclick="App.overview.openBatchCreate()" title="批量创建活动">⚡</button>
-      <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">☰</button>
-      <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">⏱</button>
+      <button class="btn" style="background:#171a21;color:#fff;border-color:#171a21" onclick="App.overview.openBatchCreate()" title="批量创建活动">${icon('bolt')}</button>
+      <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">${icon('menu')}</button>
+      <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">${icon('clock')}</button>
     </div>
   `;
 }

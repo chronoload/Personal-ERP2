@@ -4,6 +4,7 @@
 //   目标(Goal) 1:N 计划(Plan)；计划 18C 状态机；19BC 混合预算
 // ============================================================
 import { esc, fmtNum, badge, openModal, toast } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { PLAN_COLORS } from '../domain/engine.js';
 import { Prefs } from '../store/prefs.js';
 import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone, safeTheme } from '../ui/themes.js';
@@ -40,7 +41,7 @@ export function toggleGoal(id) {
   const plans = block.querySelector('.goal-plans');
   if (plans) plans.classList.toggle('hidden', collapsed);
   const arrow = block.querySelector('.goal-head .collapse-btn');
-  if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
+  if (arrow) arrow.innerHTML = collapsed ? icon('chevron-right') : icon('chevron-down');
 }
 export function togglePlan(id) {
   collapsedPlans.has(id) ? collapsedPlans.delete(id) : collapsedPlans.add(id);
@@ -53,7 +54,7 @@ export function togglePlan(id) {
   const dt = card.querySelector('.plan-details');
   if (dt) dt.classList.toggle('hidden', collapsed);
   const arrow = card.querySelector('.plan-head .collapse-btn');
-  if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
+  if (arrow) arrow.innerHTML = collapsed ? icon('chevron-right') : icon('chevron-down');
 }
 // 计划内活动列表展开/收起（超 20 条时）
 export function togglePlanActs(pid) {
@@ -186,7 +187,7 @@ export function openPlanModal(goalId, editId) {
       <select class="pr-res">${resOptsPlan(entry ? entry.resource_id : '')}</select>
       <input class="pr-amt" type="number" min="0" step="0.01" value="${esc(entry ? entry.amount : '')}" placeholder="金额">
       <input class="pr-note" value="${esc(entry ? (entry.note || '') : '')}" placeholder="备注">
-      <button type="button" class="btn sm pr-del" title="移除">✕</button>
+      <button type="button" class="btn sm pr-del" title="移除">${icon('close')}</button>
     </div>`;
   const m = openModal({
     title: p ? '编辑计划' : '新建计划（挂在目标下）',
@@ -198,9 +199,9 @@ export function openPlanModal(goalId, editId) {
       </div>
       <div class="field"><label>预算 价值元（留空 = 无限 ∞，19BC 混合预算）</label><input id="f-pbudget" type="number" min="0" value="${Number.isFinite(p?.budget) ? p.budget : ''}" placeholder="∞"></div>
       <div class="step-divider">默认预设收支（该计划下新建活动自动继承，可空 · 多资源）</div>
-      <div style="font-size:12px;font-weight:700;color:#3f4753">默认支出<button type="button" class="btn sm" id="pd-e-add" style="float:right">＋ 添加</button></div>
+      <div style="font-size:12px;font-weight:700;color:#3f4753">默认支出<button type="button" class="btn sm" id="pd-e-add" style="float:right">${icon('plus')} 添加</button></div>
       <div id="pd-e-rows">${defPE.map((x) => defRowHTML(x)).join('')}</div>
-      <div style="font-size:12px;font-weight:700;color:#3f4753;margin-top:6px">默认收入<button type="button" class="btn sm" id="pd-i-add" style="float:right">＋ 添加</button></div>
+      <div style="font-size:12px;font-weight:700;color:#3f4753;margin-top:6px">默认收入<button type="button" class="btn sm" id="pd-i-add" style="float:right">${icon('plus')} 添加</button></div>
       <div id="pd-i-rows">${defPI.map((x) => defRowHTML(x)).join('')}</div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>保存</button>`,
   });
@@ -279,7 +280,7 @@ function planCard(App, p) {
     <div class="plan-act" onclick="event.stopPropagation();App.overview.openActModal('${jsStr(a.id)}')" title="点击编辑">
       <span class="grow">
         ${esc(a.title)}${a.planned_minutes ? ` <span class="muted">· ${a.planned_minutes}m</span>` : ''}
-        ${a.note ? `<div class="plan-act-note">📝 ${esc(a.note)}</div>` : ''}
+        ${a.note ? `<div class="plan-act-note">${icon('note')} ${esc(a.note)}</div>` : ''}
       </span>
       ${badge(a.status)}
     </div>`;
@@ -287,15 +288,15 @@ function planCard(App, p) {
   const archHTML = archActs.length ? `
     <div class="plan-arch">
       <div class="plan-arch-head" onclick="event.stopPropagation();App.goals.togglePlanArch('${jsStr(p.id)}')">
-        <span class="collapse-btn">${archOpen ? '▾' : '▸'}</span>
-        <b>📦 已归档（${archActs.length}）</b>
+        <span class="collapse-btn">${archOpen ? icon('chevron-down') : icon('chevron-right')}</span>
+        <b>${icon('archive')} 已归档（${archActs.length}）</b>
       </div>
       <div class="plan-arch-body" style="${archOpen ? '' : 'display:none'}">${archActs.map(actRow).join('')}</div>
     </div>` : '';
   return `
     <div class="plan-card ${collapsed ? 'collapsed' : ''}" data-pid="${jsStr(p.id)}" style="border-left:4px solid ${safeColor(p.color) || '#e5e8ee'}">
       <div class="plan-head" onclick="App.goals.togglePlan('${jsStr(p.id)}')" title="点击收起 / 展开">
-        <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.togglePlan('${jsStr(p.id)}')" aria-label="收起/展开">${collapsed ? '▸' : '▾'}</button>
+        <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.togglePlan('${jsStr(p.id)}')" aria-label="收起/展开">${collapsed ? icon('chevron-right') : icon('chevron-down')}</button>
         <div class="grow">
           <span class="plan-chip" style="background:${safeColor(p.color) || '#e5e8ee'}"></span>
           <b>${esc(p.title)}</b> ${badge(p.status)}
@@ -306,16 +307,16 @@ function planCard(App, p) {
       <div class="plan-details ${collapsed ? 'hidden' : ''}">
       ${p.budget !== null ? `
         <div class="progress"><i class="bar ${blocked ? 'danger' : pct >= 70 ? 'warn' : ''}" style="width:${pct}%"></i></div>
-        ${blocked ? '<div class="muted warn">⛔ 硬约束触发：禁止新活动开始/完成</div>' : ''}` : ''}
+        ${blocked ? `<div class="muted warn">${icon('ban')} 硬约束触发：禁止新活动开始/完成</div>` : ''}` : ''}
       ${acts.length ? `
       <div class="plan-acts">
         <div class="plan-acts-head"><span>活动（${acts.length}）</span><span class="muted">点击可编辑</span></div>
         ${actRows}
-        ${more ? `<div class="plan-acts-more" onclick="event.stopPropagation();App.goals.togglePlanActs('${jsStr(p.id)}')">展开剩余 ${acts.length - LIMIT} 条 ▾</div>` : (expandedPlans.has(p.id) ? `<div class="plan-acts-more" onclick="event.stopPropagation();App.goals.togglePlanActs('${jsStr(p.id)}')">收起 ▴</div>` : '')}
+        ${more ? `<div class="plan-acts-more" onclick="event.stopPropagation();App.goals.togglePlanActs('${jsStr(p.id)}')">展开剩余 ${acts.length - LIMIT} 条 ${icon('chevron-down')}</div>` : (expandedPlans.has(p.id) ? `<div class="plan-acts-more" onclick="event.stopPropagation();App.goals.togglePlanActs('${jsStr(p.id)}')">收起 ${icon('chevron-up')}</div>` : '')}
       </div>` : ''}
       ${archHTML}
       <div class="row-gap" style="margin-top:8px" onclick="event.stopPropagation()">
-        <button class="btn sm primary" onclick="App.overview.openActModal(null,'${jsStr(p.id)}')">＋ 活动</button>
+        <button class="btn sm primary" onclick="App.overview.openActModal(null,'${jsStr(p.id)}')">${icon('plus')} 活动</button>
         <label class="status-select">状态
           <select onchange="App.goals.setPlanStatus('${jsStr(p.id)}', this.value)">
             <option value="Incubating" ${p.status === 'Incubating' ? 'selected' : ''}>孵化中</option>
@@ -338,8 +339,8 @@ export function render(App, el) {
   if (!db.goals.length) {
     el.innerHTML = `
       <div class="card"><div class="card-head"><h3>目标与计划</h3></div>
-        <div class="plan-add" onclick="App.goals.openGoalModal()">＋ 点击创建你的第一个目标</div>
-        <button class="btn primary" style="margin-top:10px" onclick="App.goals.openGoalModal()">＋ 创建目标</button>
+        <div class="plan-add" onclick="App.goals.openGoalModal()">${icon('plus')} 点击创建你的第一个目标</div>
+        <button class="btn primary" style="margin-top:10px" onclick="App.goals.openGoalModal()">${icon('plus')} 创建目标</button>
       </div>`;
     return;
   }
@@ -353,8 +354,8 @@ export function render(App, el) {
     const archPlansHTML = archPlans.length ? `
       <div class="plan-arch">
         <div class="plan-arch-head" onclick="event.stopPropagation();App.goals.toggleArchPlans('${jsStr(g.id)}')">
-          <span class="collapse-btn">${apOpen ? '▾' : '▸'}</span>
-          <b>📦 已归档计划（${archPlans.length}）</b>
+          <span class="collapse-btn">${apOpen ? icon('chevron-down') : icon('chevron-right')}</span>
+          <b>${icon('archive')} 已归档计划（${archPlans.length}）</b>
         </div>
         <div class="plan-arch-body" style="${apOpen ? '' : 'display:none'}">
           <div class="plan-list">${archPlans.map((p) => planCard(App, p)).join('')}</div>
@@ -389,20 +390,20 @@ export function render(App, el) {
       <div class="goal-block ${gcoll ? 'collapsed' : ''}" data-gid="${jsStr(g.id)}">
         <div class="goal-head ${gth ? 'themed' : ''} ${gtone === 'light' ? 'tone-light' : ''}" data-gid="${jsStr(g.id)}" ${gth && gtone === null ? 'data-await-tone="1"' : ''} style="${gheadStyle}" title="点击收起 / 展开 · 长按 状态 / 归档">
           ${gth ? `<div class="gh-bg" style="background:${gth}"></div>` : ''}
-          <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleGoal('${jsStr(g.id)}')" aria-label="收起/展开">${gcoll ? '▸' : '▾'}</button>
+          <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleGoal('${jsStr(g.id)}')" aria-label="收起/展开">${gcoll ? icon('chevron-right') : icon('chevron-down')}</button>
           <div class="grow">
-            <b class="goal-title">🎯 ${esc(g.title)}</b>
+            <b class="goal-title">${icon('target')} ${esc(g.title)}</b>
             <span class="muted">${meta.join(' · ')}</span>
           </div>
           <div class="row-gap" onclick="event.stopPropagation()">
-            <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 计划</button>
+            <button class="btn sm primary" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">${icon('plus')} 计划</button>
             <button class="btn sm" onclick="App.goals.openGoalModal('${jsStr(g.id)}')">编辑</button>
             <button class="btn sm danger" onclick="App.goals.delGoal('${jsStr(g.id)}')">删除</button>
           </div>
           ${totalCount ? `<div class="goal-bar" title="完成度 ${pct}%（${doneCount}/${totalCount}）"><i style="width:${pct}%;${barColor ? `background:${barColor};` : ''}"></i></div>` : ''}
         </div>
         <div class="goal-plans ${gcoll ? 'hidden' : ''}" style="${guideStyle}">
-        ${plans.length ? `<div class="plan-list">${plans.map((p) => planCard(App, p)).join('')}</div>` : (archPlans.length ? '' : `<div class="plan-add" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">＋ 点击添加计划</div>`)}
+        ${plans.length ? `<div class="plan-list">${plans.map((p) => planCard(App, p)).join('')}</div>` : (archPlans.length ? '' : `<div class="plan-add" onclick="App.goals.openPlanModal('${jsStr(g.id)}')">${icon('plus')} 点击添加计划</div>`)}
         ${archPlansHTML}
         </div>
       </div>`;
@@ -413,8 +414,8 @@ export function render(App, el) {
   const archivedHTML = archivedGoals.length ? `
     <div class="goal-block">
       <div class="goal-head" onclick="App.goals.toggleArchived()" title="点击展开 / 收起归档目标" style="opacity:.75">
-        <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleArchived()" aria-label="展开/收起">${archivedExpanded ? '▾' : '▸'}</button>
-        <div class="grow"><b class="goal-title">📦 已归档（${archivedGoals.length}）</b><span class="muted">目标 · 历史存档，默认从主视图隐藏</span></div>
+        <button class="collapse-btn" tabindex="-1" onclick="event.stopPropagation();App.goals.toggleArchived()" aria-label="展开/收起">${archivedExpanded ? icon('chevron-down') : icon('chevron-right')}</button>
+        <div class="grow"><b class="goal-title">${icon('archive')} 已归档（${archivedGoals.length}）</b><span class="muted">目标 · 历史存档，默认从主视图隐藏</span></div>
       </div>
       <div class="goal-plans ${archivedExpanded ? '' : 'hidden'}" style="border-left:none;margin-left:0;padding-left:0">
         <div class="plan-list" style="opacity:.8">${archivedGoals.map(goalBlock).join('')}</div>
@@ -424,7 +425,7 @@ export function render(App, el) {
     <div class="card">
       <div class="card-head">
         <h3>目标 Goals <span class="muted">1 : N 计划</span></h3>
-        <button class="btn sm" onclick="App.goals.openGoalModal()">＋ 新建目标</button>
+        <button class="btn sm" onclick="App.goals.openGoalModal()">${icon('plus')} 新建目标</button>
       </div>
       ${activeGoals.map(goalBlock).join('')}
       ${archivedHTML}

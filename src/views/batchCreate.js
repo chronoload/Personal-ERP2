@@ -6,6 +6,7 @@
 // 与 dayGuide 的表面重复是刻意保留的 legacy 纪律，勿据此改动 dayGuide。
 // ============================================================
 import { esc, openModal, toast } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { defaultStartPrefill } from '../domain/schedule.js';
 
 // Date → 'YYYY-MM-DDTHH:MM'（本地分量补零；日期取自行自身时刻，跨零点自然换日）
@@ -72,7 +73,7 @@ export function openBatchCreate() {
       <div class="dg-act-row">
         <span class="dg-act-time">${hm(x.start)}</span>
         <span class="grow">${esc(x.title)}<span class="muted"> · ${x.minutes}m${x.plan_id ? ' · ' + esc(((db.plans.find((p) => p.id === x.plan_id) || {}).title) || '') : ''}</span></span>
-        <button class="btn sm danger" data-del="${i}">✕</button>
+        <button class="btn sm danger" data-del="${i}">${icon('close')}</button>
       </div>`).join('');
     list.innerHTML = rows || '<div class="empty">还没添加，从上方开始吧</div>';
     list.querySelectorAll('[data-del]').forEach((b) => {

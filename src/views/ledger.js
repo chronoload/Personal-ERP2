@@ -11,6 +11,7 @@ import { serializeLedger, parseLedger, applyLedger } from '../domain/ledger.js';
 import { Prefs } from '../store/prefs.js';
 import { saveDB } from '../store/db.js';
 import { toast, esc, openModal } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import Vditor from 'vditor';
 import 'vditor/dist/index.css';
 
@@ -35,10 +36,10 @@ export function render(App, el) {
   el.innerHTML = `
     <div class="card">
       <div class="card-head">
-        <h3>📒 文本账单</h3>
+        <h3>${icon('book')} 文本账单</h3>
         <div class="row-gap">
           <button class="btn sm" data-lg-syntax title="账单语法">？语法</button>
-          <button class="btn sm primary" data-lg-refresh title="用 db 重新组织账单">↻ 重建</button>
+          <button class="btn sm primary" data-lg-refresh title="用 db 重新组织账单">${icon('refresh')} 重建</button>
         </div>
       </div>
       <div id="ledger-vditor" data-lg-md></div>
@@ -58,7 +59,7 @@ export function render(App, el) {
     }
     preview.innerHTML =
       `<span>${esc(parts.join(' · ') || '已同步')}</span>` +
-      (warnings && warnings.length ? `<span class="warn">⚠ ${warnings.length} 条提示</span>` : '');
+      (warnings && warnings.length ? `<span class="warn">${icon('warning')} ${warnings.length} 条提示</span>` : '');
   };
 
   const sync = (force = false, fromInput = false) => {

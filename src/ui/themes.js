@@ -4,6 +4,7 @@
 //   theme = null | { type:'gradient', value:'linear-gradient(...)' }
 //                | { type:'image', url:'data:image/...' }
 // ============================================================
+import { icon } from './icons.js';
 
 export const THEMES = [
   { name: '晨曦', value: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)' },
@@ -68,7 +69,7 @@ export function themePickerHTML({ chosen }) {
     <div class="theme-row">
       <button type="button" class="theme-chip t-none ${chosen ? '' : 'on'}" data-t="none">无</button>
       ${THEMES.map((t) => `<button type="button" class="theme-chip ${chosen && chosen.type === 'gradient' && chosen.value === t.value ? 'on' : ''}" data-g="${t.value}" title="${t.name}" style="background:${t.value}"></button>`).join('')}
-      <label class="theme-chip t-upload" title="上传图片">📷<input type="file" accept="image/*" style="display:none" class="theme-file"></label>
+      <label class="theme-chip t-upload" title="上传图片">${icon('camera')}<input type="file" accept="image/*" style="display:none" class="theme-file"></label>
     </div>`;
 }
 

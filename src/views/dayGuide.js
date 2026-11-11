@@ -5,6 +5,7 @@
 // 完成/跳过后记录 dayGuideLast，当天不再打扰。
 // ============================================================
 import { esc } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { Prefs } from '../store/prefs.js';
 
 const STEPS = ['welcome', 'goal', 'plan', 'acts', 'summary'];
@@ -101,9 +102,9 @@ function render() {
     body = `
       ${head('开启新的一天', `现在是 ${hm(new Date())}，把剩下的时间安排好`)}
       <div class="dg-cards">
-        <div class="dg-card">🎯 定一个目标</div>
-        <div class="dg-card">📋 拆成今天的计划</div>
-        <div class="dg-card">⏱ 从现在起排满一整天</div>
+        <div class="dg-card">${icon('target')} 定一个目标</div>
+        <div class="dg-card">${icon('note')} 拆成今天的计划</div>
+        <div class="dg-card">${icon('clock')} 从现在起排满一整天</div>
       </div>
       ${foot('先跳过', '开始规划')}`;
   }
@@ -115,10 +116,10 @@ function render() {
       ${stepDots('goal')}
       ${chips(st.goals, '还没添加目标')}
       <div class="field"><label>新建目标</label><input id="dg-goal" placeholder="例：写完一本书"></div>
-      <button class="btn sm" data-addg>＋ 添加这个目标</button>
+      <button class="btn sm" data-addg>${icon('plus')} 添加这个目标</button>
       <div class="dg-or">或选用已有目标</div>
       <select id="dg-goal-existing"><option value="">— 选择 —</option>${goals}</select>
-      <button class="btn sm" data-adde style="margin-top:8px">＋ 选用已有目标</button>
+      <button class="btn sm" data-adde style="margin-top:8px">${icon('plus')} 选用已有目标</button>
       ${foot('上一步', '下一步，定计划')}`;
   }
 
@@ -134,7 +135,7 @@ function render() {
       <div class="field"><label>所属目标</label><select id="dg-plangoal">${gOpts}</select></div>
       <div class="field"><label>计划名称 *</label><input id="dg-plan" placeholder="例：每天写 2000 字"></div>
       <div class="field"><label>预算 价值元（留空 = 无限）</label><input id="dg-budget" type="number" min="0"></div>
-      <button class="btn sm" data-addp>＋ 添加这个计划</button>
+      <button class="btn sm" data-addp>${icon('plus')} 添加这个计划</button>
       ${foot('上一步', '下一步，排活动')}`;
   }
 
@@ -146,7 +147,7 @@ function render() {
       <div class="dg-act-row">
         <span class="dg-act-time">${hm(x.start)}</span>
         <span class="grow">${esc(x.title)}<span class="muted"> · ${x.minutes}m${x.plan_id ? ' · ' + esc((db.plans.find((p) => p.id === x.plan_id) || {}).title || '') : ''}</span></span>
-        <button class="btn sm danger" data-del="${i}">✕</button>
+        <button class="btn sm danger" data-del="${i}">${icon('close')}</button>
       </div>`).join('');
     body = `
       ${head('第三步 · 排满一整天', `从 ${hm(st.slot)} 起，新活动自动顺延`)}
@@ -156,7 +157,7 @@ function render() {
         <input id="dg-act-title" placeholder="活动名称，例：写第二章初稿">
         <div class="row-gap">
           <input id="dg-act-min" type="number" min="5" step="5" value="60" style="width:90px"><span class="muted">分钟</span>
-          <button class="btn primary sm" data-add>＋ 加入日程</button>
+          <button class="btn primary sm" data-add>${icon('plus')} 加入日程</button>
         </div>
       </div>
       <div class="dg-act-list">${rows || '<div class="empty">还没添加，从上一行开始吧</div>'}</div>

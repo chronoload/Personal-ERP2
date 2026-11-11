@@ -30,7 +30,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:paddingLeft="10dp"
-            android:text="＋ 新建"
+            android:text="新建"
             android:textColor="#4A7FBF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -52,15 +52,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_today_act1"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingRight="8dp"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginRight="8dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_today_txt1"
@@ -80,15 +78,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_today_act2"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingRight="8dp"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginRight="8dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_today_txt2"
@@ -108,15 +104,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_today_act3"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingRight="8dp"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginRight="8dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_today_txt3"
@@ -136,15 +130,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_today_act4"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingRight="8dp"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginRight="8dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_today_txt4"

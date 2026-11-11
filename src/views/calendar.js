@@ -6,6 +6,7 @@
 // 循环系列在两种视图都展开 occurrences[]：当前期=活卡，其余=未来期次/已办/跳过
 // ============================================================
 import { esc, badge, empty } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { activityWindow } from '../domain/engine.js';
 
 let calYear, calMonth, calSelected = null;
@@ -102,7 +103,7 @@ function agendaRow(App, a, t, occ, virtual) {
     const done = occ.status === 'done';
     return `
       <div class="agenda-row${a.id === calFocusId ? ' focus' : ''}" data-id="${jsStr(a.id)}">
-        <div class="agenda-time" style="color:${pcolor}">${done ? '✓' : '✕'} ${span}</div>
+        <div class="agenda-time" style="color:${pcolor}">${done ? icon('check') : icon('close')} ${span}</div>
         <div class="grow">
           <div class="agenda-title"><span class="plan-chip" style="background:${pcolor}"></span>${esc(a.title)} <span class="badge ${done ? 'b-green' : 'b-gray'}">${done ? '已办' : '跳过'}</span></div>
           <div class="muted">${planTitles(db, a.plan_ids)}</div>
@@ -121,7 +122,7 @@ function agendaRow(App, a, t, occ, virtual) {
         <div class="row-gap">
           <button class="btn sm primary" title="标记该期已完成（补记/提前勾掉）" onclick="App.overview.completeOccurrence('${jsStr(a.id)}','${jsStr(occ.date)}')">完成</button>
           <button class="btn sm" title="跳过该期次" onclick="App.overview.skipOccurrence('${jsStr(a.id)}','${jsStr(occ.date)}')">跳过</button>
-          <button class="btn sm" title="查看系列期次" onclick="App.overview.openOccurrencesModal('${jsStr(a.id)}')">📅</button>
+          <button class="btn sm" title="查看系列期次" onclick="App.overview.openOccurrencesModal('${jsStr(a.id)}')">${icon('calendar')}</button>
         </div>
       </div>`;
   }
@@ -129,17 +130,17 @@ function agendaRow(App, a, t, occ, virtual) {
   const rivals = (a.conflicts || [])
     .map((cid) => db.activities.find((x) => x.id === cid))
     .filter((o) => o && o.status === 'Planned' && overlapWin(activityWindow(a), activityWindow(o)));
-  const warn = rivals.length ? `<span title="与 ${rivals.map((o) => esc(o.title)).join('、')} 时间重叠（捆绑，开始时仲裁）">⚠</span> ` : '';
+  const warn = rivals.length ? `<span title="与 ${rivals.map((o) => esc(o.title)).join('、')} 时间重叠（捆绑，开始时仲裁）">${icon('warning')}</span> ` : '';
   return `
     <div class="agenda-row clickable focusable${a.id === calFocusId ? ' focus' : ''}" data-id="${jsStr(a.id)}" data-edit="${jsStr(a.id)}" title="点击编辑">
       <div class="agenda-time" style="color:${pcolor}">${warn}${span}</div>
       <div class="grow">
         <div class="agenda-title"><span class="plan-chip" style="background:${pcolor}"></span>${esc(a.title)} ${badge(a.status)}${a.planned_minutes ? `<span class="muted"> · ${a.planned_minutes}m</span>` : ''}</div>
-        ${a.note ? `<div class="agenda-note">📝 ${esc(a.note)}</div>` : ''}
+        ${a.note ? `<div class="agenda-note">${icon('note')} ${esc(a.note)}</div>` : ''}
         <div class="muted">${planTitles(db, a.plan_ids)}</div>
       </div>
       <div class="row-gap">
-        <button class="btn sm timer-btn" title="按任务计时（计入 time_logs）" onclick="App.timer.openForActivity('${jsStr(a.id)}')">🍅</button>
+        <button class="btn sm timer-btn" title="按任务计时（计入 time_logs）" onclick="App.timer.openForActivity('${jsStr(a.id)}')">${icon('tomato')}</button>
         ${a.status === 'Planned' ? `<button class="btn sm primary" onclick="App.startAct('${jsStr(a.id)}')">开始</button>` : ''}
         ${a.status === 'Started' ? (((a.preset_expenses || []).length || (a.preset_incomes || []).length)
           ? `<button class="btn sm primary" onclick="App.quickComplete('${jsStr(a.id)}')">完成</button>`
@@ -158,7 +159,7 @@ function agendaHTML(App, byDay, k) {
     <div class="cal-agenda">
       <div class="agenda-head">
         <span>${fmtDay(k)}<span class="muted"> · ${dayActs.length} 项${totalMin ? ` · 预计 ${totalMin} 分钟` : ''}</span></span>
-        <button class="btn sm" title="为 ${fmtDay(k)} 快速添加待办" onclick="App.overview.openActModal(null,null,'${padDateKey(k)}T09:00')">＋</button>
+        <button class="btn sm" title="为 ${fmtDay(k)} 快速添加待办" onclick="App.overview.openActModal(null,null,'${padDateKey(k)}T09:00')">${icon('plus')}</button>
       </div>
       ${dayActs.length ? dayActs.map((x) => agendaRow(App, x.a, x.t, x.occ, x.virtual)).join('') : empty('当天无安排', '＋ 点击此处，为该日快速添加待办')}
     </div>`;
@@ -225,9 +226,9 @@ function renderMonth(App, host, byDay, todayK, resync) {
         <h3>日历</h3>
         <div class="row-gap">
           ${modeToggleHTML()}
-          <button class="btn sm" data-cal="prev">‹ 上月</button>
+          <button class="btn sm" data-cal="prev">${icon('arrow-left')} 上月</button>
           <button class="btn sm" data-cal="today">今天</button>
-          <button class="btn sm" data-cal="next">下月 ›</button>
+          <button class="btn sm" data-cal="next">${icon('arrow-right')} 下月</button>
         </div>
       </div>
       <div class="cal-wrap">
@@ -299,9 +300,9 @@ function renderWeek(App, host, byDay, todayK, resync) {
         <h3>日历 · 周视图</h3>
         <div class="row-gap">
           ${modeToggleHTML()}
-          <button class="btn sm" data-cal="wprev">‹ 上周</button>
+          <button class="btn sm" data-cal="wprev">${icon('arrow-left')} 上周</button>
           <button class="btn sm" data-cal="wtoday">今天</button>
-          <button class="btn sm" data-cal="wnext">下周 ›</button>
+          <button class="btn sm" data-cal="wnext">${icon('arrow-right')} 下周</button>
         </div>
       </div>
       <div class="week-head">

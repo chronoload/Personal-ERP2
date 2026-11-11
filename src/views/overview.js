@@ -5,6 +5,7 @@
 // 所有写操作均经 App.engine（不变量强制），成功后才 refresh。
 // ============================================================
 import { esc, fmtNum, fmtDate, fmtDateTime, badge, openModal, closeModal, toast, btn, empty, resColor } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import * as calendar from './calendar.js';
 import { Prefs } from '../store/prefs.js';
 import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone, safeTheme } from '../ui/themes.js';
@@ -109,7 +110,7 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
       <select class="pr-res">${resOptsAct(entry ? entry.resource_id : '')}</select>
       <input class="pr-amt" type="number" min="0" step="0.01" value="${esc(entry ? entry.amount : '')}" placeholder="金额">
       <input class="pr-note" value="${esc(entry ? (entry.note || '') : '')}" placeholder="备注">
-      <button type="button" class="btn sm pr-del" title="移除">✕</button>
+      <button type="button" class="btn sm pr-del" title="移除">${icon('close')}</button>
     </div>`;
   const plansHTML = () =>
     db.plans.map((p) =>
@@ -140,8 +141,8 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
       <div class="step-divider">关联计划（多选 N:M）</div>
       <div class="chk-group" id="actPlanChips">${plansHTML()}</div>
       <div class="row-gap" style="margin-top:8px">
-        <button class="btn sm" data-newplan>＋ 新建计划</button>
-        <button class="btn sm" data-newgoal>＋ 新建目标</button>
+        <button class="btn sm" data-newplan>${icon('plus')} 新建计划</button>
+        <button class="btn sm" data-newgoal>${icon('plus')} 新建目标</button>
       </div>
       <div id="quick-create" data-enter-zone style="display:none;border:1px dashed #dfe3ea;border-radius:10px;padding:12px;margin-top:10px">
         <div id="quick-goal" style="display:none">
@@ -167,7 +168,7 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
         <div class="field"><label>地点约束（用于排班寻路与提醒门控）</label><select id="f-aplace">${placeOptsHTML()}</select></div>
         <div class="field"><label>专注类型（注意力预算）</label><select id="f-adepth">${depthOptsHTML()}</select></div>
       </div>
-      ${places.length ? '' : '<div class="muted" style="font-size:12px;margin:-2px 0 6px">尚无地点：可在「☰ → 📍 地点」添加后再指定</div>'}
+      ${places.length ? '' : `<div class="muted" style="font-size:12px;margin:-2px 0 6px">尚无地点：可在「${icon('menu')} → ${icon('pin')} 地点」添加后再指定</div>`}
       <div id="atomic-preview" class="muted" style="display:none;font-size:12px;margin:2px 0 4px"></div>
       <label class="chk" id="keep-conflict-row" style="display:none;margin:0 0 8px"><input type="checkbox" id="f-keepconflict"> 坚持此时间（与冲突活动捆绑，开始时仲裁先后）</label>
       <div class="grid2">
@@ -189,11 +190,11 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
         </div>
         <div class="muted" style="margin-top:4px">仅此期 = 把当期拆成独立活动；此期及后续 = 当期与其后全部期次日期整体平移</div>
       </div>` : ''}
-      <label class="chk" style="margin:0 0 4px"><input type="checkbox" id="f-haspreset" ${hasPreset ? 'checked' : ''}> ⚡ 预设收支（完成后一键入账，可空 · 多资源）</label>
+      <label class="chk" style="margin:0 0 4px"><input type="checkbox" id="f-haspreset" ${hasPreset ? 'checked' : ''}> ${icon('bolt')} 预设收支（完成后一键入账，可空 · 多资源）</label>
       <div id="preset-rows" class="preset-rows" style="${hasPreset ? '' : 'display:none'}">
-        <div class="step-divider">预设支出（消耗 · 可空）<button type="button" class="btn sm" id="pe-add">＋ 添加</button></div>
+        <div class="step-divider">预设支出（消耗 · 可空）<button type="button" class="btn sm" id="pe-add">${icon('plus')} 添加</button></div>
         <div id="pe-rows">${defPE.map((x) => presetRowHTML(x)).join('')}</div>
-        <div class="step-divider">预设收入（获得 · 可空）<button type="button" class="btn sm" id="pi-add">＋ 添加</button></div>
+        <div class="step-divider">预设收入（获得 · 可空）<button type="button" class="btn sm" id="pi-add">${icon('plus')} 添加</button></div>
         <div id="pi-rows">${defPI.map((x) => presetRowHTML(x)).join('')}</div>
       </div>
       <div class="field"><label>卡片主题（虚化背景，可选）</label><div id="actThemePicker"></div></div>`,
@@ -286,10 +287,10 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
     const hits = engine.findConflicts(db, { startMs: s, endMs: e2, excludeId: a ? a.id : null });
     box.style.display = 'block';
     if (!hits.length) {
-      box.innerHTML = `🕐 ${hm(s)}–${hm(e2)} · 无冲突`;
+      box.innerHTML = `${icon('clock')} ${hm(s)}–${hm(e2)} · 无冲突`;
       row.style.display = 'none';
     } else {
-      box.innerHTML = `⚠ ${hm(s)}–${hm(e2)} 与 ${hits.map((h) => `「${esc(h.title)}」`).join('、')} 重叠，保存时将自动顺延`;
+      box.innerHTML = `${icon('warning')} ${hm(s)}–${hm(e2)} 与 ${hits.map((h) => `「${esc(h.title)}」`).join('、')} 重叠，保存时将自动顺延`;
       row.style.display = 'block';
     }
   };
@@ -378,7 +379,7 @@ export function openCompleteModal(activityId, opts = {}) {
       <select class="pr-res">${resOpts(sel)}</select>
       <input class="pr-amt" type="number" min="0" step="0.01" value="${esc(amt ?? '')}" placeholder="金额">
       <input class="pr-note" value="${esc(note || '')}" placeholder="备注">
-      <button type="button" class="btn sm pr-del" title="移除">✕</button>
+      <button type="button" class="btn sm pr-del" title="移除">${icon('close')}</button>
     </div>`;
   // 语境提速：收入金额/产出标题/tags 按上次或活动语境预填，用户只需微调
   const defIncomeAmt = prefs.lastIncomeAmount || '';
@@ -393,10 +394,10 @@ export function openCompleteModal(activityId, opts = {}) {
     accent: 'warn',
     bodyHTML: `
       <div class="callout warn">「${esc(a.title)}」进入 Completed 需登记 <b>支出/收入</b> 至少一笔，并挂 <b>产出</b>。可同时填收支两栏。</div>
-      ${tracked > 0 ? `<div class="callout">⏱ 已按任务计时 <b>${tracked}</b> 分钟，支出金额已预填，可按需调整。</div>` : ''}
-      <div class="step-divider step-1">① 支出（消耗 · 可空）<button type="button" class="btn sm" id="c-e-add">＋ 添加</button></div>
+      ${tracked > 0 ? `<div class="callout">${icon('clock')} 已按任务计时 <b>${tracked}</b> 分钟，支出金额已预填，可按需调整。</div>` : ''}
+      <div class="step-divider step-1">① 支出（消耗 · 可空）<button type="button" class="btn sm" id="c-e-add">${icon('plus')} 添加</button></div>
       <div id="c-e-rows">${cRow(defExpenseRes, tracked > 0 ? tracked : defExpenseAmt, '')}</div>
-      <div class="step-divider step-1">② 收入（获得 · 可空）<button type="button" class="btn sm" id="c-i-add">＋ 添加</button></div>
+      <div class="step-divider step-1">② 收入（获得 · 可空）<button type="button" class="btn sm" id="c-i-add">${icon('plus')} 添加</button></div>
       <div id="c-i-rows">${cRow(prefs.lastIncomeRes, defIncomeAmt, '')}</div>
       <div class="step-divider step-2">③ 产出（10B / 11B 自由标签）</div>
       <div class="field"><label>产出标题 *</label><input id="f-cout" value="${esc(defOutTitle)}"></div>
@@ -491,7 +492,7 @@ export function openAmendModal(activityId) {
       <select class="pr-res">${resOptsAm(entry ? entry.resource_id : '')}</select>
       <input class="pr-amt" type="number" min="0" step="0.01" value="${esc(entry ? entry.amount : '')}" placeholder="金额">
       <input class="pr-note" value="${esc(entry ? (entry.note || '') : '')}" placeholder="备注">
-      <button type="button" class="btn sm pr-del" title="移除">✕</button>
+      <button type="button" class="btn sm pr-del" title="移除">${icon('close')}</button>
     </div>`;
   const m = openModal({
     title: '改账 · 收支修正',
@@ -499,9 +500,9 @@ export function openAmendModal(activityId) {
     accent: 'warn',
     bodyHTML: `
       <div class="callout warn">「${esc(a.title)}」已入账的收支将按<b>冲正语义</b>反转并重记（不变量5，审计留痕），产出与状态不变。</div>
-      <div class="step-divider">① 支出（可空）<button type="button" class="btn sm" id="am-e-add">＋ 添加</button></div>
+      <div class="step-divider">① 支出（可空）<button type="button" class="btn sm" id="am-e-add">${icon('plus')} 添加</button></div>
       <div id="am-e-rows">${expenses.map((x) => rowHTML(x)).join('')}</div>
-      <div class="step-divider">② 收入（可空）<button type="button" class="btn sm" id="am-i-add">＋ 添加</button></div>
+      <div class="step-divider">② 收入（可空）<button type="button" class="btn sm" id="am-i-add">${icon('plus')} 添加</button></div>
       <div id="am-i-rows">${incomes.map((x) => rowHTML(x)).join('')}</div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>冲正并重记</button>`,
   });
@@ -577,12 +578,12 @@ function activityCard(App, a) {
   // 信息量压缩：归属/日期/循环 三行 meta 合一；实际起止移入 title（编辑弹窗/日历里仍可见）；
   // 计时进度条只在有实际计时值时出现（没开始计时的卡片不占一整行 0%）。
   const dateBit = (a.planned_start || a.planned_date)
-    ? `📅 ${a.planned_start ? `${esc(String(a.planned_start).replace('T', ' ').slice(5))}${plannedEndOf(a) ? `–${plannedEndOf(a)}` : ''}` : esc(String(a.planned_date))}${a.planned_minutes ? ` · ${esc(a.planned_minutes)}m` : ''}`
-    : (a.planned_minutes ? `⏱ ${esc(a.planned_minutes)}m` : '');
+    ? `${icon('calendar')} ${a.planned_start ? `${esc(String(a.planned_start).replace('T', ' ').slice(5))}${plannedEndOf(a) ? `–${plannedEndOf(a)}` : ''}` : esc(String(a.planned_date))}${a.planned_minutes ? ` · ${esc(a.planned_minutes)}m` : ''}`
+    : (a.planned_minutes ? `${icon('clock')} ${esc(a.planned_minutes)}m` : '');
   const metaBits = [];
   if (pn && pn !== '未关联') metaBits.push(pn);
   if (dateBit) metaBits.push(dateBit);
-  if (a.repeat) metaBits.push(`🔁 ${REPEAT_LABEL[a.repeat] || a.repeat} · ${seriesProg(a)}${a.repeat_until ? ` 至 ${esc(a.repeat_until)}` : ''}`);
+  if (a.repeat) metaBits.push(`${icon('refresh')} ${REPEAT_LABEL[a.repeat] || a.repeat} · ${seriesProg(a)}${a.repeat_until ? ` 至 ${esc(a.repeat_until)}` : ''}`);
   if (pn === '未关联') metaBits.push('未关联');
   // 未来待做期次（看板内嵌，与日历对齐）：pending 且非当前期
   const pendingFuture = (a.repeat && Array.isArray(a.occurrences))
@@ -597,40 +598,40 @@ function activityCard(App, a) {
         <span class="kc-title">${esc(a.title)}</span>
         ${badge(a.status)}
       </div>
-      ${a.note ? `<div class="kc-note" title="${esc(a.note)}">📝 ${esc(a.note)}</div>` : ''}
+      ${a.note ? `<div class="kc-note" title="${esc(a.note)}">${icon('note')} ${esc(a.note)}</div>` : ''}
       ${metaBits.length ? `<div class="kc-meta">${metaBits.join(' · ')}</div>` : ''}
       ${tracked > 0 ? `
       <div class="kc-time-progress" title="已计时 ${trackedLabel} / 计划 ${plannedMin || '—'} 分钟">
-        <div class="kc-tp-label"><span><b style="color:${pcolor || '#ff2d55'}">⏱ 已计时 ${trackedLabel}</b>${plannedMin ? ` / 计划 ${plannedMin}m` : ''}</span>${plannedMin ? `<span>${tpct >= 100 ? '100+' : Math.round(tpct)}%</span>` : ''}</div>
+        <div class="kc-tp-label"><span><b style="color:${pcolor || '#ff2d55'}">${icon('clock')} 已计时 ${trackedLabel}</b>${plannedMin ? ` / 计划 ${plannedMin}m` : ''}</span>${plannedMin ? `<span>${tpct >= 100 ? '100+' : Math.round(tpct)}%</span>` : ''}</div>
         ${plannedMin ? `<div class="progress"><i class="bar" style="width:${tpct}%;background:${pcolor || '#ff2d55'}"></i></div>` : ''}
       </div>` : ''}
-      ${blocked ? `<div class="kc-meta warn">⛔ 关联计划预算已耗尽</div>` : ''}
+      ${blocked ? `<div class="kc-meta warn">${icon('ban')} 关联计划预算已耗尽</div>` : ''}
       ${outs.length ? `<div class="kc-outs">${outs.map((o) => `
         <div class="kc-out">
-          <span>📄 ${esc(o.title)} ${o.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')} ${badge(o.status)}</span>
+          <span>${icon('file')} ${esc(o.title)} ${o.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')} ${badge(o.status)}</span>
           ${o.status === 'Draft' ? `<button class="btn sm" onclick="App.engine.setOutputStatus(App.db,'${jsStr(o.id)}','Published');App.overview.refreshBoard()">发布</button>`
             : o.status === 'Published' ? `<button class="btn sm primary" onclick="App.engine.setOutputStatus(App.db,'${jsStr(o.id)}','Archived');App.overview.refreshBoard()">归档 → 价值流</button>` : ''}
         </div>`).join('')}</div>` : ''}
       <div class="kc-actions">
-        <button class="btn sm timer-btn" onclick="App.timer.openForActivity('${jsStr(a.id)}')">🍅 计时</button>
+        <button class="btn sm timer-btn" onclick="App.timer.openForActivity('${jsStr(a.id)}')">${icon('tomato')} 计时</button>
         ${stateActions}
         <div class="act-menu-wrap">
           <button class="btn sm" title="更多操作" onclick="App.overview.toggleActMenu('${jsStr(a.id)}')">⋯</button>
           <div class="act-menu hidden" id="am-${esc(a.id)}">
             <button onclick="App.overview.openActModal('${jsStr(a.id)}')">编辑</button>
-            ${a.repeat ? `<button onclick="App.overview.openOccurrencesModal('${jsStr(a.id)}')">📅 期次</button>` : ''}
-            ${a.repeat ? `<button onclick="App.overview.extendRecurrence('${jsStr(a.id)}')">＋ 续生成后续 30 期</button>` : ''}
+            ${a.repeat ? `<button onclick="App.overview.openOccurrencesModal('${jsStr(a.id)}')">${icon('calendar')} 期次</button>` : ''}
+            ${a.repeat ? `<button onclick="App.overview.extendRecurrence('${jsStr(a.id)}')">${icon('plus')} 续生成后续 30 期</button>` : ''}
             <button class="danger" onclick="App.overview.delAct('${jsStr(a.id)}')">删除</button>
           </div>
         </div>
       </div>
       ${pendingFuture.length ? `
       <div class="kc-occ" style="margin:6px 0 0;padding-top:6px;border-top:1px dashed var(--border)">
-        <div class="kc-occ-head" onclick="event.stopPropagation();App.overview.toggleSeriesOccs('${jsStr(a.id)}')" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer;margin-bottom:4px">📅 未来 ${pendingFuture.length} 期 <span class="collapse-btn">${occOpen ? '▾' : '▸'}</span></div>
+        <div class="kc-occ-head" onclick="event.stopPropagation();App.overview.toggleSeriesOccs('${jsStr(a.id)}')" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer;margin-bottom:4px">${icon('calendar')} 未来 ${pendingFuture.length} 期 <span class="collapse-btn">${occOpen ? icon('chevron-down') : icon('chevron-right')}</span></div>
         <div class="kc-occ-body" style="${occOpen ? '' : 'display:none'}">
           ${pendingFuture.map((o) => `
           <div class="kc-occ-row" style="display:flex;gap:6px;align-items:center;margin:2px 0">
-            <span class="grow" style="flex:1;font-size:11px">📅 ${esc(o.date)}</span>
+            <span class="grow" style="flex:1;font-size:11px">${icon('calendar')} ${esc(o.date)}</span>
             <button class="btn sm primary" title="完成该期并入账" onclick="event.stopPropagation();App.overview.completeOccurrence('${jsStr(a.id)}','${jsStr(o.date)}')">完成</button>
             <button class="btn sm" title="跳过该期" onclick="event.stopPropagation();App.overview.skipOccurrence('${jsStr(a.id)}','${jsStr(o.date)}')">跳过</button>
           </div>`).join('')}
@@ -858,7 +859,7 @@ export function openOccurrencesModal(id) {
   if (!a || !a.repeat) return;
   const occs = a.occurrences || [];
   const rows = occs.map((o) => {
-    const st = o.status === 'done' ? '<span class="badge b-green">✓ 完成</span>'
+    const st = o.status === 'done' ? `<span class="badge b-green">${icon('check')} 完成</span>`
       : o.status === 'skipped' ? '<span class="badge b-gray">跳过</span>'
         : '<span class="badge b-amber">待做</span>';
     // 该期账本：同一系列、occurrence_date === 该期日期的流水 / 产出
@@ -874,7 +875,7 @@ export function openOccurrencesModal(id) {
         if (inAmt > 0) bits.push(`收 <b>+${fmtNum(inAmt)}</b>`);
         if (bits.length) ledger += `<span class="muted"> · ${bits.join(' ')}</span>`;
       }
-      if (occOuts.length) ledger += `<span class="muted"> · 📤 ${esc(occOuts.map((x) => x.title).join('、'))}</span>`;
+      if (occOuts.length) ledger += `<span class="muted"> · ${icon('upload')} ${esc(occOuts.map((x) => x.title).join('、'))}</span>`;
       if (!occTxs.length && !occOuts.length) ledger = '<span class="muted"> · 未记账</span>';
     }
     return `<div class="tx-row"><div class="grow"><div class="tx-main"><b>${esc(o.date)}</b>${o.status === 'done' ? `<span class="muted"> · ${fmtDateTime(o.completedAt)}</span>` : ''}${ledger}</div></div>${st}</div>`;
@@ -924,7 +925,7 @@ function kanbanGroupsBar() {
   if (!isCarousel()) return ''; // 桌面多列自适应并列，无需切换条
   // 完整六态一维轴：待办/进行中/已完成/失败/已归档 —— 移动端每次看一屏，可探察全部状态维度
   return `<div class="kanban-groups">` +
-    [{ g: 'todo', l: '📋 待办' }, { g: 'doing', l: '⚡ 进行中' }, { g: 'done', l: '✅ 已完成' }, { g: 'failed', l: '❌ 失败' }, { g: 'archived', l: '📦 已归档' }]
+    [{ g: 'todo', l: `${icon('note')} 待办` }, { g: 'doing', l: `${icon('bolt')} 进行中` }, { g: 'done', l: `${icon('check-circle')} 已完成` }, { g: 'failed', l: `${icon('close')} 失败` }, { g: 'archived', l: `${icon('archive')} 已归档` }]
       .map((x) => `<button type="button" class="${kanbanGroup === x.g ? 'on' : ''}" data-group="${x.g}" onclick="App.overview.setKanbanGroup('${x.g}')">${x.l}</button>`).join('') +
     `</div>`;
 }
@@ -958,13 +959,13 @@ function kanbanFilterBar(App) {
     <button type="button" class="tag-chip ${on ? 'on' : ''}" data-f="${id}" onclick="App.overview.setKanbanPlanFilter('${jsStr(id)}')">${label} <span class="muted">${cnt}</span></button>`;
   // 第一层（单一横向滚动条 + 边缘渐隐光晕提示可滑动）：今日 / 全部 / 未关联 + 目标汇聚 chips
   let html = `<div class="kb-scroll-wrap" data-edge><div class="kanban-filter">`;
-  html += `<button type="button" class="tag-chip ${kanbanTodayOnly ? 'on' : ''}" data-today="1" onclick="App.overview.setKanbanToday(${!kanbanTodayOnly})">📅 今日 <span class="muted">${todayN}</span></button>`;
+  html += `<button type="button" class="tag-chip ${kanbanTodayOnly ? 'on' : ''}" data-today="1" onclick="App.overview.setKanbanToday(${!kanbanTodayOnly})">${icon('calendar')} 今日 <span class="muted">${todayN}</span></button>`;
   html += chip('all', '全部', db.activities.length, !kanbanTodayOnly && !kanbanGoalFilter && kanbanPlanFilter === 'all');
   html += chip('none', '未关联', countOf((a) => !a.plan_ids || !a.plan_ids.length), !kanbanTodayOnly && !kanbanGoalFilter && kanbanPlanFilter === 'none');
   for (const g of db.goals) {
     const gPlans = db.plans.filter((p) => p.goal_id === g.id).map((p) => p.id);
     const gCnt = db.activities.filter((a) => (a.plan_ids || []).some((pid) => gPlans.includes(pid))).length;
-    html += `<button type="button" class="tag-chip ${kanbanGoalFilter === g.id ? 'on' : ''}" data-goal="${jsStr(g.id)}" onclick="App.overview.setKanbanGoal('${jsStr(g.id)}')">🎯 ${esc(g.title)} <span class="muted">${gCnt}</span></button>`;
+    html += `<button type="button" class="tag-chip ${kanbanGoalFilter === g.id ? 'on' : ''}" data-goal="${jsStr(g.id)}" onclick="App.overview.setKanbanGoal('${jsStr(g.id)}')">${icon('target')} ${esc(g.title)} <span class="muted">${gCnt}</span></button>`;
   }
   html += `</div></div>`;
   // 第二层（目标展开）：该目标下计划 chips，仍单一横向滚动条 + 边缘光晕
@@ -1036,11 +1037,11 @@ function kanbanHTML(App) {
   //  Failed 不再无处安放：显式终态列，防「一旦失败就从视野消失」的维度丢失。
   //  Archived 从 done 底部折叠区提升为独立投影位：carousel 时独占一屏，桌面时紧随其后。
   const groups = [
-    { key: 'todo', label: '📋 待办', colKey: 'Planned', match: (a) => a.status === 'Planned' },
-    { key: 'doing', label: '⚡ 进行中', colKey: 'Started', match: (a) => a.status === 'Started' },
-    { key: 'done', label: '✅ 已完成', colKey: 'Done', match: (a) => a.status === 'Completed' || a.status === 'Reviewed' },
-    { key: 'failed', label: '❌ 失败', colKey: 'Failed', match: (a) => a.status === 'Failed' },
-    { key: 'archived', label: '📦 已归档', colKey: 'Archived', match: (a) => a.status === 'Archived' },
+    { key: 'todo', label: `${icon('note')} 待办`, colKey: 'Planned', match: (a) => a.status === 'Planned' },
+    { key: 'doing', label: `${icon('bolt')} 进行中`, colKey: 'Started', match: (a) => a.status === 'Started' },
+    { key: 'done', label: `${icon('check-circle')} 已完成`, colKey: 'Done', match: (a) => a.status === 'Completed' || a.status === 'Reviewed' },
+    { key: 'failed', label: `${icon('close')} 失败`, colKey: 'Failed', match: (a) => a.status === 'Failed' },
+    { key: 'archived', label: `${icon('archive')} 已归档`, colKey: 'Archived', match: (a) => a.status === 'Archived' },
   ];
   const shown = isCarousel() ? groups.filter((g) => g.key === kanbanGroup) : groups;
   const cols = shown.map((g) => {
@@ -1051,17 +1052,17 @@ function kanbanHTML(App) {
       const vis = !doneExpanded ? items.slice(0, DONE_PREVIEW) : items;
       const hidden = items.length - vis.length;
       more = (hidden > 0 || doneExpanded) && items.length > DONE_PREVIEW
-        ? `<button class="btn sm" style="margin:8px auto 0;display:block;width:auto" onclick="App.overview.toggleDone()">${doneExpanded ? '⬆ 收起，只看最近 ' + DONE_PREVIEW + ' 条' : `⬇ 展开更早的 ${hidden} 条`}</button>` : '';
+        ? `<button class="btn sm" style="margin:8px auto 0;display:block;width:auto" onclick="App.overview.toggleDone()">${doneExpanded ? `${icon('arrow-up')} 收起，只看最近 ` + DONE_PREVIEW + ' 条' : `${icon('arrow-down')} 展开更早的 ${hidden} 条`}</button>` : '';
       items = vis;
     } else if (g.key === 'archived' || g.key === 'failed') {
       items = items.sort((x, y) => (y.actual_end || y.created || 0) - (x.actual_end || x.created || 0));
     }
     const addBtn = (g.key === 'todo' || g.key === 'doing')
-      ? `<button class="btn sm" title="快速添加待办" onclick="App.overview.openActModal()">＋</button>` : '';
+      ? `<button class="btn sm" title="快速添加待办" onclick="App.overview.openActModal()">${icon('plus')}</button>` : '';
     return `
       <div class="kanban-col ${g.key === 'failed' ? 'col-failed' : ''} ${g.key === 'archived' ? 'col-archived' : ''}" data-col="${g.colKey}">
         <div class="kanban-head">${g.label} <span class="cnt">${items.length}</span>${addBtn}</div>
-        <div class="kanban-body">${items.map((a) => activityCard(App, a)).join('') || '<div class="kanban-add">＋ 点击添加待办</div>'}${more}</div>
+        <div class="kanban-body">${items.map((a) => activityCard(App, a)).join('') || `<div class="kanban-add">${icon('plus')} 点击添加待办</div>`}${more}</div>
       </div>`;
   }).join('');
   return cols;
@@ -1230,7 +1231,7 @@ export function openSchedulerBoard() {
     // 延期：有排期但已过期，仍未完成——也属于「该重新排进日程」的积压
     const overdueHTML = overdue.length ? `
       <details class="sched-group" open>
-        <summary><b>↩ 延期未完成</b><span class="muted"> · ${overdue.length} 条</span></summary>
+        <summary><b>${icon('undo')} 延期未完成</b><span class="muted"> · ${overdue.length} 条</span></summary>
         ${overdue.map((a) => {
           const dayKey = String(a.planned_start || a.planned_date || '').split('T')[0];
           return `
@@ -1250,7 +1251,7 @@ export function openSchedulerBoard() {
         这些都是已经规划、但还没落到具体时间上的活动。
       </div>
       <div class="row-gap" style="margin-bottom:8px">
-        <button class="btn primary sm" onclick="App.overview.fillToday()">⚡ 把未指派排满今天</button>
+        <button class="btn primary sm" onclick="App.overview.fillToday()">${icon('bolt')} 把未指派排满今天</button>
         <span class="muted">从 09:00（或现在）开始依次塞进空档，到 23:00 停</span>
       </div>
       <div class="sched-groups">${overdueHTML}${groupHTML}</div>`;
@@ -1305,9 +1306,9 @@ export function render(App, el) {
   el.innerHTML = `
     <div class="dash-pager" id="dash-pager">
       <div class="dash-nav">
-        <button type="button" class="dash-nav-item on" data-page="0">📋 活动看板</button>
-        <button type="button" class="dash-nav-item" data-page="1">📅 当日日程</button>
-        <button type="button" class="dash-nav-item" data-page="2">📝 编辑器</button>
+        <button type="button" class="dash-nav-item on" data-page="0">${icon('note')} 活动看板</button>
+        <button type="button" class="dash-nav-item" data-page="1">${icon('calendar')} 当日日程</button>
+        <button type="button" class="dash-nav-item" data-page="2">${icon('edit')} 编辑器</button>
       </div>
       <div class="dash-track">
         <section class="dash-page">
@@ -1315,8 +1316,8 @@ export function render(App, el) {
             <div class="card-head">
               <h3>活动看板</h3>
               <div class="row-gap">
-                <button class="btn sm" onclick="App.overview.openSchedulerBoard()" title="把规划好但没排时间的活动排进日程">📋 待排程</button>
-                <button class="btn sm primary" onclick="App.overview.openActModal()">＋ 活动</button>
+                <button class="btn sm" onclick="App.overview.openSchedulerBoard()" title="把规划好但没排时间的活动排进日程">${icon('note')} 待排程</button>
+                <button class="btn sm primary" onclick="App.overview.openActModal()">${icon('plus')} 活动</button>
               </div>
             </div>
             <div id="kanban-root">${kanbanGroupsBar(App)}${kanbanFilterBar(App)}<div class="kanban">${kanbanHTML(App)}</div></div>

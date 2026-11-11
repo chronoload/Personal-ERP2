@@ -103,6 +103,9 @@ public class HomeTodayWidgetProvider extends AppWidgetProvider {
     fresh.putExtra("erp_fresh_date", WidgetStore.todayKey());
     PendingIntent pf = PendingIntent.getActivity(ctx, 2001, fresh, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     rv.setOnClickPendingIntent(R.id.widget_home_add, pf);
+    // 「＋ 添加今日日程」的加号用 vector drawable
+    rv.setTextViewCompoundDrawablesRelative(R.id.widget_home_add, R.drawable.widget_ic_plus_add, 0, 0, 0);
+    rv.setInt(R.id.widget_home_add, "setCompoundDrawablePadding", 5);
 
     bindOpen(ctx, rv, R.id.widget_home_title, false);
     bindOpen(ctx, rv, R.id.widget_home_date, false);
@@ -128,22 +131,22 @@ public class HomeTodayWidgetProvider extends AppWidgetProvider {
     else if ("unscheduled".equals(kind)) title = "待排 · " + title;
     if (tracked > 0) title = title + "  ⏱" + tracked + "m";
 
-    String g; int color;
-    if ("running".equals(kind) || "Started".equals(status)) { g = "●"; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; }
-    else if ("overdue".equals(kind)) { g = "↩"; color = dark ? 0xFFE0B27A : 0xFFC8892F; }
-    else if ("unscheduled".equals(kind)) { g = "·"; color = dark ? 0xFFA8B0BD : 0xFF8A93A3; }
+    int g; int color;
+    if ("running".equals(kind) || "Started".equals(status)) { g = R.drawable.widget_ic_running; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; }
+    else if ("overdue".equals(kind)) { g = R.drawable.widget_ic_overdue; color = dark ? 0xFFE0B27A : 0xFFC8892F; }
+    else if ("unscheduled".equals(kind)) { g = R.drawable.widget_ic_more; color = dark ? 0xFFA8B0BD : 0xFF8A93A3; }
     else {
       switch (status) {
-        case "Started": g = "●"; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; break;
-        case "Completed": case "Reviewed": case "Archived": g = "✓"; color = dark ? 0xFF8A93A3 : 0xFF9AA3B2; break;
-        case "Failed": g = "✕"; color = dark ? 0xFFE08A8A : 0xFFC05050; break;
-        default: g = "○"; color = dark ? 0xFF8FB8E8 : 0xFF4A7FBF; break;
+        case "Started": g = R.drawable.widget_ic_running; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; break;
+        case "Completed": case "Reviewed": case "Archived": g = R.drawable.widget_ic_done; color = dark ? 0xFF8A93A3 : 0xFF9AA3B2; break;
+        case "Failed": g = R.drawable.widget_ic_failed; color = dark ? 0xFFE08A8A : 0xFFC05050; break;
+        default: g = R.drawable.widget_ic_wait; color = dark ? 0xFF8FB8E8 : 0xFF4A7FBF; break;
       }
     }
 
     rv.setViewVisibility(row, View.VISIBLE);
-    rv.setTextViewText(glyph, g);
-    rv.setTextColor(glyph, color);
+    rv.setImageViewResource(glyph, g);
+    rv.setInt(glyph, "setColorFilter", color);
     rv.setTextViewText(time, clock);
     rv.setTextColor(time, dark ? 0xFFA8B0BD : 0xFF6B7482);
     rv.setTextViewText(txt, title);

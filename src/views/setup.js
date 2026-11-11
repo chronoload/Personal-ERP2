@@ -4,6 +4,7 @@
 // 至少添加 1 个资源后才能进入主界面。
 // ============================================================
 import { esc, fmtNum, toast } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 
 // data-* 属性值转义（同 overview.js）：\ 与 ' 按 JS 转义，" 转 \x22 防止属性提前闭合
 function jsStr(s) {
@@ -45,7 +46,7 @@ export function render(App, el) {
       <div id="s-list" class="setup-list"></div>
 
       <div class="setup-foot">
-        <button class="btn primary" id="s-done" ${db.resources.length ? '' : 'disabled'}>完成初始化，开始使用 →</button>
+        <button class="btn primary" id="s-done" ${db.resources.length ? '' : 'disabled'}>完成初始化，开始使用 ${icon('arrow-right')}</button>
       </div>
     </div>
   `;

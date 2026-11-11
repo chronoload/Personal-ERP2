@@ -4,6 +4,7 @@
 // ============================================================
 
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { icon } from './icons.js';
 
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
@@ -74,7 +75,7 @@ export function openModal({ title, bodyHTML, footerHTML, width = 520, accent = '
       <div class="modal-panel accent-${accent}" style="max-width:${width}px" onclick="event.stopPropagation()">
         <div class="modal-head">
           <h3>${esc(title)}</h3>
-          <button class="icon-btn" data-close>✕</button>
+          <button class="icon-btn" data-close>${icon('close')}</button>
         </div>
         <div class="modal-body">${bodyHTML}</div>
         ${footerHTML ? `<div class="modal-foot">${footerHTML}</div>` : ''}

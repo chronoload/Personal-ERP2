@@ -7,6 +7,7 @@ import { loadDB, saveDB, resetDB, ensureSeq, normalizeDB, initErpFileSync, flush
 import { Prefs } from './store/prefs.js';
 import { bgStyle } from './ui/themes.js';
 import { openModal, toast, esc, fmtNum } from './ui/helpers.js';
+import { icon } from './ui/icons.js';
 import * as engine from './domain/engine.js';
 import { Widget } from './services/widget.js';
 import { LockScreen } from './services/lockScreen.js';
@@ -217,7 +218,7 @@ const App = {
       'max-width:min(92vw,560px)',
     ].join(';');
     bar.innerHTML =
-      `<span style="flex:1">✓ 已入账 ${parts.join(' / ')} · 产出「${esc(s.output_title)}」</span>` +
+      `<span style="flex:1">${icon('check')} 已入账 ${parts.join(' / ')} · 产出「${esc(s.output_title)}」</span>` +
       `<button class="btn sm" data-qc-edit>有要改的吗</button>` +
       `<button class="btn sm primary" data-qc-close>关闭</button>`;
     bar.querySelector('[data-qc-close]').onclick = () => bar.remove();
@@ -337,9 +338,9 @@ function syncTopbarDock() {
     dock.className = 'topbar-dock ' + mode;
     dock.innerHTML = `
       <button class="dock-logo" onclick="App.timer.open()" title="计时器">P</button>
-      <button class="btn" onclick="App.overview.openBatchCreate()" title="批量创建活动">⚡</button>
-      <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">☰</button>
-      <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">⏱</button>`;
+      <button class="btn" onclick="App.overview.openBatchCreate()" title="批量创建活动">${icon('bolt')}</button>
+      <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">${icon('menu')}</button>
+      <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">${icon('clock')}</button>`;
     dock.style.display = '';
   } else if (dock) {
     dock.style.display = 'none';

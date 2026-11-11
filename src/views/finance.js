@@ -6,6 +6,7 @@
 // 卡片内联事件统一走 App.finance.*（与 overview 解耦，便于独立装卸）。
 // ============================================================
 import { esc, fmtNum, fmtDate, fmtDateTime, badge, openModal, toast, empty, resColor } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { Prefs } from '../store/prefs.js';
 import { parseLedgerCommand, applyOps, defaultResourceId } from '../domain/ledger.js';
 import { analyze } from '../domain/capital.js';
@@ -78,9 +79,9 @@ export function openKeypad() {
       <div class="kp-res" data-kp-res>${chips}</div>
       <div class="field"><input id="kp-note" placeholder="备注（可选）" autocomplete="off"></div>
       <div class="kp-pad">
-        <button class="kp-key" data-kp-num="7">7</button><button class="kp-key" data-kp-num="8">8</button><button class="kp-key" data-kp-num="9">9</button><button class="kp-key" data-kp-del>⌫</button>
+        <button class="kp-key" data-kp-num="7">7</button><button class="kp-key" data-kp-num="8">8</button><button class="kp-key" data-kp-num="9">9</button><button class="kp-key" data-kp-del>${icon('backspace')}</button>
         <button class="kp-key" data-kp-num="4">4</button><button class="kp-key" data-kp-num="5">5</button><button class="kp-key" data-kp-num="6">6</button><button class="kp-key kp-dir-btn" data-kp-dir>− 支出</button>
-        <button class="kp-key" data-kp-num="1">1</button><button class="kp-key" data-kp-num="2">2</button><button class="kp-key" data-kp-num="3">3</button><button class="kp-key kp-submit" data-kp-submit title="加入命令区">＋ 加入</button>
+        <button class="kp-key" data-kp-num="1">1</button><button class="kp-key" data-kp-num="2">2</button><button class="kp-key" data-kp-num="3">3</button><button class="kp-key kp-submit" data-kp-submit title="加入命令区">${icon('plus')} 加入</button>
         <button class="kp-key" data-kp-num="0">0</button><button class="kp-key" data-kp-num=".">.</button><button class="kp-key" data-kp-clear>C</button><button class="kp-key" data-kp-empty></button>
       </div>
       <div class="kp-hint muted">点「＋ 加入」/选商品 = 追加一行 DSL 到命令区；关闭后统一批量入账。</div>`,
@@ -120,7 +121,7 @@ export function openKeypad() {
       if (v.inc) parts.push(`收入 <b>+${fmtNum(v.inc)}</b>`);
       return `<span>${name}：${parts.join(' / ')}</span>`;
     }).join('');
-    totalEl.innerHTML = `共 <b>${all.length}</b> 笔 · ${chips}` + (errors.length ? ` · ⚠${errors.length}` : '');
+    totalEl.innerHTML = `共 <b>${all.length}</b> 笔 · ${chips}` + (errors.length ? ` · ${icon('warning')}${errors.length}` : '');
   };
   const refresh = () => {
     const r = db.resources.find((x) => x.id === st.rid);
@@ -183,7 +184,7 @@ function keypadGoodsHTML(db) {
     }).join('＋');
     return `<option value="${jsStr(g.id)}">${esc(g.emoji || '🛍')} ${esc(g.name)} · ${price}</option>`;
   }).join('');
-  return `<div class="kp-goods-title">🛍 商品</div>
+  return `<div class="kp-goods-title">${icon('bag')} 商品</div>
     <select id="ledger-good" class="kp-good-select"><option value="">选择商品（自动填成本）…</option>${options}</select>`;
 }
 
@@ -275,7 +276,7 @@ function resourceCard(App, r) {
       <div class="progress"><i class="bar ${danger ? 'danger' : pct >= 90 ? 'warn' : ''}" style="width:${pct}%;${!danger && pct < 90 ? `background:${resC}` : ''}"></i></div>
       <div class="res-meta muted">初始 ${fmtNum(r.initial)} · 余额=Σ流水 · 点击补充</div>
       <div class="row-gap" onclick="event.stopPropagation()">
-        <button class="btn sm primary" onclick="App.finance.openAdjustModal('${jsStr(r.id)}')">＋ 补充</button>
+        <button class="btn sm primary" onclick="App.finance.openAdjustModal('${jsStr(r.id)}')">${icon('plus')} 补充</button>
         <button class="btn sm" onclick="App.finance.openResModal('${jsStr(r.id)}')">编辑</button>
         <button class="btn sm" onclick="App.engine.setResourceStatus(App.db,'${jsStr(r.id)}','${r.status === 'Active' ? 'Inactive' : 'Active'}');App.refresh()">
           ${r.status === 'Active' ? '停用' : '启用'}
@@ -438,10 +439,10 @@ export function openGoodModal(editId) {
             <div class="row-gap dg-cost-row" style="margin-bottom:6px">
               <select class="gc-res" style="flex:1">${resOpts(c.resource_id)}</select>
               <input type="number" class="gc-amt" min="0.01" step="0.01" value="${esc(c.amount ?? '')}" placeholder="数量" style="width:110px">
-              <button class="btn sm danger" data-delcost>✕</button>
+              <button class="btn sm danger" data-delcost>${icon('close')}</button>
             </div>`).join('')}
         </div>
-        <button class="btn sm" data-addcost>＋ 加一种资源</button>
+        <button class="btn sm" data-addcost>${icon('plus')} 加一种资源</button>
       </div>
       <div class="field"><label>备注</label><input id="f-gnote" value="${esc(g?.note || '')}" placeholder="可选"></div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>${g ? '保存' : '创建'}</button>`,
@@ -456,7 +457,7 @@ export function openGoodModal(editId) {
     div.style.marginBottom = '6px';
     div.innerHTML = `<select class="gc-res" style="flex:1">${resOpts()}</select>
       <input type="number" class="gc-amt" min="0.01" step="0.01" placeholder="数量" style="width:110px">
-      <button class="btn sm danger" data-delcost>✕</button>`;
+      <button class="btn sm danger" data-delcost>${icon('close')}</button>`;
     m.q('#f-gcosts').appendChild(div);
     div.querySelector('[data-delcost]').onclick = () => div.remove();
   };
@@ -496,7 +497,7 @@ export function openConsumeModal(goodId) {
     bodyHTML: `
       <div class="callout warn">${esc(g.emoji)} ${esc(g.name)} 消耗：</div>
       <ul style="margin:8px 0 12px;padding-left:20px;font-size:13px;line-height:1.9">${costLines}</ul>
-      ${anyLack ? '<div class="callout">💡 部分资源不足，允许借贷扣为负数，后续充值自动回补。</div>' : ''}
+      ${anyLack ? `<div class="callout">${icon('lightbulb')} 部分资源不足，允许借贷扣为负数，后续充值自动回补。</div>` : ''}
       <div class="grid2">
         <div class="field"><label>数量</label><input id="f-gqty" type="number" min="1" step="1" value="1"></div>
         <div class="field"><label>备注</label><input id="f-gnote" placeholder="可选"></div>
@@ -558,9 +559,9 @@ function vfRow(App, v) {
   return `
     <div class="vf-row">
       <div class="grow">
-        <div>📤 ${esc(out?.title || v.output_id)} ${badge(st)}</div>
+        <div>${icon('upload')} ${esc(out?.title || v.output_id)} ${badge(st)}</div>
         <div class="muted">${who ? esc(who) + ' · ' : ''}期望反馈 ${fmtDate(v.expected)}</div>
-        ${v.feedback ? `<div class="muted">💬 ${esc(v.feedback)}</div>` : ''}
+        ${v.feedback ? `<div class="muted">${icon('note')} ${esc(v.feedback)}</div>` : ''}
       </div>
       ${st !== 'Closed' ? `<button class="btn sm primary" onclick="App.finance.openFeedbackModal('${jsStr(v.id)}')">录入反馈</button>` : ''}
     </div>`;
@@ -697,9 +698,9 @@ function flowSection(App) {
     </div>
     <div class="card-body">
       <div class="flow-toolbar">
-        <button class="btn sm" onclick="App.finance.shiftFlow(-1)" title="上一段">‹</button>
+        <button class="btn sm" onclick="App.finance.shiftFlow(-1)" title="上一段">${icon('arrow-left')}</button>
         <b class="flow-period">${flowLabel(flowMode, range)}</b>
-        <button class="btn sm" onclick="App.finance.shiftFlow(1)" title="下一段">›</button>
+        <button class="btn sm" onclick="App.finance.shiftFlow(1)" title="下一段">${icon('arrow-right')}</button>
         <select class="flow-res" onchange="App.finance.setFlowResource(this.value)">${resOpts}</select>
       </div>
       <div class="flow-sum">
@@ -928,7 +929,7 @@ function templateCard(tpl, recommended, unit) {
       <div class="tpl-stat muted">${st.goals} 目标 · ${st.plans} 计划 · ${st.activities} 活动${stageText} · 全链预算 ${fmtNum(budget)}${unit ? ` ${esc(unit)}` : ''}</div>
       <div class="tpl-actions" onclick="event.stopPropagation()">
         ${action}
-        <button class="btn sm" onclick="App.finance.exportTemplate('${jsStr(tpl.id)}')">⇩ MD</button>
+        <button class="btn sm" onclick="App.finance.exportTemplate('${jsStr(tpl.id)}')">${icon('download')} MD</button>
         ${tpl.builtin ? '' : `<button class="btn sm danger" onclick="App.finance.deleteTemplate('${jsStr(tpl.id)}')">删除</button>`}
       </div>
     </div>`;
@@ -946,19 +947,19 @@ function templatesCard(App) {
   return `
     <section class="card" data-card-id="templates">
       <div class="card-head">
-        <h3>🧩 规划模板</h3>
+        <h3>${icon('layers')} 规划模板</h3>
         <div class="row-gap">
           <span class="muted">建议预算 ${fmtNum(a.recommended)}${unit ? ` ${esc(unit)}` : ''}</span>
-          <button class="btn sm" onclick="App.finance.openTemplateImport()">⇩ 导入</button>
-          <button class="btn sm" onclick="App.finance.exportAllTemplates()">⇧ 导出全部</button>
+          <button class="btn sm" onclick="App.finance.openTemplateImport()">${icon('download')} 导入</button>
+          <button class="btn sm" onclick="App.finance.exportAllTemplates()">${icon('upload')} 导出全部</button>
           <button class="btn sm" onclick="App.finance.openTemplatePrompt()" title="复制提示词，和模型多轮对话产出模板">?</button>
-          <button class="btn sm" onclick="App.finance.openTemplateSave()">＋ 存为模板</button>
+          <button class="btn sm" onclick="App.finance.openTemplateSave()">${icon('plus')} 存为模板</button>
         </div>
       </div>
       <div class="card-body">
         <div class="tag-suggest" id="tpl-cats">${chips}</div>
         <div class="tpl-list">${all.map((t) => templateCard(t, a.recommended, unit)).join('')}</div>
-        <div class="muted" style="font-size:11px;margin-top:8px">内置/MD 模板按建议预算的比例分配；目标级与计划级模板保留保存时的绝对预算。导入支持多文件、一个文件多模板；「⇩ MD」可导出单个模板。</div>
+        <div class="muted" style="font-size:11px;margin-top:8px">内置/MD 模板按建议预算的比例分配；目标级与计划级模板保留保存时的绝对预算。导入支持多文件、一个文件多模板；「${icon('download')} MD」可导出单个模板。</div>
       </div>
     </section>`;
 }
@@ -1129,7 +1130,7 @@ export async function openTemplatePrompt() {
     title: '模板提示词（打开即自动复制）',
     width: 720,
     bodyHTML: `
-      <p class="muted" style="font-size:12px;margin-bottom:8px">把它发给模型，多轮问答后让它输出 Markdown 模板；再回到「⇩ 导入 MD」粘贴。</p>
+      <p class="muted" style="font-size:12px;margin-bottom:8px">把它发给模型，多轮问答后让它输出 Markdown 模板；再回到「${icon('upload')} 导入 MD」粘贴。</p>
       <textarea id="tpl-prompt" class="ledger-cmd" rows="16" readonly>${esc(TEMPLATE_PROMPT)}</textarea>`,
     footerHTML: `<button class="btn" data-copy>再复制</button><button class="btn primary" data-close>知道了</button>`,
   });
@@ -1153,7 +1154,7 @@ export function openTemplateImport() {
     bodyHTML: `
       <p class="muted" style="font-size:12px;margin-bottom:8px">每个模板以一级标题 <code># 模板名</code> 开始；每个文件独立解析，一个文件可含多个模板。可多选文件，也可粘贴。点「?」复制提示词。</p>
       <div class="row-gap" style="margin-bottom:6px">
-        <label class="btn sm">📄 选择 .md 文件（可多选）
+        <label class="btn sm">${icon('file')} 选择 .md 文件（可多选）
           <input id="tpl-md-file" type="file" accept=".md,.markdown,text/markdown" multiple hidden>
         </label>
         <span id="tpl-md-fileinfo" class="muted" style="font-size:11px"></span>
@@ -1447,9 +1448,9 @@ function renderCards(App) {
     ledger: `
       <section class="card" data-card-id="ledger">
         <div class="card-head">
-          <h3>🧮 记账器</h3>
+          <h3>${icon('calculator')} 记账器</h3>
           <div class="row-gap">
-            <button class="btn sm" onclick="App.finance.openKeypad()" title="独立于系统键盘的记账键盘">🧮 键盘</button>
+            <button class="btn sm" onclick="App.finance.openKeypad()" title="独立于系统键盘的记账键盘">${icon('calculator')} 键盘</button>
           </div>
         </div>
         <div class="card-body">
@@ -1459,7 +1460,7 @@ function renderCards(App) {
           </div>
           <div class="muted" style="font-size:11px;margin-bottom:8px">语法：- 金额 备注 @资源名；- 支出、+ 收入；缺省资源 = 价值元/首个启用。</div>
           <div id="ledger-host">
-            <button class="btn sm" onclick="App.finance.openLedger()">📒 打开文本账单（Vditor 镜像）</button>
+            <button class="btn sm" onclick="App.finance.openLedger()">${icon('book')} 打开文本账单（Vditor 镜像）</button>
           </div>
         </div>
       </section>`,
@@ -1470,7 +1471,7 @@ function renderCards(App) {
           <h3>资源状态</h3>
           <div class="row-gap">
             <span class="muted">余额 = 初始 + Σ(debit−credit) · 不变量1</span>
-            <button class="btn sm" onclick="App.finance.openResModal()">＋ 资源</button>
+            <button class="btn sm" onclick="App.finance.openResModal()">${icon('plus')} 资源</button>
           </div>
         </div>
         <div class="card-body"><div class="res-grid">${db.resources.map((r) => resourceCard(App, r)).join('')}</div></div>
@@ -1480,7 +1481,7 @@ function renderCards(App) {
       <section class="card" data-card-id="rules">
         <div class="card-head">
           <h3>兑换规则</h3>
-          <button class="btn sm" onclick="App.finance.openRuleModal()">＋ 新增</button>
+          <button class="btn sm" onclick="App.finance.openRuleModal()">${icon('plus')} 新增</button>
         </div>
         <div class="card-body">${db.rules.map((r) => ruleRow(App, r)).join('') || empty('暂无规则')}</div>
       </section>`,
@@ -1488,10 +1489,10 @@ function renderCards(App) {
     shop: `
       <section class="card" data-card-id="shop">
         <div class="card-head">
-          <h3>🛍️ 商店 · 快速消费</h3>
+          <h3>${icon('bag')} 商店 · 快速消费</h3>
           <div class="row-gap">
             <span class="muted">LifeUp 式一键消费 · 点击商品直接扣减余额</span>
-            <button class="btn sm" onclick="App.finance.openGoodModal()">＋ 商品</button>
+            <button class="btn sm" onclick="App.finance.openGoodModal()">${icon('plus')} 商品</button>
           </div>
         </div>
         <div class="card-body"><div class="goods-grid">${db.goods.map((g) => goodCard(App, g)).join('') || empty('暂无商品', '添加商品后即可一键快速消费')}</div></div>
@@ -1508,9 +1509,9 @@ function renderCards(App) {
         <div class="card-head"><h3>系统反馈</h3></div>
         <div class="card-body">
           ${blocked.length ? blocked.map((p) => `
-            <div class="fb warn"><b>⛔ 预算硬约束（不变量4）</b><p>「${esc(p.title)}」已耗 ${fmtNum(engine.planCost(db, p.id))}/${fmtNum(p.budget)}，新活动禁止开始/完成。</p></div>`).join('') : ''}
-          ${overdue.length ? `<div class="fb warn"><b>⏰ 价值流逾期（16C）</b><p>${overdue.length} 条待补录反馈，可手动闭环。</p></div>` : ''}
-          ${!blocked.length && !overdue.length ? '<div class="fb ok"><b>✓ 全部不变量满足</b><p>同惠链路正常，账目自洽。</p></div>' : ''}
+            <div class="fb warn"><b>${icon('ban')} 预算硬约束（不变量4）</b><p>「${esc(p.title)}」已耗 ${fmtNum(engine.planCost(db, p.id))}/${fmtNum(p.budget)}，新活动禁止开始/完成。</p></div>`).join('') : ''}
+          ${overdue.length ? `<div class="fb warn"><b>${icon('alarm')} 价值流逾期（16C）</b><p>${overdue.length} 条待补录反馈，可手动闭环。</p></div>` : ''}
+          ${!blocked.length && !overdue.length ? `<div class="fb ok"><b>${icon('check')} 全部不变量满足</b><p>同惠链路正常，账目自洽。</p></div>` : ''}
         </div>
       </section>`,
 

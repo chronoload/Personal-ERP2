@@ -13,6 +13,7 @@ import 'vditor/dist/index.css';
 import { Prefs } from '../store/prefs.js';
 import { saveDB } from '../store/db.js';
 import { esc, toast, openModal, fmtNum, badge } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import {
   extractBlocks, diffBlocks, splitCommands, injectJournal, makeParseRecord,
   todayJournalKey, shiftJournalKey, parseJournalKey, dayKeyOf, fingerprint,
@@ -63,12 +64,12 @@ export function render(App, el) {
   el.innerHTML = `
     <div class="card">
       <div class="card-head">
-        <h3>📔 日记</h3>
+        <h3>${icon('book')} 日记</h3>
         <div class="row-gap">
           <button class="btn sm" data-diary-prompt title="复制提示词：先和模型聊清规划，再把输出的命令块粘回来直接加活动">?</button>
-          <button class="btn sm" data-diary-full title="全屏编辑（Esc 退出）">⛶ 全屏</button>
+          <button class="btn sm" data-diary-full title="全屏编辑（Esc 退出）">${icon('expand')} 全屏</button>
           <button class="btn sm" data-diary-today title="回到今天">今天</button>
-          <button class="btn sm" data-diary-cal title="选择日期">📅 月历</button>
+          <button class="btn sm" data-diary-cal title="选择日期">${icon('calendar')} 月历</button>
         </div>
       </div>
       <div class="diary-bar" data-diary-bar></div>
@@ -77,8 +78,8 @@ export function render(App, el) {
       </div>
       <div class="diary-editor"><div id="diary-vditor"></div></div>
       <div class="diary-actions">
-        <button class="btn primary" data-diary-parse>🔍 解析并注入</button>
-        <button class="btn" data-diary-block title="在末尾插入一个空命令块">＋ 命令块</button>
+        <button class="btn primary" data-diary-parse>${icon('search')} 解析并注入</button>
+        <button class="btn" data-diary-block title="在末尾插入一个空命令块">${icon('plus')} 命令块</button>
         <span class="muted" data-diary-status></span>
       </div>
       <div class="diary-ledger" data-diary-ledger></div>
@@ -142,7 +143,7 @@ export function render(App, el) {
     card.classList.toggle('ws-full', on);
     document.body.classList.toggle('ws-lock', on);
     const btn = el.querySelector('[data-diary-full]');
-    if (btn) btn.textContent = on ? '⤢ 退出全屏' : '⛶ 全屏';
+    if (btn) btn.innerHTML = on ? `${icon('expand')} 退出全屏` : `${icon('expand')} 全屏`;
     const wrap = document.getElementById('diary-vditor');
     if (on) {
       setTimeout(fitFull, 60);
@@ -165,7 +166,7 @@ function buildDateBar(App, el) {
   for (let i = -BAR_SPAN; i <= BAR_SPAN; i++) keys.push(shiftJournalKey(curKey, i));
   const today = todayJournalKey();
   host.innerHTML = `
-    <button class="btn sm diary-nav" data-nav="prev" title="前一天">‹</button>
+    <button class="btn sm diary-nav" data-nav="prev" title="前一天">${icon('arrow-left')}</button>
     <div class="diary-days">
       ${keys.map((k) => {
         const j = getJournal(db, k);
@@ -184,7 +185,7 @@ function buildDateBar(App, el) {
         </button>`;
       }).join('')}
     </div>
-    <button class="btn sm diary-nav" data-nav="next" title="后一天">›</button>`;
+    <button class="btn sm diary-nav" data-nav="next" title="后一天">${icon('arrow-right')}</button>`;
   host.querySelectorAll('[data-k]').forEach((b) => {
     b.onclick = () => switchDay(App, el, b.dataset.k);
   });
@@ -412,7 +413,7 @@ function openParseModal(App, el) {
     bodyHTML: `
       <div class="muted" style="margin-bottom:8px">本次将注入 <b>${diff.fresh.length}</b> 个新块的内容；已解析过的块不会再注入。</div>
       ${actLines}${txLines}
-      ${warnings.length ? `<div class="fb warn" style="margin-top:8px"><b>⚠ ${warnings.length} 条提示</b>${warnings.slice(0, 5).map((w) => `<p>${esc(w)}</p>`).join('')}</div>` : ''}
+      ${warnings.length ? `<div class="fb warn" style="margin-top:8px"><b>${icon('warning')} ${warnings.length} 条提示</b>${warnings.slice(0, 5).map((w) => `<p>${esc(w)}</p>`).join('')}</div>` : ''}
       <div class="callout" style="margin-top:8px">注入是一次性的：之后修改这些块不会再影响账本。</div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-ok>确认注入</button>`,
   });
@@ -474,9 +475,9 @@ function renderLedger(App, el) {
 
   const actRows = acts.map((a) => {
     const tm = a.planned_start ? String(a.planned_start).split('T')[1] || '' : '';
-    const mark = a.status === 'Completed' || a.status === 'Reviewed' ? '✓'
-      : a.status === 'Failed' ? '✕'
-        : a.status === 'Started' ? '▶' : '○';
+    const mark = a.status === 'Completed' || a.status === 'Reviewed' ? icon('check')
+      : a.status === 'Failed' ? icon('close')
+        : a.status === 'Started' ? icon('play') : icon('circle');
     return `<div class="diary-lrow" data-jump="overview"><span class="mk">${mark}</span><span class="tt">${esc(a.title)}</span><span class="tm">${esc(tm)}</span><span class="st">${esc(a.status)}</span></div>`;
   }).join('');
 
@@ -526,9 +527,9 @@ function openMonthPicker(App, el) {
     }
     host.innerHTML = `
       <div class="diary-cal-nav">
-        <button class="btn sm" data-mv="-1">‹</button>
+        <button class="btn sm" data-mv="-1">${icon('arrow-left')}</button>
         <b>${y} 年 ${mo + 1} 月</b>
-        <button class="btn sm" data-mv="1">›</button>
+        <button class="btn sm" data-mv="1">${icon('arrow-right')}</button>
       </div>
       <div class="diary-cal-dow">${['一', '二', '三', '四', '五', '六', '日'].map((d) => `<span>${d}</span>`).join('')}</div>
       <div class="diary-cal-grid">${cells}</div>`;

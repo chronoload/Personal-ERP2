@@ -78,6 +78,9 @@ public class TodayWidgetProvider extends AppWidgetProvider {
     }
 
     bindOpen(ctx, rv, R.id.widget_today_title);
+    // 「＋ 新建」：图标用 vector drawable，文字只留「新建」
+    rv.setTextViewCompoundDrawablesRelative(R.id.widget_today_add, R.drawable.widget_ic_plus_add, 0, 0, 0);
+    rv.setInt(R.id.widget_today_add, "setCompoundDrawablePadding", 5);
     // 「＋ 新建」：跳 App 并直接弹新建框
     Intent fresh = new Intent(ctx, MainActivity.class);
     fresh.putExtra("erp_tab", "overview");
@@ -106,27 +109,28 @@ public class TodayWidgetProvider extends AppWidgetProvider {
     StringBuilder line = new StringBuilder();
     if (!time.isEmpty()) line.append(time).append("  ");
     // 非今日项加来源前缀，避免误以为是今天的任务
-    if ("running".equals(kind)) line.append("● 进行中 · ");
-    else if ("overdue".equals(kind)) line.append("↩ 延期 · ");
-    else if ("unscheduled".equals(kind)) line.append("· 待排 · ");
+    if ("running".equals(kind)) line.append("进行中 · ");
+    else if ("overdue".equals(kind)) line.append("延期 · ");
+    else if ("unscheduled".equals(kind)) line.append("待排 · ");
     line.append(title);
     if (tracked > 0) line.append("  ⏱").append(tracked).append("m");
 
-    String glyph; int color; boolean canStart = false;
-    if ("running".equals(kind) || "Started".equals(status)) { glyph = "●"; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; }
-    else if ("overdue".equals(kind)) { glyph = "↩"; color = dark ? 0xFFE0B27A : 0xFFC8892F; }
-    else if ("unscheduled".equals(kind)) { glyph = "·"; color = dark ? 0xFFA8B0BD : 0xFF8A93A3; }
+    int iconRes; int color; boolean canStart = false;
+    if ("running".equals(kind) || "Started".equals(status)) { iconRes = R.drawable.widget_ic_running; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; }
+    else if ("overdue".equals(kind)) { iconRes = R.drawable.widget_ic_overdue; color = dark ? 0xFFE0B27A : 0xFFC8892F; }
+    else if ("unscheduled".equals(kind)) { iconRes = R.drawable.widget_ic_more; color = dark ? 0xFFA8B0BD : 0xFF8A93A3; }
     else {
       switch (status) {
-        case "Started": glyph = "●"; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; break;
-        case "Completed": case "Reviewed": case "Archived": glyph = "✓"; color = dark ? 0xFF8A93A3 : 0xFF9AA3B2; break;
-        default: glyph = "▶"; color = dark ? 0xFF8FB8E8 : 0xFF4A7FBF; canStart = true; break;
+        case "Started": iconRes = R.drawable.widget_ic_running; color = dark ? 0xFF7ED4A3 : 0xFF3DA06A; break;
+        case "Completed": case "Reviewed": case "Archived": iconRes = R.drawable.widget_ic_done; color = dark ? 0xFF8A93A3 : 0xFF9AA3B2; break;
+        case "Failed": iconRes = R.drawable.widget_ic_failed; color = dark ? 0xFFE08A8A : 0xFFC05050; break;
+        default: iconRes = R.drawable.widget_ic_play; color = dark ? 0xFF8FB8E8 : 0xFF4A7FBF; canStart = true; break;
       }
     }
 
     rv.setViewVisibility(row, View.VISIBLE);
-    rv.setTextViewText(act, glyph);
-    rv.setTextColor(act, color);
+    rv.setImageViewResource(act, iconRes);
+    rv.setInt(act, "setColorFilter", color);
     rv.setInt(act, "setBackgroundResource", dark ? R.drawable.widget_act_bg_dark : R.drawable.widget_act_bg);
     rv.setTextViewText(txt, line.toString());
     rv.setTextColor(txt, "Started".equals(status) ? (dark ? 0xFF7ED4A3 : 0xFF2F7D53) : (dark ? 0xFFE8EBF0 : 0xFF1F2430));

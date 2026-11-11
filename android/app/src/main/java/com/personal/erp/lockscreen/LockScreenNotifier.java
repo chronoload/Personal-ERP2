@@ -206,7 +206,7 @@ public class LockScreenNotifier {
     else if ("unscheduled".equals(kind)) title = "待排 · " + title;
     int tracked = WidgetStore.trackedMinutes(a);
     StringBuilder sb = new StringBuilder();
-    sb.append(done ? "✓ " : ("running".equals(kind) ? "● " : "○ "));
+    if (done) sb.append("已完成 · ");
     if (!clock.isEmpty()) sb.append(clock).append("  ");
     sb.append(title);
     if (tracked > 0) sb.append(" · ").append(tracked).append("m");

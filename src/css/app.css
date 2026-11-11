@@ -33,6 +33,15 @@ h1, h2, h3 { margin: 0; }
 .grow { flex: 1; min-width: 0; }
 .row-gap { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
+/* ---------------- 图标 ----------------
+   内联 SVG 跟随字号与文字颜色；vertical-align 让图标与中文基线对齐 */
+.ico { width: 1em; height: 1em; display: inline-block; vertical-align: -0.14em; flex: none; }
+.ico.sm { width: .92em; height: .92em; }
+.ico.lg { width: 1.25em; height: 1.25em; }
+/* 按钮里的「图标 + 文字」保持紧凑间距 */
+.btn .ico, .tag-chip .ico, .tab .ico { margin-right: 4px; }
+.btn .ico:only-child { margin-right: 0; }
+
 /* ---------------- 顶栏 ---------------- */
 .topbar {
   position: sticky; top: 0; z-index: 30;

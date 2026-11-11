@@ -5,6 +5,7 @@
 // 流水绝对不可变（不变量5）：无编辑无删除，只有冲正。
 // ============================================================
 import { esc, fmtNum, fmtDateTime, badge, openModal, toast, empty, resColor } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { Prefs } from '../store/prefs.js';
 import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL } from '../ui/themes.js';
 import { ErrorLog } from '../services/errorLog.js';
@@ -68,7 +69,7 @@ export async function refreshLocalBackups() {
   box.innerHTML = list.slice(0, 12).map((b) => `
     <div class="tx-row" style="align-items:center">
       <div class="grow">
-        <div class="muted" style="font-size:12px">📄 ${esc(b.filename)}</div>
+        <div class="muted" style="font-size:12px">${icon('file')} ${esc(b.filename)}</div>
         <div class="muted" style="font-size:11px">${b.exportedAt ? `${fmtDateTime(new Date(b.exportedAt).getTime())} · 网页端` : '安卓端 Documents/backups'}</div>
       </div>
       <button class="btn sm" onclick="App.stats.restoreLocalBackup('${jsStr(b.filename)}')">恢复</button>
@@ -225,7 +226,7 @@ export function openReport() {
   if (enabled('activity')) {
     const dailies = Object.entries(r.activity.daily).sort((a, b) => (a[0] < b[0] ? -1 : 1))
       .map(([k, n]) => `${String(k).slice(5)}:${n}`).join(' ');
-    body += `<div class="step-divider">📋 活动汇总</div>
+    body += `<div class="step-divider">${icon('note')} 活动汇总</div>
       ${statChips([['完成', r.activity.completed], ['开始', r.activity.started], ['失败', r.activity.failed], ['新增', r.activity.created]])}
       ${dailies ? `<div class="muted" style="font-size:11px">每日完成：${esc(dailies)}</div>` : ''}`;
   }
@@ -234,7 +235,7 @@ export function openReport() {
       <div class="tx-row"><div class="grow"><div class="tx-main"><b>${esc(e.name)}</b>
         <span class="amount ${e.net < 0 ? 'neg' : 'pos'}">${e.net >= 0 ? '+' : ''}${fmtNum(e.net)}</span><span class="muted"> ${esc(e.unit)}</span></div>
         <div class="muted">流入 ${fmtNum(e.debit)} · 流出 ${fmtNum(e.credit)} · ${e.n} 笔</div></div></div>`).join('');
-    body += `<div class="step-divider">💸 收支流水（${r.ledger.n} 笔）</div>
+    body += `<div class="step-divider">${icon('chart')} 收支流水（${r.ledger.n} 笔）</div>
       <div class="muted" style="font-size:11px;margin-bottom:6px">收入 ${fmtNum(r.ledger.incomeTotal)} · 支出 ${fmtNum(r.ledger.expenseTotal)}${r.ledger.revCount ? ` · 冲正 ${r.ledger.revCount}` : ''}</div>
       ${rows || '<div class="muted">本期无流水</div>'}`;
   }
@@ -242,17 +243,17 @@ export function openReport() {
     const rows = r.plan.map((p) => `
       <div class="hbar-row"><span class="hbar-label">${esc(p.title)}</span><div class="hbar"><i style="width:${Math.min(100, p.budget ? (p.spend / p.budget) * 100 : 100)}%"></i></div>
       <span class="hbar-val">${fmtNum(p.spend)}${p.budget !== null ? `/${fmtNum(p.budget)}` : ''}</span></div>`).join('');
-    body += `<div class="step-divider">🎯 计划投入</div>${rows || '<div class="muted">本期无计划投入</div>'}`;
+    body += `<div class="step-divider">${icon('target')} 计划投入</div>${rows || '<div class="muted">本期无计划投入</div>'}`;
   }
   if (enabled('balance')) {
     const rows = r.balance.map((b) => `
       <div class="tx-row"><div class="grow"><div class="tx-main"><b>${esc(b.name)}</b>
         <span class="amount ${b.net < 0 ? 'neg' : 'pos'}">${b.net >= 0 ? '+' : ''}${fmtNum(b.net)}</span></div>
         <div class="muted">${fmtNum(b.before)} → ${fmtNum(b.after)} ${esc(b.unit)}</div></div></div>`).join('');
-    body += `<div class="step-divider">⚖️ 余额变化</div>${rows || '<div class="muted">本期无余额变化</div>'}`;
+    body += `<div class="step-divider">${icon('scale')} 余额变化</div>${rows || '<div class="muted">本期无余额变化</div>'}`;
   }
   if (enabled('vf')) {
-    body += `<div class="step-divider">🔄 价值流</div>
+    body += `<div class="step-divider">${icon('refresh')} 价值流</div>
       <div class="muted">本期新增 ${r.vf.created} · 当前待反馈 ${r.vf.pending} · 已闭环 ${r.vf.closed}</div>`;
   }
   if (!body) body = '<div class="muted">未启用任何报告模块</div>';
@@ -424,13 +425,13 @@ export function render(App, el) {
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>📊 周报 · 月报</h3><span class="muted">综合简报 · 模块可配置 · 支持历史期次</span></div>
+      <div class="card-head"><h3>${icon('chart')} 周报 · 月报</h3><span class="muted">综合简报 · 模块可配置 · 支持历史期次</span></div>
       <div class="row-gap" style="flex-wrap:wrap">
         <button class="btn sm ${reportPeriod === 'week' ? 'primary' : ''}" data-rp-type="week">周报</button>
         <button class="btn sm ${reportPeriod === 'month' ? 'primary' : ''}" data-rp-type="month">月报</button>
         <span class="muted" id="rp-label">${reportLabelText()}</span>
-        <button class="btn sm" data-rp-shift="-1">‹ 上一期</button>
-        <button class="btn sm" data-rp-shift="1">下一期 ›</button>
+        <button class="btn sm" data-rp-shift="-1">${icon('arrow-left')} 上一期</button>
+        <button class="btn sm" data-rp-shift="1">下一期 ${icon('arrow-right')}</button>
         <button class="btn sm" data-rp-shift="0">本期</button>
       </div>
       <div class="row-gap" style="flex-wrap:wrap;margin-top:8px">
@@ -438,8 +439,8 @@ export function render(App, el) {
       </div>
       <div class="row-gap" style="flex-wrap:wrap;margin-top:8px">
         <label class="chk"><input type="checkbox" id="rp-remind" ${prefs.reportRemind !== false ? 'checked' : ''}> 通知提醒（每周日 / 每月末 20:00）</label>
-        <button class="btn primary" onclick="App.stats.openReport()">📄 查看报告</button>
-        <button class="btn primary" onclick="App.reportSlides.openSlidesReport()">📊 智能简报</button>
+        <button class="btn primary" onclick="App.stats.openReport()">${icon('file')} 查看报告</button>
+        <button class="btn primary" onclick="App.reportSlides.openSlidesReport()">${icon('chart')} 智能简报</button>
       </div>
     </div>
 
@@ -461,8 +462,8 @@ export function render(App, el) {
         const hidden = txsAll.length - LEDGER_PREVIEW;
         const shown = (!ledgerExpanded && hidden > 0) ? txsAll.slice(0, LEDGER_PREVIEW) : txsAll;
         const more = (!ledgerExpanded && hidden > 0)
-          ? `<button class="btn sm" style="margin:10px auto 0;display:block" onclick="App.stats.toggleLedger()">⬇ 展开更早的 ${hidden} 条（共 ${txsAll.length}）</button>`
-          : (ledgerExpanded ? `<button class="btn sm" style="margin:10px auto 0;display:block" onclick="App.stats.toggleLedger()">⬆ 收起，只看最近 ${LEDGER_PREVIEW} 条</button>` : '');
+          ? `<button class="btn sm" style="margin:10px auto 0;display:block" onclick="App.stats.toggleLedger()">${icon('arrow-down')} 展开更早的 ${hidden} 条（共 ${txsAll.length}）</button>`
+          : (ledgerExpanded ? `<button class="btn sm" style="margin:10px auto 0;display:block" onclick="App.stats.toggleLedger()">${icon('arrow-up')} 收起，只看最近 ${LEDGER_PREVIEW} 条</button>` : '');
         return `<div class="ledger">${shown.map((t) => txRow(App, t)).join('') || empty('暂无流水')}</div>${more}`;
       })()}
     </div>
@@ -515,7 +516,7 @@ export function render(App, el) {
       <label class="row-gap" style="align-items:center"><input type="checkbox" id="lock-enabled" ${App.lockScreen.enabled() ? 'checked' : ''}> 常驻锁屏通知：显示今天的安排与待办数</label>
       <label class="row-gap" style="align-items:center;margin-top:6px"><input type="checkbox" id="lock-full" ${App.lockScreen.full() ? 'checked' : ''}> 亮屏时整页展示今日日程（系统未允许「全屏通知」时自动降级为通知）</label>
       <div class="row-gap" style="margin-top:8px">
-        <button class="btn sm" onclick="App.stats.lockPreview()">👀 预览一次</button>
+        <button class="btn sm" onclick="App.stats.lockPreview()">${icon('eye')} 预览一次</button>
         <span class="muted">通知里可直接点「＋ 添加今日日程」</span>
       </div>
       <div class="callout" style="margin-top:8px">Android 14+ 需在系统设置里允许本应用「全屏通知」，否则只在锁屏显示通知卡片。锁屏内容默认公开，介意可在系统通知设置里改为隐藏内容。</div>
@@ -540,11 +541,11 @@ export function render(App, el) {
     <div class="card">
       <div class="card-head"><h3>数据管理</h3><span class="muted">自包含单机 · 备份 = 一份 JSON，可随时还原</span></div>
       <div class="row-gap">
-        <button class="btn primary" onclick="App.backup.export(App.db)">⬇ 导出备份 (JSON)</button>
-        <button class="btn" onclick="App.backup.importFromFile((db)=>App.stats.doImport(db))">⬆ 导入</button>
-        <button class="btn" onclick="App.ics.export(App.db)">📅 导出日历 (ICS)</button>
-        <button class="btn" onclick="App.ics.import()">⇪ 导入日历 (ICS)</button>
-        <button class="btn danger" onclick="App.reset()">♻ 清空并重新初始化</button>
+        <button class="btn primary" onclick="App.backup.export(App.db)">${icon('download')} 导出备份 (JSON)</button>
+        <button class="btn" onclick="App.backup.importFromFile((db)=>App.stats.doImport(db))">${icon('upload')} 导入</button>
+        <button class="btn" onclick="App.ics.export(App.db)">${icon('calendar')} 导出日历 (ICS)</button>
+        <button class="btn" onclick="App.ics.import()">${icon('upload')} 导入日历 (ICS)</button>
+        <button class="btn danger" onclick="App.reset()">${icon('refresh')} 清空并重新初始化</button>
       </div>
       <div class="muted" style="margin-top:8px">导入可选择「增量合并（同名资源复用账户）」或「全量替换」。</div>
 
@@ -581,17 +582,17 @@ export function render(App, el) {
         <datalist id="sync-history">${App.sync.history().map((h) => `<option value="${esc(h)}">`).join('')}</datalist>
       </div>
       <div class="row-gap" style="margin-top:8px">
-        <button class="btn sm" onclick="App.stats.syncDetect()">🎯 自动检测</button>
-        <button class="btn sm" onclick="App.stats.syncCopyCmd()">📋 复制启动命令</button>
+        <button class="btn sm" onclick="App.stats.syncDetect()">${icon('target')} 自动检测</button>
+        <button class="btn sm" onclick="App.stats.syncCopyCmd()">${icon('note')} 复制启动命令</button>
         <button class="btn sm" onclick="App.stats.syncTest()">测试连接</button>
-        <button class="btn sm" onclick="App.stats.syncDiag()">🧪 插件自检</button>
-        <button class="btn primary" onclick="App.stats.syncPush()">⬆ 推送</button>
-        <button class="btn" onclick="App.stats.syncPull()">⬇ 拉取</button>
+        <button class="btn sm" onclick="App.stats.syncDiag()">${icon('flask')} 插件自检</button>
+        <button class="btn primary" onclick="App.stats.syncPush()">${icon('upload')} 推送</button>
+        <button class="btn" onclick="App.stats.syncPull()">${icon('download')} 拉取</button>
       </div>
       ${App.sync.nativeAvailable() ? `
       <div class="row-gap" style="margin-top:8px">
-        <button class="btn primary" onclick="App.stats.syncStart()">📡 启动服务（本机）</button>
-        <button class="btn" onclick="App.stats.syncStop()">⏹ 停止服务</button>
+        <button class="btn primary" onclick="App.stats.syncStart()">${icon('play')} 启动服务（本机）</button>
+        <button class="btn" onclick="App.stats.syncStop()">${icon('stop')} 停止服务</button>
         <span class="muted">安卓 App 内一键启动，手机当服务器</span>
       </div>` : ''}
       <div class="muted" style="margin-top:8px">上次同步：${lastSyncLabel}</div>

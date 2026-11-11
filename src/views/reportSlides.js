@@ -6,6 +6,7 @@
 //   只读聚合层：不触碰原始账本/余额，去身份契约见 HANDOVER 蓝图。
 // ============================================================
 import { esc, fmtNum, openModal, empty, badge } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { buildReport, periodRange } from '../domain/report.js';
 import { downloadPptx } from '../services/pptx.js';
 
@@ -209,8 +210,8 @@ export function openSlidesReport() {
     width: 620,
     bodyHTML: body,
     footerHTML: `
-      <button class="btn" data-pdf>⬇ PDF</button>
-      <button class="btn" data-pptx>⬇ PPTX</button>
+      <button class="btn" data-pdf>${icon('download')} PDF</button>
+      <button class="btn" data-pptx>${icon('download')} PPTX</button>
       <button class="btn primary" data-close>关闭</button>`,
   });
 

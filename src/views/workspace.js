@@ -17,6 +17,7 @@ import { organizeDay, organizeWeek, organizeMonth, dkey, todayKey, parseKey, add
 import { Prefs } from '../store/prefs.js';
 import { saveDB } from '../store/db.js';
 import { toast, esc, openModal } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { saveFile } from '../services/saveFile.js';
 import Vditor from 'vditor';
 import 'vditor/dist/index.css';
@@ -70,7 +71,8 @@ function queueComplete(id, title) {
   pumpComplete();
 }
 
-const VIEW_LABEL = { goal: '🗂 目标', day: '📅 日', week: '🗓 周', month: '📆 月' };
+const VIEW_LABEL = { goal: '目标', day: '日', week: '周', month: '月' };
+const VIEW_ICON = { goal: 'layers', day: 'calendar', week: 'calendar', month: 'calendar' };
 const VIEW_ORG = { day: organizeDay, week: organizeWeek, month: organizeMonth };
 // 各视图语法提示（随 curView 切换，卡片头部下方）
 const WS_HINT = {
@@ -114,20 +116,20 @@ export function render(App, el) {
   el.innerHTML = `
     <div class="card">
       <div class="card-head">
-        <h3>📝 编辑器</h3>
+        <h3>${icon('note')} 编辑器</h3>
         <div class="row-gap">
-          <button class="btn sm" data-ws-full title="全屏编辑（Esc/返回键退出）">⛶ 全屏</button>
+          <button class="btn sm" data-ws-full title="全屏编辑（Esc/返回键退出）">${icon('expand')} 全屏</button>
           <button class="btn sm" data-ws-syntax title="当前视图语法">？语法</button>
-          <button class="btn sm" data-ws-export>⬇ 导出 .md</button>
+          <button class="btn sm" data-ws-export>${icon('download')} 导出 .md</button>
         </div>
       </div>
       <div class="ws-tabs" data-ws-tabs>
-        ${Object.entries(VIEW_LABEL).map(([v, label]) => `<button class="ws-tab${v === curView ? ' on' : ''}" data-v="${v}">${label}</button>`).join('')}
+        ${Object.entries(VIEW_LABEL).map(([v, label]) => `<button class="ws-tab${v === curView ? ' on' : ''}" data-v="${v}">${icon(VIEW_ICON[v])} ${label}</button>`).join('')}
       </div>
       <div class="ws-nav" data-ws-nav hidden>
-        <button class="btn sm" data-nav="prev">‹</button>
+        <button class="btn sm" data-nav="prev">${icon('arrow-left')}</button>
         <button class="btn sm" data-nav="today">今天</button>
-        <button class="btn sm" data-nav="next">›</button>
+        <button class="btn sm" data-nav="next">${icon('arrow-right')}</button>
         <span class="ws-nav-label" data-nav-label></span>
       </div>
       <div id="ws-vditor" data-ws-md></div>
@@ -146,8 +148,8 @@ export function render(App, el) {
     const syncInfo = stat ? (stat.created ? ` · 新建 ${stat.created}` : '') + (stat.updated ? ` · 更新 ${stat.updated}` : '') : '';
     preview.innerHTML =
       `<span>${esc(tag)}${syncInfo}</span>` +
-      (r.warnings.length ? `<span class="warn">⚠ ${r.warnings.length} 条提示</span>` : '') +
-      (stat && stat.deletions.length ? `<span class="warn">⚠ 将删除 ${stat.deletions.length} 项</span>` : '');
+      (r.warnings.length ? `<span class="warn">${icon('warning')} ${r.warnings.length} 条提示</span>` : '') +
+      (stat && stat.deletions.length ? `<span class="warn">${icon('warning')} 将删除 ${stat.deletions.length} 项</span>` : '');
   };
 
   // 实时同步：解析当前 md → 写回 db → 持久化。任何解析异常都不应中断编辑。
@@ -372,7 +374,7 @@ export function render(App, el) {
     if (!on && wsCard.parentElement !== el) el.appendChild(wsCard);
     wsCard.classList.toggle('ws-full', on);
     document.body.classList.toggle('ws-lock', on);
-    if (fullBtn) fullBtn.textContent = on ? '⤢ 退出全屏' : '⛶ 全屏';
+    if (fullBtn) fullBtn.innerHTML = on ? `${icon('expand')} 退出全屏` : `${icon('expand')} 全屏`;
     const wrap = document.getElementById('ws-vditor');
     if (on) {
       setTimeout(fitFull, 60); // 等布局稳定后实测一次

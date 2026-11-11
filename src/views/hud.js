@@ -7,6 +7,7 @@
 //  - 点击活动行 → 打开编辑弹窗（日历/看板外又多一个入口）
 // ============================================================
 import { esc, badge, toast, openModal } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { Prefs } from '../store/prefs.js';
 import { getPlace, createPlace, updatePlace, removePlace, setCommute, isGeofenceable } from '../domain/places.js';
 import { Geo } from '../services/geo.js';
@@ -100,10 +101,10 @@ function renderHTML(db) {
     const acts = actsOfPlan(p.id);
     const blocked = App.engine.isPlanBlocked(db, p.id);
     rows.push(`<div class="hud-node hud-plan" data-toggle="${pk}">
-      <span class="hud-caret">${openP ? '▾' : '▸'}</span>
+      <span class="hud-caret">${openP ? icon('chevron-down') : icon('chevron-right')}</span>
       <span class="hud-dot" style="background:${esc(p.color || '#889')}"></span>
       <span class="hud-plan-t">${esc(p.title)}</span>
-      <span class="hud-cnt">${acts.length}</span>${blocked ? '<span class="hud-block" title="预算耗尽">⛔</span>' : ''}</div>`);
+      <span class="hud-cnt">${acts.length}</span>${blocked ? `<span class="hud-block" title="预算耗尽">${icon('ban')}</span>` : ''}</div>`);
     if (openP) {
       const shown = acts.slice(0, MAX_ACTS);
       for (const a of shown) rows.push(actRow(a));
@@ -115,8 +116,8 @@ function renderHTML(db) {
     const openG = !collapsed[gk];
     const total = plans.reduce((s, p) => s + actsOfPlan(p.id).length, 0);
     rows.push(`<div class="hud-node hud-goal" data-toggle="${gk}">
-      <span class="hud-caret">${openG ? '▾' : '▸'}</span>
-      <b>🎯 ${esc(g.title)}</b><span class="hud-cnt">${plans.length} 计划 · ${total} 活动</span></div>`);
+      <span class="hud-caret">${openG ? icon('chevron-down') : icon('chevron-right')}</span>
+      <b>${icon('target')} ${esc(g.title)}</b><span class="hud-cnt">${plans.length} 计划 · ${total} 活动</span></div>`);
     if (openG) for (const p of plans) planNode(p);
   };
 
@@ -131,15 +132,15 @@ function renderHTML(db) {
     const gk = 'g:__noplan';
     const openG = !collapsed[gk];
     rows.push(`<div class="hud-node hud-goal" data-toggle="${gk}">
-      <span class="hud-caret">${openG ? '▾' : '▸'}</span><b>📦 无计划活动</b><span class="hud-cnt">${noPlanActs.length}</span></div>`);
+      <span class="hud-caret">${openG ? icon('chevron-down') : icon('chevron-right')}</span><b>${icon('archive')} 无计划活动</b><span class="hud-cnt">${noPlanActs.length}</span></div>`);
     if (openG) for (const a of noPlanActs.slice(0, MAX_ACTS)) rows.push(actRow(a));
   }
 
   return `
     <div class="hud-head">
-      <b>📊 HUD</b>
+      <b>${icon('chart')} HUD</b>
       <span class="muted">目标 → 计划 → 活动</span>
-      <button class="btn sm" data-hud-close style="margin-left:auto">✕</button>
+      <button class="btn sm" data-hud-close style="margin-left:auto">${icon('close')}</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:1px;margin-top:8px">
       ${rows.join('') || '<div class="muted" style="padding:8px">暂无数据</div>'}
@@ -152,8 +153,8 @@ function placesBlock(db) {
   const cur = getPlace(db, db.currentPlaceId);
   const open = !collapsed.places;
   const head = `<div class="hud-node hud-goal" data-toggle="places">
-    <span class="hud-caret">${open ? '▾' : '▸'}</span>
-    <b>📍 地点</b>
+    <span class="hud-caret">${open ? icon('chevron-down') : icon('chevron-right')}</span>
+    <b>${icon('pin')} 地点</b>
     <span class="hud-cnt">${cur ? esc(cur.name) : '未定位'}</span>
   </div>`;
   if (!open) return head;
@@ -166,8 +167,8 @@ function placesBlock(db) {
       <span class="hud-place-t">${esc(p.name)}</span>
       <span class="hud-place-meta">${meta}</span>
       ${on ? '<span class="hud-tag">当前</span>' : ''}
-      <span class="hud-place-edit" data-place-edit="${esc(p.id)}" title="编辑">✎</span>
-      <span class="hud-place-del" data-place-del="${esc(p.id)}" title="删除">×</span>
+      <span class="hud-place-edit" data-place-edit="${esc(p.id)}" title="编辑">${icon('edit')}</span>
+      <span class="hud-place-del" data-place-del="${esc(p.id)}" title="删除">${icon('trash')}</span>
     </div>`;
   }).join('');
 
@@ -182,14 +183,14 @@ function placesBlock(db) {
           data-commute="${esc(cur.id)}|${esc(p.id)}" value="${c ? c.minutes : ''}">
       </div>`;
     }).join('');
-    commutes = `<div class="hud-sub">🚗 通勤（分钟，留空清除）</div>${lines}`;
+    commutes = `<div class="hud-sub">${icon('car')} 通勤（分钟，留空清除）</div>${lines}`;
   }
 
   return `${head}
     ${rows || '<div class="muted" style="padding:4px 8px">还没有地点</div>'}
     <div class="hud-place-actions">
-      <span data-place-add>＋ 地点</span>
-      <span data-place-locate>◎ 定位</span>
+      <span data-place-add>${icon('plus')} 地点</span>
+      <span data-place-locate>${icon('target')} 定位</span>
       <span data-place-perm>权限</span>
     </div>
     ${commutes}`;
@@ -212,7 +213,7 @@ function openPlaceModal(existing) {
         <div class="field"><label>经度</label><input id="pl-lng" inputmode="decimal" value="${p.lng == null ? '' : esc(String(p.lng))}" placeholder="自动获取"></div>
       </div>
       <div class="row-gap" style="margin-bottom:6px;align-items:center">
-        <button type="button" class="btn sm" id="pl-locate">◎ 用当前位置</button>
+        <button type="button" class="btn sm" id="pl-locate">${icon('target')} 用当前位置</button>
         <span id="pl-loc-hint" class="muted" style="font-size:12px"></span>
       </div>
       <div class="field"><label>半径（米）</label><input id="pl-radius" inputmode="numeric" value="${esc(String(p.radius || 120))}"></div>
@@ -355,8 +356,8 @@ function ensurePlan(db) {
 function dayPlanBlock(db) {
   const open = !collapsed.plan;
   const head = `<div class="hud-node hud-goal" data-toggle="plan">
-    <span class="hud-caret">${open ? '▾' : '▸'}</span>
-    <b>🗓 今日排班</b>
+    <span class="hud-caret">${open ? icon('chevron-down') : icon('chevron-right')}</span>
+    <b>${icon('calendar')} 今日排班</b>
     <span class="hud-cnt">${open ? '' : '点开生成'}</span>
   </div>`;
   if (!open) return head;
@@ -381,7 +382,7 @@ function dayPlanBlock(db) {
   }).join('');
 
   const over = plan.rho.level === 'ok' ? '' : `<div class="hud-overload${plan.rho.level === 'over' ? ' over' : ''}">
-      <b>${plan.rho.level === 'over' ? '⚠ 过载' : '◐ 偏紧'}</b>
+      <b>${plan.rho.level === 'over' ? `${icon('warning')} 过载` : `${icon('gauge')} 偏紧`}</b>
       <span>时间 ${plan.rho.rhoTime} · 深度 ${plan.rho.rhoDepth}${plan.rho.depthOverMin ? ` · 超出 ${plan.rho.depthOverMin} 分` : ''}</span>
     </div>`;
 
@@ -394,8 +395,8 @@ function dayPlanBlock(db) {
     ${un ? `<div class="hud-sub">未排</div>${un}` : ''}
     ${rerouteLine(db)}
     <div class="hud-place-actions">
-      <span data-plan-regen>↻ 重新生成</span>
-      <span data-plan-apply>✓ 采纳座次</span>
+      <span data-plan-regen>${icon('refresh')} 重新生成</span>
+      <span data-plan-apply>${icon('check')} 采纳座次</span>
     </div>`;
 }
 
@@ -409,7 +410,7 @@ function rerouteLine(db) {
     if (!node || !node.startsWith('act:')) return '';
     const a = (db.activities || []).find((x) => x.id === node.slice(4));
     if (!a) return '';
-    return `<div class="hud-reroute">↯ 改道：先做「${esc(a.title)}」（${Math.ceil(r.cost)} 分当量）</div>`;
+    return `<div class="hud-reroute">${icon('bolt')} 改道：先做「${esc(a.title)}」（${Math.ceil(r.cost)} 分当量）</div>`;
   } catch (e) {
     return '';
   }

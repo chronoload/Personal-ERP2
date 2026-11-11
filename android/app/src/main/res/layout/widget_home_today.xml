@@ -50,13 +50,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_home_glyph1"
-            android:layout_width="18dp"
-            android:layout_height="wrap_content"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="13sp" />
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginRight="6dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_home_time1"
@@ -86,13 +86,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_home_glyph2"
-            android:layout_width="18dp"
-            android:layout_height="wrap_content"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="13sp" />
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginRight="6dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_home_time2"
@@ -122,13 +122,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_home_glyph3"
-            android:layout_width="18dp"
-            android:layout_height="wrap_content"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="13sp" />
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginRight="6dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_home_time3"
@@ -158,13 +158,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_home_glyph4"
-            android:layout_width="18dp"
-            android:layout_height="wrap_content"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="13sp" />
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginRight="6dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_home_time4"
@@ -194,13 +194,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_home_glyph5"
-            android:layout_width="18dp"
-            android:layout_height="wrap_content"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="13sp" />
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginRight="6dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_home_time5"
@@ -230,13 +230,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <ImageView
             android:id="@+id/widget_home_glyph6"
-            android:layout_width="18dp"
-            android:layout_height="wrap_content"
-            android:text="○"
-            android:textColor="#4A7FBF"
-            android:textSize="13sp" />
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginRight="6dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
         <TextView
             android:id="@+id/widget_home_time6"
@@ -267,7 +267,7 @@
         android:gravity="center"
         android:paddingTop="7dp"
         android:paddingBottom="7dp"
-        android:text="＋ 添加今日日程"
+        android:text="添加今日日程"
         android:textColor="#4A7FBF"
         android:textSize="13sp"
         android:textStyle="bold" />

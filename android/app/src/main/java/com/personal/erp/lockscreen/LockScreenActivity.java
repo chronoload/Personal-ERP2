@@ -3,12 +3,14 @@ package com.personal.erp.lockscreen;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import com.personal.erp.MainActivity;
 import com.personal.erp.R;
@@ -90,6 +92,19 @@ public class LockScreenActivity extends AppCompatActivity {
         JSONObject a = it == null ? null : it.optJSONObject("act");
         boolean done = !WidgetStore.isOpenActivity(a);
         rows[i].setText(line(a, done, kind));
+        int iconRes; int iconColor;
+        if (done) { iconRes = com.personal.erp.R.drawable.widget_ic_done; iconColor = 0xFF8A93A3; }
+        else if ("running".equals(kind)) { iconRes = com.personal.erp.R.drawable.widget_ic_running; iconColor = 0xFF3DA06A; }
+        else if ("overdue".equals(kind)) { iconRes = com.personal.erp.R.drawable.widget_ic_overdue; iconColor = 0xFFC8892F; }
+        else if ("unscheduled".equals(kind)) { iconRes = com.personal.erp.R.drawable.widget_ic_more; iconColor = 0xFF9AA6B8; }
+        else { iconRes = com.personal.erp.R.drawable.widget_ic_wait; iconColor = 0xFFE8EBF0; }
+        Drawable marker = ContextCompat.getDrawable(this, iconRes);
+        if (marker != null) {
+          marker = marker.mutate();
+          marker.setTint(iconColor);
+          rows[i].setCompoundDrawablesRelativeWithIntrinsicBounds(marker, null, null, null);
+          rows[i].setCompoundDrawablePadding(8);
+        }
         rows[i].setTextColor(done ? 0xFF8A93A3
             : ("running".equals(kind) ? 0xFF3DA06A
               : ("overdue".equals(kind) ? 0xFFE0B27A : ("unscheduled".equals(kind) ? 0xFF9AA6B8 : 0xFFE8EBF0))));
@@ -136,7 +151,7 @@ public class LockScreenActivity extends AppCompatActivity {
     else if ("unscheduled".equals(kind)) title = "待排 · " + title;
     int tracked = WidgetStore.trackedMinutes(a);
     StringBuilder sb = new StringBuilder();
-    sb.append(done ? "✓ " : ("running".equals(kind) ? "● " : "○ "));
+    if (done) sb.append("已完成 · ");
     if (!clock.isEmpty()) sb.append(clock).append("  ");
     sb.append(title);
     if (tracked > 0) sb.append(" · ").append(tracked).append("m");

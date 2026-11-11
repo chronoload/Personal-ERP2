@@ -12,6 +12,7 @@ import { Capacitor } from '@capacitor/core';
 import { Notifications } from '../services/notifications.js';
 import { System } from '../services/system.js';
 import { toast } from '../ui/helpers.js';
+import { icon } from '../ui/icons.js';
 import { scheduleTimerAlarm, cancelTimerAlarm, stopAlarm, TIMER_ALARM_ID } from '../services/alarm.js';
 
 const PRESETS = [5, 15, 25, 45, 60];
@@ -268,12 +269,12 @@ function build() {
     </div>
     <div class="timer-controls">
       <button class="t-now" id="t-now" data-now style="display:none">记到现在</button>
-      <button class="t-close" data-close>✕</button>
+      <button class="t-close" data-close>${icon('close')}</button>
       <button class="t-go" id="t-go" data-go>开始</button>
       <button class="t-reset" id="t-reset" data-reset style="display:none">重置</button>
     </div>
     <div class="timer-done" id="t-done">
-      <div class="emoji">🎉</div>
+      <div class="emoji">${icon('check-circle')}</div>
       <div class="txt">时间到！记录这次活动</div>
       <input id="t-actname" placeholder="刚才做了什么？">
       <div class="rowbtn">
