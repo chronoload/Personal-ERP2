@@ -24,6 +24,9 @@ let curKey = null;    // 当前日期（YYYY-M-D）
 let saveTimer = null; // 编辑防抖保存
 let composing = false;
 let CURRENT_APP = null;
+let lastEl = null;        // 最近一次渲染的容器（桌面小组件点进来时要能直接切日）
+let pendingFocus = false; // 从小组件进来：等编辑器就绪后聚焦
+let docHideBound = false; // 切后台落库+推给小组件的监听只绑一次
 const BAR_SPAN = 3;   // 日期条以当前日为中心，前后各展开的天数
 
 // 键规范化：统一为 YYYY-M-D（不补零），与 mdviews.dkey 同格式
@@ -53,6 +56,7 @@ function lastParseOf(j) { return j && j.parses && j.parses.length ? j.parses[j.p
 
 export function render(App, el) {
   CURRENT_APP = App;
+  lastEl = el;
   const db = App.db;
   if (!db.journals) db.journals = [];
   if (curKey === null) curKey = todayJournalKey();
@@ -87,6 +91,7 @@ export function render(App, el) {
 
   buildDateBar(App, el);
   buildVditor(App, el);
+  if (pendingFocus) { pendingFocus = false; setTimeout(() => focusEditor(), 200); }
   refreshStatus(App, el);
   renderLedger(App, el);
 
@@ -155,6 +160,17 @@ export function render(App, el) {
   };
   el.querySelector('[data-diary-full]').onclick = () => setFull(!full);
   if (typeof window !== 'undefined') window.__diaryExitFull = () => setFull(false);
+
+  // 切后台：先落库，再把 db 推给原生——日记只写 localStorage，
+  // 不推的话桌面日记组件会一直停在旧内容（直到下次 App 渲染/回前台）。
+  if (!docHideBound && typeof document !== 'undefined') {
+    docHideBound = true;
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden || !CURRENT_APP) return;
+      try { saveCurrent(CURRENT_APP, lastEl); } catch (e) { /* 忽略 */ }
+      try { CURRENT_APP.widget && CURRENT_APP.widget.refreshNative(); } catch (e) { /* 忽略 */ }
+    });
+  }
 }
 
 // 日期条：以当前日为中心展开 BAR_SPAN 天；有内容打点；今天高亮
@@ -560,4 +576,24 @@ export function refresh() {
     refreshStatus(CURRENT_APP, el);
     renderLedger(CURRENT_APP, el);
   }
+}
+
+// 桌面日记小组件点进来：定位到指定日期，并可要求直接进入编辑（聚焦编辑器）。
+// 日记页是懒加载 + tab 缓存的，所以两种状态都要接住：
+//   已挂载 → switchDay 立刻换内容；未挂载 → 记下 curKey，等 render 时用。
+export function openAt(key, focus = false) {
+  const k = normKey(key);
+  if (k) {
+    if (vd && CURRENT_APP && lastEl && lastEl.isConnected) switchDay(CURRENT_APP, lastEl, k);
+    else curKey = k;
+  }
+  if (focus) {
+    pendingFocus = true;
+    // 已挂载时不会重建编辑器，补一次聚焦；首渲染由 render 里的 pendingFocus 处理
+    setTimeout(() => { if (pendingFocus && vd) { pendingFocus = false; focusEditor(); } }, 400);
+  }
+}
+
+export function focusEditor() {
+  try { if (vd && vd.focus) vd.focus(); } catch (e) { /* 忽略 */ }
 }

@@ -56,8 +56,12 @@ public class MainActivity extends BridgeActivity {
       final String tab = intent.getStringExtra("erp_tab");
       final boolean fresh = intent.getBooleanExtra("erp_fresh", false);
       final String freshDate = intent.getStringExtra("erp_fresh_date");
+      final String diaryDate = intent.getStringExtra("erp_diary_date");
+      final boolean diaryEdit = intent.getBooleanExtra("erp_diary_edit", false);
       postJSEvent("erpLaunchTab", "{\"tab\":\"" + tab + "\",\"fresh\":" + fresh
-          + (freshDate != null ? ",\"date\":\"" + freshDate + "\"" : "") + "}");
+          + (freshDate != null ? ",\"date\":\"" + freshDate + "\"" : "")
+          + (diaryDate != null ? ",\"diaryDate\":\"" + diaryDate + "\",\"diaryEdit\":" + diaryEdit : "")
+          + "}");
     }
     // 番茄钟控制栏按钮：暂停/继续/结束 → JS window 事件 timerControl
     if (intent.hasExtra("timer_action")) {

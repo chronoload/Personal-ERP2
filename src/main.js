@@ -458,6 +458,14 @@ window.addEventListener('erpLaunchTab', (e) => {
   const d = e.detail || {};
   // 从桌面小组件点进来时先把原生流水拉一遍，再切页（否则刚记的那笔看不到）
   syncFromNative();
+  // 日记小组件：先定位到那一天，再切到日记页（diary 懒加载，import 复用同一模块实例）
+  if (d.diaryDate) {
+    import('./views/diary.js').then((m) => {
+      try { m.openAt(d.diaryDate, !!d.diaryEdit); } catch (err) { /* 定位失败不阻断进页 */ }
+      App.setTab('diary');
+    }).catch(() => {});
+    return;
+  }
   if (d.tab && TAB_ORDER.includes(d.tab)) App.setTab(d.tab);
   if (d.fresh) {
     const pad = (k) => {

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 日记小组件：4×3，可纵向拉伸放更多正文 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="140dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:updatePeriodMillis="0"
+    android:previewLayout="@layout/widget_diary"
+    android:description="@string/widget_diary_desc"
+    android:initialLayout="@layout/widget_diary"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

@@ -14,6 +14,7 @@
     <string name="widget_countdown_label">ERP · 任务倒计时</string>
     <string name="widget_stopwatch_label">ERP · 专注停表</string>
     <string name="widget_ledger_label">ERP · 快速记账</string>
+    <string name="widget_diary_label">ERP · 日记</string>
 
     <string name="widget_today_desc">今日前 4 项活动；全部完成后自动补延期与待排任务</string>
     <string name="widget_home_desc">今日日程大卡；含「＋ 添加今日日程」直达新建</string>
@@ -23,4 +24,5 @@
     <string name="widget_countdown_desc">盯一个任务的时间点：下一个 / 指定 / 自定义；底部列出接下来的等待队列</string>
     <string name="widget_stopwatch_desc">手动专注计时：25/45 分一键开跑，开始 · 暂停 · 重置</string>
     <string name="widget_ledger_desc">点金额立即入账：−5/−10/−20/−50 支出，+10/+50/+100 收入；点标题切换资源</string>
+    <string name="widget_diary_desc">显示当天日记；‹ › 逐日回看昨天/前天；点正文进日记编辑</string>
 </resources>

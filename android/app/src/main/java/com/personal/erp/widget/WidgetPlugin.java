@@ -233,6 +233,7 @@ public class WidgetPlugin extends Plugin {
     refreshOne(mgr, CountdownWidgetProvider.class); // 倒计时跟随任务改期
     refreshOne(mgr, FocusStopwatchProvider.class);  // 停表独立计时，推送时顺带校正
     refreshOne(mgr, LedgerWidgetProvider.class);    // 快速记账：资源/主题变化即时同步
+    refreshOne(mgr, DiaryWidgetProvider.class);     // 日记：正文/日期跟随 db 推送
     // 锁屏常驻通知跟随同一份数据刷新（未开启时内部直接跳过）
     try { com.personal.erp.lockscreen.LockScreenNotifier.post(getContext(), false); } catch (Exception ignored) {}
   }
@@ -252,6 +253,8 @@ public class WidgetPlugin extends Plugin {
         for (int id : ids) FocusStopwatchProvider.refreshOne(getContext(), id);
       } else if (cls == LedgerWidgetProvider.class) {
         for (int id : ids) LedgerWidgetProvider.refreshOne(getContext(), id);
+      } else if (cls == DiaryWidgetProvider.class) {
+        for (int id : ids) DiaryWidgetProvider.updateOne(getContext(), mgr, id);
       } else if (cls == ResourcesWidgetProvider.class) {
         for (int id : ids) ResourcesWidgetProvider.updateOne(getContext(), mgr, id);
       } else if (cls == GoalsWidgetProvider.class) {
