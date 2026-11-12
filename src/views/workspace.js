@@ -100,6 +100,8 @@ function findEntity(db, type, id) {
 }
 
 export function render(App, el) {
+  // 容器已被重渲染替换（异步 import 迟到的旧回调）：直接丢弃，别在新界面上弹报错
+  if (!el || !el.isConnected) return;
   CURRENT_APP = App; // 完成面板回调的 App 引用
   if (vd) { try { vd.destroy(); } catch (e) { /* 忽略旧实例销毁异常 */ } vd = null; }
   if (inputTimer) { clearTimeout(inputTimer); inputTimer = null; } // 旧实例的防抖提交作废
@@ -251,7 +253,12 @@ export function render(App, el) {
     || (prefs.nightTheme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   // 同步模型：编辑器是纯编辑缓冲——编辑中系统绝不触碰（不 setValue、不写 db），
   // 失焦（blur）才一次性 reconcile 提交。杜绝 input 重入导致的跳顶/光标丢失/覆盖输入。
-  vd = new Vditor('ws-vditor', {
+  // 用元素本身挂载，不走 id 查找：编辑器在「编辑器」页里是异步 import 后挂载的，
+  // 若这次挂载的容器已被重渲染替换（refresh 抢先一步），document.getElementById
+  // 会取不到 #ws-vditor，Vditor 就会在屏幕中间弹「Failed to get element by id」。
+  const vdEl = el.querySelector('[data-ws-md]');
+  if (!vdEl) return; // 容器没了就别建实例（旧 DOM 已作废）
+  vd = new Vditor(vdEl, {
     mode: 'wysiwyg',
     height: 440,
     cache: { enable: false }, // 数据由 db 统一管理，禁用编辑器内缓存

@@ -1381,7 +1381,14 @@ export function render(App, el) {
   const wsHost = el.querySelector('[data-ws-host]');
   // 三视图工作台（Vditor 编辑器 + 看板 + 日历）——延迟加载：把它打成独立 async chunk，
   // 只有切到「📝 编辑器」页才拉取，首屏不再背负造 570KB 的 Vditor 整包。
-  if (wsHost) import('./workspace.js').then((ws) => ws.render(App, wsHost));
+  if (wsHost) {
+    import('./workspace.js').then((ws) => {
+      // 异步 chunk 到达时，本页可能已被下一次 refresh 重建（手机端加载慢，概率更高）。
+      // 旧容器已脱离文档就别往上挂——否则 Vditor 找不到 #ws-vditor 会弹全局报错提示。
+      if (!wsHost.isConnected) return;
+      ws.render(App, wsHost);
+    }).catch(() => {});
+  }
   setupDrag(App);
   settleThemeTones(App, el);
   syncPager(App, el);
