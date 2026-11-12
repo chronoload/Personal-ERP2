@@ -454,8 +454,16 @@ timer.restore();
 timer.restoreNative();
 
 // 桌面小组件点击跳转：MainActivity 触发 window 事件，切到对应 Tab（fresh=直接弹新建，date=预填日期）
-window.addEventListener('erpLaunchTab', (e) => {
-  const d = e.detail || {};
+// 冷启动时原生事件可能早于本监听注册（WebView 还没起来），所以原生同时把指令落盘，
+// JS 起来后主动拉一次（consumeLaunch）；两条通道用 ts 去重，避免动作执行两次。
+const seenLaunch = new Set();
+function applyLaunch(d) {
+  if (!d || !d.tab) return;
+  const k = d.ts ? String(d.ts) : '';
+  if (k) {
+    if (seenLaunch.has(k)) return;
+    seenLaunch.add(k);
+  }
   // 从桌面小组件点进来时先把原生流水拉一遍，再切页（否则刚记的那笔看不到）
   syncFromNative();
   // 日记小组件：先定位到那一天，再切到日记页（diary 懒加载，import 复用同一模块实例）
@@ -466,17 +474,28 @@ window.addEventListener('erpLaunchTab', (e) => {
     }).catch(() => {});
     return;
   }
-  if (d.tab && TAB_ORDER.includes(d.tab)) App.setTab(d.tab);
+  if (TAB_ORDER.includes(d.tab)) App.setTab(d.tab);
   if (d.fresh) {
-    const pad = (k) => {
-      const m = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(k || ''));
+    const pad = (k2) => {
+      const m = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(k2 || ''));
       return m ? `${m[1]}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}` : null;
     };
     const start = pad(d.date) ? `${pad(d.date)}T09:00` : null;
     setTimeout(() => overview.openActModal(null, null, start), 350);
   }
-});
+}
+window.addEventListener('erpLaunchTab', (e) => applyLaunch(e.detail));
 
+// 冷启动兜底：主动取一次原生落盘的点击指令
+async function pullWidgetLaunch() {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const P = Capacitor.registerPlugin('Widget');
+    const r = await P.consumeLaunch();
+    if (r && r.json) applyLaunch(JSON.parse(r.json));
+  } catch (e) { /* 插件不可用则忽略 */ }
+}
+window.addEventListener('erpResume', () => { pullWidgetLaunch(); });
 // 系统深浅偏好变化：仅「跟随系统」模式实时切换，手动选择后不打扰
 (() => {
   const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -506,6 +525,9 @@ initErpFileSync()
   .catch((e) => console.error('[erp-file] 引导失败，回落 localStorage：', e));
 
 App.render(true);
+
+// 首屏渲染完再取桌面点击指令：避免在初次渲染前抢跑导致页面状态被覆盖
+pullWidgetLaunch();
 
 // 新一天引导：每天首次启动弹出（模块内部自带「当天已展示」与「未初始化」短路）
 dayGuide.maybeShow(App);

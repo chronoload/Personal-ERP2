@@ -58,10 +58,18 @@ public class MainActivity extends BridgeActivity {
       final String freshDate = intent.getStringExtra("erp_fresh_date");
       final String diaryDate = intent.getStringExtra("erp_diary_date");
       final boolean diaryEdit = intent.getBooleanExtra("erp_diary_edit", false);
-      postJSEvent("erpLaunchTab", "{\"tab\":\"" + tab + "\",\"fresh\":" + fresh
+      final String json = "{\"tab\":\"" + tab + "\",\"fresh\":" + fresh
           + (freshDate != null ? ",\"date\":\"" + freshDate + "\"" : "")
           + (diaryDate != null ? ",\"diaryDate\":\"" + diaryDate + "\",\"diaryEdit\":" + diaryEdit : "")
-          + "}");
+          + ",\"ts\":" + System.currentTimeMillis() + "}";
+      // 冷启动时 WebView 还没加载完，postDelayed 的 window 事件会打空（表现为「只打开应用，
+      // 不跳转」）。所以同时把指令落一份，JS 起来后主动来取（WidgetPlugin.consumeLaunch），
+      // 两边用 json 里的 ts 去重。
+      try {
+        getSharedPreferences(com.personal.erp.widget.WidgetKeys.PREFS_FILE, MODE_PRIVATE)
+            .edit().putString("widget_pending_launch", json).apply();
+      } catch (Exception ignored) {}
+      postJSEvent("erpLaunchTab", json);
     }
     // 番茄钟控制栏按钮：暂停/继续/结束 → JS window 事件 timerControl
     if (intent.hasExtra("timer_action")) {

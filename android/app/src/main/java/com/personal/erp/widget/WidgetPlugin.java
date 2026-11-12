@@ -104,6 +104,20 @@ public class WidgetPlugin extends Plugin {
     call.resolve(ret);
   }
 
+  /** JS 起来后主动取一次桌面点击指令（冷启动 window 事件可能早于监听注册） */
+  @PluginMethod
+  public void consumeLaunch(PluginCall call) {
+    JSObject ret = new JSObject();
+    String raw = "";
+    try {
+      SharedPreferences sp = getContext().getSharedPreferences(WidgetKeys.PREFS_FILE, Context.MODE_PRIVATE);
+      raw = sp.getString("widget_pending_launch", "");
+      if (!raw.isEmpty()) sp.edit().remove("widget_pending_launch").apply();
+    } catch (Exception ignored) {}
+    ret.put("json", raw);
+    call.resolve(ret);
+  }
+
   /** 取走原生独立产生的待回读流水（取完即清空），JS 合并进本地库后回推即可 */
   @PluginMethod
   public void getPendingTxs(PluginCall call) {
