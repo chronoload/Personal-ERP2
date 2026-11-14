@@ -359,9 +359,9 @@ function takeCommandBody(text) {
 // 没有可拉起的应用时才退回系统分享面板；再不行就只保证已复制。
 async function shareToAi(text) {
   const copied = await copyText(text);
-  const r = await AppLaunch.openAi();
+  const r = await AppLaunch.openTarget();
   if (r && r.ok) {
-    toast('已打开 AI 助手 · 提示词在剪贴板，粘贴即可', 'ok');
+    toast('已打开目标应用 · 提示词在剪贴板，粘贴即可', 'ok');
     return;
   }
   try {
@@ -382,7 +382,7 @@ function openPlanPromptModal(App, el) {
       <div class="field"><label>提示词</label><textarea id="dp-prompt" class="ledger-cmd" rows="10" readonly spellcheck="false"></textarea></div>
       <div class="field" style="margin-top:8px"><label>模型输出的命令块</label><textarea id="dp-paste" class="ledger-cmd" rows="6" spellcheck="false" placeholder="- [ ] 写周报 @ 09:00 45分钟 (运营)"></textarea></div>
       <p class="muted" style="font-size:11px">语法与「🔍 解析并注入」完全一致：<code>- [ ] 活动</code>、<code>@ 09:00 60分钟</code> 排时间、<code>(计划名)</code> 归属、<code>+100 工资</code> 记流水。</p>`,
-    footerHTML: `<button class="btn" data-copy>复制提示词</button><button class="btn" data-share>复制并打开 AI 助手</button><button class="btn" data-cancel>取消</button><button class="btn primary" data-ok>解析并注入</button>`,
+    footerHTML: `<button class="btn" data-copy>复制提示词</button><button class="btn" data-share>复制并打开应用</button><button class="btn" data-cancel>取消</button><button class="btn primary" data-ok>解析并注入</button>`,
   });
   m.q('#dp-prompt').value = prompt;
   copyText(prompt).then((ok) => toast(ok ? '提示词已复制，发给模型即可' : '自动复制失败，请手动复制', ok ? 'ok' : 'warn'));

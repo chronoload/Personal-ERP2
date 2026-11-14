@@ -511,15 +511,15 @@ export function render(App, el) {
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>AI 助手跳转</h3><span class="muted">日记问号 → 复制提示词并直接打开你选的 AI</span></div>
+      <div class="card-head"><h3>跳转到其他应用</h3><span class="muted">日记问号 → 复制提示词并直接打开你选的应用</span></div>
       ${App.launch.nativeAvailable() ? `
       <div class="row-gap" style="align-items:center">
         <span class="muted">跳转到</span>
-        <select id="ai-app-select" style="max-width:240px">
+        <select id="ai-app-select" style="max-width:260px">
           <option value="">系统分享面板（默认）</option>
         </select>
       </div>
-      <div class="muted" style="margin-top:6px" id="ai-app-hint">正在检测已安装的 AI 助手…</div>
+      <div class="muted" style="margin-top:6px" id="ai-app-hint">正在读取应用列表…</div>
       ` : '<div class="muted">仅安卓 App 内生效；桌面 / 浏览器会退回系统分享面板。</div>'}
     </div>
 
@@ -708,13 +708,13 @@ export function render(App, el) {
       aiSel.value = cur;
       if (hint) {
         hint.textContent = apps.length
-          ? '日记里的「复制并打开 AI 助手」会直接切到所选应用，提示词已在剪贴板。'
-          : '没检测到已安装的 AI 助手：会退回系统分享面板（文本随分享带上）。';
+          ? '日记里的「复制并打开应用」会直接切到所选应用，提示词已在剪贴板。'
+          : '没有读到可启动的应用列表：会退回系统分享面板。';
       }
     });
     aiSel.addEventListener('change', () => {
       App.launch.setPkg(aiSel.value);
-      toast(aiSel.value ? '已设为直启目标' : '已改为系统分享面板', 'ok');
+      toast(aiSel.value ? '已设为跳转目标' : '已改为系统分享面板', 'ok');
     });
   }
   refreshLocalBackups(); // 异步加载本地备份清单（native 读目录 / web 读历史）

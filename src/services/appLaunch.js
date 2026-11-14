@@ -1,32 +1,33 @@
 // services/appLaunch.js
 // 系统跳转桥（原生 AppLaunch 插件）的 JS 封装：
-//   · list()   列出手机里已安装的 AI 助手（用于设置页选择）
-//   · openAi() 打开用户选中的 AI 助手（未选则用原生默认顺序）
-// 设置项存在 Prefs.aiAppPackage，空字符串 = 不直启、退回系统分享面板。
+//   · list()       列出设备上所有可从桌面启动的应用（设置页挑选跳转目标）
+//   · openTarget() 打开用户选中的应用；未选择时返回 ok:false，由调用方退回分享面板
+// 选择结果存在 Prefs.launchAppPackage，空字符串 = 不直启。
 import { Capacitor } from '@capacitor/core';
 import { Prefs } from '../store/prefs.js';
 
 export const AppLaunch = {
   nativeAvailable() { return Capacitor.isNativePlatform(); },
 
-  pkg() { return Prefs.load().aiAppPackage || ''; },
+  pkg() { return Prefs.load().launchAppPackage || ''; },
 
-  setPkg(pkg) { Prefs.set({ aiAppPackage: pkg || '' }); },
+  setPkg(pkg) { Prefs.set({ launchAppPackage: pkg || '' }); },
 
   async list() {
     if (!this.nativeAvailable()) return [];
     try {
       const P = Capacitor.registerPlugin('AppLaunch');
-      const r = await P.listAiApps();
+      const r = await P.listApps();
       return Array.isArray(r && r.apps) ? r.apps : [];
     } catch (e) { return []; }
   },
 
-  async openAi() {
-    if (!this.nativeAvailable()) return { ok: false, error: 'web' };
+  async openTarget() {
+    const pkg = this.pkg();
+    if (!this.nativeAvailable() || !pkg) return { ok: false, error: 'unset' };
     try {
       const P = Capacitor.registerPlugin('AppLaunch');
-      return await P.openAi({ package: this.pkg() });
+      return await P.open({ package: pkg });
     } catch (e) {
       return { ok: false, error: String((e && e.message) || e) };
     }

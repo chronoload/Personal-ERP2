@@ -1,16 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 包可见性：AI 助手跳转需要能查询这些包（Android 11+） -->
+    <!-- 包可见性：跳转目标由用户在设置里从「所有可启动应用」中选择（Android 11+ 需声明） -->
     <queries>
-        <package android:name="com.larus.nova" />
-        <package android:name="com.deepseek.chat" />
-        <package android:name="com.openai.chatgpt" />
-        <package android:name="com.moonshot.kimichat" />
-        <package android:name="com.baidu.newapp" />
-        <package android:name="com.aliyun.tea" />
-        <package android:name="com.google.android.apps.bard" />
-        <package android:name="com.microsoft.copilot" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
