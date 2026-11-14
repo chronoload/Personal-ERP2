@@ -21,6 +21,7 @@ import { icon } from '../ui/icons.js';
 import { saveFile } from '../services/saveFile.js';
 import Vditor from 'vditor';
 import 'vditor/dist/index.css';
+import VditorZh from '../ui/vditorI18n.js';
 
 let vd = null; // 当前 Vditor 实例（render 重建时销毁）
 let curView = 'goal'; // 当前视图：goal | day | week | month（模块级，跨 render 保留）
@@ -253,14 +254,17 @@ export function render(App, el) {
     || (prefs.nightTheme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   // 同步模型：编辑器是纯编辑缓冲——编辑中系统绝不触碰（不 setValue、不写 db），
   // 失焦（blur）才一次性 reconcile 提交。杜绝 input 重入导致的跳顶/光标丢失/覆盖输入。
-  // 用元素本身挂载，不走 id 查找：编辑器在「编辑器」页里是异步 import 后挂载的，
-  // 若这次挂载的容器已被重渲染替换（refresh 抢先一步），document.getElementById
-  // 会取不到 #ws-vditor，Vditor 就会在屏幕中间弹「Failed to get element by id」。
-  const vdEl = el.querySelector('[data-ws-md]');
-  if (!vdEl) return; // 容器没了就别建实例（旧 DOM 已作废）
-  vd = new Vditor(vdEl, {
+  // 用 id 挂载：Vditor 对字符串 id 的分支会顺带补全 cache 等默认项，
+  // 元素挂载在 WebView2（Tauri）/部分 WebView 上会导致编辑器初始化异常。
+  // 容器有效性由上面的 el.isConnected 守卫保证，所以不会出现「找不到元素」。
+  if (!document.getElementById('ws-vditor')) return;
+  vd = new Vditor('ws-vditor', {
     mode: 'wysiwyg',
     height: 440,
+    // 编辑器依赖的两份运行时资源改为本地：i18n 内置、lute 随包发布。
+    // Vditor 默认从 unpkg 拉这两样，网络不通/被墙时编辑器直接初始化失败（白板）。
+    i18n: VditorZh,
+    _lutePath: './vditor-assets/lute.min.js',
     cache: { enable: false }, // 数据由 db 统一管理，禁用编辑器内缓存
     sanitize: false, // 保留 <!--id:--> 的 lute 链接形式（CSS 隐藏，绑定身份用）
     theme: darkNow ? 'dark' : 'classic',

@@ -14,6 +14,7 @@ import { toast, esc, openModal } from '../ui/helpers.js';
 import { icon } from '../ui/icons.js';
 import Vditor from 'vditor';
 import 'vditor/dist/index.css';
+import VditorZh from '../ui/vditorI18n.js';
 
 let vd = null;          // 当前 Vditor 实例
 let CURRENT_APP = null; // 完成面板回调用 App 引用（跨 render 保留）
@@ -85,6 +86,9 @@ export function render(App, el) {
   vd = new Vditor('ledger-vditor', {
     mode: 'wysiwyg',
     height: 380,
+    // 运行时资源本地化：i18n 内置、lute 随包，unpkg 不通时编辑器也能起来
+    i18n: VditorZh,
+    _lutePath: './vditor-assets/lute.min.js',
     cache: { enable: false },
     sanitize: false,
     theme: darkNow ? 'dark' : 'classic',

@@ -14,6 +14,7 @@ import { Prefs } from '../store/prefs.js';
 import { saveDB } from '../store/db.js';
 import { esc, toast, openModal, fmtNum, badge } from '../ui/helpers.js';
 import { icon } from '../ui/icons.js';
+import VditorZh from '../ui/vditorI18n.js';
 import {
   extractBlocks, diffBlocks, splitCommands, injectJournal, makeParseRecord,
   todayJournalKey, shiftJournalKey, parseJournalKey, dayKeyOf, fingerprint,
@@ -218,6 +219,9 @@ function buildVditor(App, el) {
   vd = new Vditor('diary-vditor', {
     mode: 'wysiwyg',
     height: 360,
+    // 运行时资源本地化：i18n 内置、lute 随包，unpkg 不通时编辑器也能起来
+    i18n: VditorZh,
+    _lutePath: './vditor-assets/lute.min.js',
     cache: { enable: false },
     sanitize: false,
     theme: darkNow ? 'dark' : 'classic',
