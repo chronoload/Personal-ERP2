@@ -71,7 +71,7 @@ export function render(App, el) {
       <div class="card-head">
         <h3>${icon('book')} 日记</h3>
         <div class="row-gap">
-          <button class="btn sm" data-diary-prompt title="复制提示词：先和模型聊清规划，再把输出的命令块粘回来直接加活动">?</button>
+          <button class="btn sm" data-diary-prompt title="先问我需要什么：对齐目标/计划/今天，聊清楚再把命令块粘回来">?</button>
           <button class="btn sm" data-diary-full title="全屏编辑（Esc 退出）">${icon('expand')} 全屏</button>
           <button class="btn sm" data-diary-today title="回到今天">今天</button>
           <button class="btn sm" data-diary-cal title="选择日期">${icon('calendar')} 月历</button>
@@ -286,18 +286,29 @@ function switchDay(App, el, key) {
 const FENCE = '```';
 
 // 语法与 journal.splitCommands 严格对齐：`- [ ] 标题 @ 09:00 60分钟 (计划名) #标签 ；备注`
+// 理念：日记不是排程工具，而是「向自己提问」的咨询动作——先问需要什么，
+// 再把大局（目标 → 计划 → 活动）对齐到今天，最后才落到可执行的行。
 function diaryPrompt(dateKey) {
   return [
-    '你是我的「一天执行规划」助手。先不要给方案，用多轮对话把下面几件事问清楚（每轮只问 1-3 个问题）：',
-    '1) 今天 / 这周真正要推进的一件事是什么？',
-    '2) 每天能拿出多少分钟、集中在哪些时段？',
-    '3) 有哪些硬约束（上课 / 上班 / 会议 / 通勤 / 睡眠）？',
-    '4) 这次的安排属于已有目标 / 计划里的哪一个？',
-    '5) 截止时间是什么时候、做到什么程度算完成？',
+    '你是我的「大局 → 今天」对齐伙伴，不是排程工具，也不要急着给方案。',
+    '',
+    '先反过来问我：我现在真正需要的是什么？',
+    '（每轮只问 1-3 个问题，像咨询一样一层层往下收敛；我说不清楚就继续问，不要替我决定。）',
+    '',
+    '按这个顺序把上下文问清楚，已经说过的跳过：',
+    '1) 现在卡在哪、想要的结果是什么、为什么是现在？',
+    '2) 我已有的目标里，哪些在推进、哪些被搁置、哪些其实已经不重要了？',
+    '3) 每条目标对应的计划现在是什么状态：继续 / 已经变形 / 该停？',
+    '4) 再往下才是活动：这周、今天具体做什么，明确不做什么？',
+    '5) 硬约束（上课 / 上班 / 会议 / 通勤 / 睡眠）和可投入时间是多少？',
+    '6) 今天这一天，在这个大局里应该承担哪一块？',
+    '',
+    '在你确认我已经想清楚之前，不要输出代码块。问清楚后，只输出两部分：',
+    'A. 3-5 句话：这周真正要的是什么，今天只做哪一件。',
+    'B. 一个 Markdown 代码块（用 ' + FENCE + ' 包住），每行一条今天要做的活动：',
+    '- [ ] 活动标题 @ 09:00 60分钟 (计划名) #标签 ；备注',
     '',
     `当前日记日期：${dateKey}（时区 Asia/Shanghai）。`,
-    '信息够了以后，只输出一个 Markdown 代码块（用 ' + FENCE + ' 包住），每行一条：',
-    '- [ ] 活动标题 @ 09:00 60分钟 (计划名) #标签 ；备注',
     '',
     '规则：',
     '- 每行一条活动，以 `- [ ]` 开头；已完成的写 `- [x]`。',
@@ -341,17 +352,29 @@ function takeCommandBody(text) {
   return (bodies.length ? bodies.join('\n') : src).trim();
 }
 
+// 复制提示词，并尝试拉起系统分享面板：安卓上直接选豆包 / ChatGPT 等 AI 助手，
+// 文本随分享一并带上，不用再手动粘贴。不支持的平台退回「只复制」。
+async function shareToAi(text) {
+  const copied = await copyText(text);
+  try {
+    const { Share } = await import('@capacitor/share');
+    await Share.share({ text, dialogTitle: '发送给 AI 助手' });
+    return;
+  } catch (e) { /* web / 未安装分享目标：走剪贴板提示 */ }
+  toast(copied ? '提示词已复制，发给你的 AI 助手即可' : '复制失败，请手动复制', copied ? 'ok' : 'warn');
+}
+
 function openPlanPromptModal(App, el) {
   const prompt = diaryPrompt(curKey);
   const m = openModal({
-    title: '🧠 规划提示词：先聊清楚，再排活动',
+    title: '🧠 先问我需要什么 · 再把大局落到今天',
     width: 720,
     bodyHTML: `
-      <p class="muted" style="font-size:12px">打开时已自动复制提示词。先和模型多轮把规划定下来，它最后只给一段 ${FENCE} 代码块；粘到下面就直接加进「${esc(curKey)}」这一天。</p>
+      <p class="muted" style="font-size:12px">打开时已自动复制。把它发给模型：它会反过来问你想要什么、目标和计划现在是什么状态，聊清楚之后才给今天这一个代码块。粘到下面就能直接加进「${esc(curKey)}」这一天。</p>
       <div class="field"><label>提示词</label><textarea id="dp-prompt" class="ledger-cmd" rows="10" readonly spellcheck="false"></textarea></div>
       <div class="field" style="margin-top:8px"><label>模型输出的命令块</label><textarea id="dp-paste" class="ledger-cmd" rows="6" spellcheck="false" placeholder="- [ ] 写周报 @ 09:00 45分钟 (运营)"></textarea></div>
       <p class="muted" style="font-size:11px">语法与「🔍 解析并注入」完全一致：<code>- [ ] 活动</code>、<code>@ 09:00 60分钟</code> 排时间、<code>(计划名)</code> 归属、<code>+100 工资</code> 记流水。</p>`,
-    footerHTML: `<button class="btn" data-copy>复制提示词</button><button class="btn" data-cancel>取消</button><button class="btn primary" data-ok>解析并注入</button>`,
+    footerHTML: `<button class="btn" data-copy>复制提示词</button><button class="btn" data-share>复制并打开 AI 助手</button><button class="btn" data-cancel>取消</button><button class="btn primary" data-ok>解析并注入</button>`,
   });
   m.q('#dp-prompt').value = prompt;
   copyText(prompt).then((ok) => toast(ok ? '提示词已复制，发给模型即可' : '自动复制失败，请手动复制', ok ? 'ok' : 'warn'));
@@ -359,6 +382,7 @@ function openPlanPromptModal(App, el) {
     const ok = await copyText(prompt);
     toast(ok ? '提示词已复制' : '复制失败，请手动全选复制', ok ? 'ok' : 'warn');
   };
+  m.q('[data-share]').onclick = () => shareToAi(prompt);
   m.q('[data-cancel]').onclick = () => m.close();
   m.q('[data-ok]').onclick = () => {
     const body = takeCommandBody(m.q('#dp-paste').value);
