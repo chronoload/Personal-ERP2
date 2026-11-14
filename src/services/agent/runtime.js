@@ -7,7 +7,7 @@ import { agentCfg, ensureAgent, newSession, getSession, updateSession, addMessag
   newToolCall, finishToolCall, addApproval, decideApproval, takeUndoSnapshot, commitUndo,
   undoRecord, prune } from './store.js';
 import { buildSystem, historyToMessages } from './prompt.js';
-import { toolDefs, runTool, isWrite, previewOf, applyUndo } from './tools.js';
+import { toolDefs, runTool, isWrite, previewOf, applyUndo, internalNameOf } from './tools.js';
 import { chat } from './llm.js';
 import { Notifications } from '../notifications.js';
 import { saveDB } from '../../store/db.js';
@@ -150,11 +150,13 @@ async function runLoop() {
 
       for (const call of res.toolCalls) {
         if (abortFlag) break;
+        // 模型返回的是 API 安全名（erp__add_activity），这里换回内部点号名
+        const name = internalNameOf(call.name);
         updateSession(db, sid, { status: 'calling_tool' });
-        emit('state', { status: 'calling_tool', tool: call.name });
+        emit('state', { status: 'calling_tool', tool: name });
 
-        if (isWrite(call.name)) {
-          const allowed = sessionTrust ? 'auto' : await askApproval(call);
+        if (isWrite(name)) {
+          const allowed = sessionTrust ? 'auto' : await askApproval(name, call);
           if (allowed === 'deny') {
             updateSession(db, sid, { status: 'cancelled', lastError: '用户拒绝' });
             saveDB(db);
@@ -166,21 +168,21 @@ async function runLoop() {
           }
         }
 
-        const snap = isWrite(call.name) ? takeUndoSnapshot(db) : null;
-        const tc = newToolCall(db, sid, { name: call.name, args: call.args });
+        const snap = isWrite(name) ? takeUndoSnapshot(db) : null;
+        const tc = newToolCall(db, sid, { name, args: call.args });
         emit('message', { sessionId: sid });
-        const env = runTool(AppRef, call.name, call.args);
+        const env = runTool(AppRef, name, call.args);
 
         let undoId = null;
-        if (isWrite(call.name) && env && env.ok) {
+        if (isWrite(name) && env && env.ok) {
           undoId = commitUndo(db, sid, tc.id, snap);
           saveDB(db);
         }
         finishToolCall(db, tc.id, { status: env && env.ok ? 'ok' : 'error', result: env, undoId });
-        addMessage(db, sid, { role: 'tool', content: toolSummary(call.name, env), toolCallId: tc.id, meta: { name: call.name, ok: !!(env && env.ok), undoId } });
+        addMessage(db, sid, { role: 'tool', content: toolSummary(name, env), toolCallId: tc.id, meta: { name, ok: !!(env && env.ok), undoId } });
         saveDB(db);
         emit('message', { sessionId: sid });
-        emit('tool', { toolCallId: tc.id, name: call.name, env, undoId });
+        emit('tool', { toolCallId: tc.id, name, env, undoId });
 
         convo.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(env).slice(0, 4000) });
       }
@@ -223,15 +225,15 @@ function toolSummary(name, env) {
   return `${name} 完成${bits.length ? `：${bits.join(' · ')}` : ''}${warn}`;
 }
 
-function askApproval(call) {
+function askApproval(name, call) {
   return new Promise((resolve) => {
     const db = AppRef.db;
-    const preview = previewOf(call.name, call.args, db);
+    const preview = previewOf(name, call.args, db);
     const rec = addApproval(db, sessionId, { toolCallId: call.id, preview });
     saveDB(db);
     updateSession(db, sessionId, { status: 'awaiting_approval' });
     emit('state', { status: 'awaiting_approval' });
-    emit('approval', { approvalId: rec.id, name: call.name, preview, expiresAt: rec.expiresAt });
+    emit('approval', { approvalId: rec.id, name, preview, expiresAt: rec.expiresAt });
     notify('Agent 需要你确认', preview.split('\n')[0]);
 
     const timer = setTimeout(() => {

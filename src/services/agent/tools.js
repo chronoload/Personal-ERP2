@@ -3,13 +3,24 @@
 // 进程内工具桥：把 mcp/tools.mjs 的同一套工具接到内存库上，
 // 并提供「读/写分级、审批预览、撤销回放」。
 // ============================================================
-import { TOOLS, callTool } from '../../../mcp/tools.mjs';
+import { TOOLS, TOOL_BY_NAME, callTool } from '../../../mcp/tools.mjs';
 import { saveDB } from '../../store/db.js';
 
 export const READ_TOOLS = new Set(['erp.status', 'erp.goals', 'erp.activities', 'erp.transactions', 'erp.journal']);
 export const WRITE_TOOLS = new Set(['erp.add_goal', 'erp.add_plan', 'erp.add_activity', 'erp.add_tx', 'erp.append_journal']);
 
 export const isWrite = (name) => WRITE_TOOLS.has(name);
+
+// 模型侧函数名必须匹配 ^[a-zA-Z0-9_-]+$（DeepSeek/OpenAI 都会校验），
+// 而 MCP 内部工具名带点（erp.add_activity），所以边界上做一次映射。
+export const apiNameOf = (name) => String(name).replace(/[^a-zA-Z0-9_-]/g, '__');
+
+/** 模型返回的 name → 内部工具名（同时兼容模型直接回内部点号名） */
+export function internalNameOf(api) {
+  if (TOOL_BY_NAME.has(api)) return api;
+  const hit = TOOLS.find((t) => apiNameOf(t.name) === api);
+  return hit ? hit.name : api;
+}
 
 /** 给模型看的工具描述补充：何时用 / 何时不用 / 参数来源 */
 const HINTS = {
@@ -30,7 +41,7 @@ export function toolDefs() {
   return TOOLS.map((t) => ({
     type: 'function',
     function: {
-      name: t.name,
+      name: apiNameOf(t.name),
       description: `${HINTS[t.name] || t.description}\n用途：${t.description}`,
       parameters: t.inputSchema || { type: 'object', properties: {} },
     },
