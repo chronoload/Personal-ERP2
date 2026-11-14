@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 包可见性：AI 助手跳转需要能查询这些包（Android 11+） -->
+    <queries>
+        <package android:name="com.larus.nova" />
+        <package android:name="com.deepseek.chat" />
+        <package android:name="com.openai.chatgpt" />
+        <package android:name="com.moonshot.kimichat" />
+        <package android:name="com.baidu.newapp" />
+        <package android:name="com.aliyun.tea" />
+        <package android:name="com.google.android.apps.bard" />
+        <package android:name="com.microsoft.copilot" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

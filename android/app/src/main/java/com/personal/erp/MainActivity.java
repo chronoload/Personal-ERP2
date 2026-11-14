@@ -9,6 +9,7 @@ import com.personal.erp.sync.SyncPlugin;
 import com.personal.erp.timer.TimerPlugin;
 import com.personal.erp.geofence.GeofencePlugin;
 import com.personal.erp.lockscreen.LockScreenPlugin;
+import com.personal.erp.launch.AppLaunchPlugin;
 
 public class MainActivity extends BridgeActivity {
   // ★ Capacitor 8 关键：桥在 BridgeActivity.onCreate 内同步构建（super.onCreate → this.load() → bridgeBuilder.create()）。
@@ -22,6 +23,7 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(AlarmPlugin.class);  // 闹钟桥（日程提醒：后台响铃 + 锁屏全屏 + 重启恢复）
     registerPlugin(GeofencePlugin.class); // 地理围栏桥（地点进/出事件 + 一次性定位）
     registerPlugin(LockScreenPlugin.class); // 锁屏 / 开屏桥（常驻通知 + 亮屏整页）
+    registerPlugin(AppLaunchPlugin.class); // 系统跳转桥（打开 AI 助手 / 指定包名 / URL）
     super.load();
   }
 
