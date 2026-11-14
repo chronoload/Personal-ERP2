@@ -10,7 +10,7 @@
 // ============================================================
 import Vditor from 'vditor';
 import 'vditor/dist/index.css';
-import { Capacitor } from '@capacitor/core';
+import { AppLaunch } from '../services/appLaunch.js';
 import { Prefs } from '../store/prefs.js';
 import { saveDB } from '../store/db.js';
 import { esc, toast, openModal, fmtNum, badge } from '../ui/helpers.js';
@@ -359,15 +359,10 @@ function takeCommandBody(text) {
 // 没有可拉起的应用时才退回系统分享面板；再不行就只保证已复制。
 async function shareToAi(text) {
   const copied = await copyText(text);
-  if (Capacitor.isNativePlatform()) {
-    try {
-      const P = Capacitor.registerPlugin('AppLaunch');
-      const r = await P.openAi();
-      if (r && r.ok) {
-        toast('已打开 AI 助手 · 提示词在剪贴板，粘贴即可', 'ok');
-        return;
-      }
-    } catch (e) { /* 插件不可用：继续走分享 */ }
+  const r = await AppLaunch.openAi();
+  if (r && r.ok) {
+    toast('已打开 AI 助手 · 提示词在剪贴板，粘贴即可', 'ok');
+    return;
   }
   try {
     const { Share } = await import('@capacitor/share');

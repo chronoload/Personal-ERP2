@@ -11,6 +11,7 @@ import { icon } from './ui/icons.js';
 import * as engine from './domain/engine.js';
 import { Widget } from './services/widget.js';
 import { LockScreen } from './services/lockScreen.js';
+import { AppLaunch } from './services/appLaunch.js';
 import { System } from './services/system.js';
 import { Notifications } from './services/notifications.js';
 import { Backup } from './services/backup.js';
@@ -165,7 +166,7 @@ const App = {
   tab: 'overview',
   tabOrder: TAB_ORDER, // 全局 Tab 序（overview 轮播右边界滑入「下一个 Tab」用，勿再硬编码）
   // 系统服务接口（预留：小组件 / 系统提示 / 系统通知 / 备份）
-  widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS, geo: Geo, lockScreen: LockScreen,
+  widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS, geo: Geo, lockScreen: LockScreen, launch: AppLaunch,
   // 视图扁平暴露给内联 handler（App.calendar.open() 等）
   overview, diary: diaryLazy, finance, goals, stats, calendar, timer, dayGuide, hud, reportSlides,
   setTab(id) { this.tab = id; this.render(true); window.scrollTo({ top: 0 }); },

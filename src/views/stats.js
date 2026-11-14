@@ -511,6 +511,19 @@ export function render(App, el) {
     </div>
 
     <div class="card">
+      <div class="card-head"><h3>AI 助手跳转</h3><span class="muted">日记问号 → 复制提示词并直接打开你选的 AI</span></div>
+      ${App.launch.nativeAvailable() ? `
+      <div class="row-gap" style="align-items:center">
+        <span class="muted">跳转到</span>
+        <select id="ai-app-select" style="max-width:240px">
+          <option value="">系统分享面板（默认）</option>
+        </select>
+      </div>
+      <div class="muted" style="margin-top:6px" id="ai-app-hint">正在检测已安装的 AI 助手…</div>
+      ` : '<div class="muted">仅安卓 App 内生效；桌面 / 浏览器会退回系统分享面板。</div>'}
+    </div>
+
+    <div class="card">
       <div class="card-head"><h3>锁屏 · 开屏</h3><span class="muted">常驻通知 + 亮屏整页 · 每天 07:00 自动更新</span></div>
       ${App.sync.nativeAvailable() ? `
       <label class="row-gap" style="align-items:center"><input type="checkbox" id="lock-enabled" ${App.lockScreen.enabled() ? 'checked' : ''}> 常驻锁屏通知：显示今天的安排与待办数</label>
@@ -681,6 +694,29 @@ export function render(App, el) {
   });
   const abe = el.querySelector('#ab-every');
   if (abe) abe.addEventListener('change', () => { Prefs.set({ autoBackupEvery: Number(abe.value) }); });
+
+  // AI 助手跳转：列出手机里已安装的候选，选择写入 Prefs.aiAppPackage
+  const aiSel = el.querySelector('#ai-app-select');
+  if (aiSel) {
+    const hint = el.querySelector('#ai-app-hint');
+    App.launch.list().then((apps) => {
+      const cur = App.launch.pkg();
+      const opts = apps.map((a) => `<option value="${esc(a.package)}">${esc(a.label)}</option>`).join('');
+      const orphan = (cur && !apps.some((a) => a.package === cur))
+        ? `<option value="${esc(cur)}">${esc(cur)}（未安装）</option>` : '';
+      aiSel.innerHTML = `<option value="">系统分享面板（默认）</option>${opts}${orphan}`;
+      aiSel.value = cur;
+      if (hint) {
+        hint.textContent = apps.length
+          ? '日记里的「复制并打开 AI 助手」会直接切到所选应用，提示词已在剪贴板。'
+          : '没检测到已安装的 AI 助手：会退回系统分享面板（文本随分享带上）。';
+      }
+    });
+    aiSel.addEventListener('change', () => {
+      App.launch.setPkg(aiSel.value);
+      toast(aiSel.value ? '已设为直启目标' : '已改为系统分享面板', 'ok');
+    });
+  }
   refreshLocalBackups(); // 异步加载本地备份清单（native 读目录 / web 读历史）
 
   // 局域网同步：服务器地址
