@@ -13,6 +13,7 @@ import { buildReport, REPORT_MODULES, REPORT_MODULE_LABEL, periodRange } from '.
 import { flushErpFile } from '../store/db.js';
 import { agentCfg, saveCfg } from '../services/agent/store.js';
 import { getPresets } from '../services/agent/prompt.js';
+import { testConnection } from '../services/agent/llm.js';
 
 // ---------- 全局外观主题（图片 / 渐变） ----------
 export function setGlobalTheme(theme) {
@@ -552,7 +553,10 @@ export function render(App, el) {
       <div class="field"><label>预设内容</label><textarea id="ag-preset-text" rows="3"></textarea></div>
       <div class="field"><label>自定义指令（始终生效，≤2000 字）</label><textarea id="ag-extra" rows="3">${esc(String(prefs.agentInstructions || ''))}</textarea></div>
       <div class="muted" style="font-size:11px;margin-bottom:6px">API Key 存在本机偏好里（明文），仅本设备使用；写操作审批被拒绝时任务立即停止。</div>
-      <button class="btn primary sm" id="ag-save">保存 Agent 设置</button>
+      <div class="row-gap">
+        <button class="btn sm" id="ag-test">测试连接</button>
+        <button class="btn primary sm" id="ag-save">保存 Agent 设置</button>
+      </div>
     </div>
 
     <div class="card">
@@ -789,6 +793,28 @@ export function render(App, el) {
       if (list.length <= 1) return toast('至少保留一套预设', 'warn');
       Prefs.set({ agentPresets: list.filter((p) => p.id !== presetSel.value), agentActivePreset: '' });
       drawPresets();
+    };
+    el.querySelector('#ag-test').onclick = async () => {
+      const btn = el.querySelector('#ag-test');
+      const cfgIn = {
+        baseUrl: agBase.value.trim(),
+        apiKey: el.querySelector('#ag-key').value.trim(),
+        model: el.querySelector('#ag-model').value.trim(),
+        temperature: 0,
+      };
+      btn.disabled = true;
+      btn.textContent = '测试中…';
+      try {
+        const r = await testConnection(cfgIn);
+        if (stateEl) stateEl.textContent = '连接正常';
+        toast(`连接正常 · ${r.reply}`, 'ok');
+      } catch (e) {
+        if (stateEl) stateEl.textContent = '连接失败';
+        toast(String((e && e.message) || e).slice(0, 180), 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '测试连接';
+      }
     };
     el.querySelector('#ag-save').onclick = () => {
       const list = getPresets().map((p) => (p.id === presetSel.value ? { ...p, text: presetText.value.slice(0, 2000) } : p));
