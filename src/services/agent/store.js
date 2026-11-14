@@ -180,11 +180,11 @@ export function messagesOf(db, sessionId) {
 }
 
 // ---------------- 长对话：早期消息压缩 ----------------
-// 最近 KEEP_RECENT 条原样进模型；更早的攒够 COMPACT_TRIGGER 条压成一段摘要，
-// 摘要累积到 SUMMARY_LIMIT 字后只保留末尾，避免上下文无限膨胀。
-const KEEP_RECENT = 24;
-const COMPACT_TRIGGER = 12;
-const SUMMARY_LIMIT = 4000;
+// 最近 KEEP_RECENT 条原样进模型；更早的攒够 COMPACT_TRIGGER 条压成一段摘要。
+// 压缩会改写 system 内摘要、破坏前缀缓存，所以宁可晚压、一次压一大批。
+const KEEP_RECENT = 60;
+const COMPACT_TRIGGER = 60;
+const SUMMARY_LIMIT = 8000;
 
 export function compactSession(db, sessionId) {
   const s = getSession(db, sessionId);

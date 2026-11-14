@@ -122,8 +122,9 @@ export function buildSystem(App, session) {
   ].filter(Boolean).join('\n');
 }
 
-/** 历史消息 → chat messages：只回放 user/assistant 文本，按字符预算从最近往回取 */
-const HISTORY_CHAR_BUDGET = 6000;
+/** 历史消息 → chat messages：只回放 user/assistant 文本，按字符预算从最近往回取。
+ *  预算给得宽，尽量别在中段裁掉旧消息：一旦裁掉，整个前缀就变了，缓存全失效。 */
+const HISTORY_CHAR_BUDGET = 24000;
 
 export function historyToMessages(history, budget = HISTORY_CHAR_BUDGET) {
   const src = (Array.isArray(history) ? history : [])
