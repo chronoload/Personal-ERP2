@@ -341,6 +341,7 @@ function syncTopbarDock() {
     dock.className = 'topbar-dock ' + mode;
     dock.innerHTML = `
       <button class="dock-logo" onclick="App.timer.open()" title="计时器">P</button>
+      <button class="btn agent-entry" onclick="App.openAgent()" title="Agent · 纯模态对话">✦</button>
       <button class="btn" onclick="App.overview.openBatchCreate()" title="批量创建活动">${icon('bolt')}</button>
       <button class="btn ${App.hud.isEnabled() ? 'primary' : ''}" onclick="App.hud.toggle()" title="HUD 侧边栏（目标→计划→活动）">${icon('menu')}</button>
       <button class="btn timer-btn" onclick="App.timer.open()" title="计时器">${icon('clock')}</button>`;
