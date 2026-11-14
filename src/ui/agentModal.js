@@ -316,7 +316,7 @@ export function openConfig() {
       <div class="agent-body">
         <div class="row-gap" style="align-items:center;margin-bottom:6px">
           <select data-ac-select style="max-width:200px">
-            ${list.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}${p.id === cur.id ? '（当前）' : ''}</option>`).join('')}
+            ${list.map((p) => `<option value="${esc(p.id)}"${p.id === cur.id ? ' selected' : ''}>${esc(p.name)}${p.id === cur.id ? '（当前）' : ''}</option>`).join('')}
           </select>
           <button class="btn sm" data-ac-new>新建</button>
           <button class="btn sm" data-ac-del>删除当前</button>
@@ -350,7 +350,8 @@ export function openConfig() {
     rebuild();
   };
   q('[data-ac-new]').onclick = () => {
-    const p = saveProfile({ name: '新配置', baseUrl: '', apiKey: '', model: '', temperature: 0.3, maxTurns: 8 });
+    const n = listProfiles().length + 1;
+    const p = saveProfile({ name: `配置 ${n}`, baseUrl: '', apiKey: '', model: '', temperature: 0.3, maxTurns: 8 });
     setActiveProfile(p.id);
     rebuild();
   };
@@ -397,6 +398,7 @@ export function openConfig() {
     configEl = null;
     toast(Agent.isConfigured() ? '已保存并设为当前配置' : '还差 baseUrl / Key / 模型名', Agent.isConfigured() ? 'ok' : 'warn');
     renderChat();
+    try { if (window.App && window.App.refresh) window.App.refresh(); } catch (e) { /* 摘要刷新失败不影响保存 */ }
   };
 }
 
