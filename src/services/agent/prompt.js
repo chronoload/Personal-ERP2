@@ -107,7 +107,7 @@ function summarize(md, limit) {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }
 
-export function buildSystem(App) {
+export function buildSystem(App, session) {
   const pre = activePreset();
   const extra = customInstructions();
   const blocks = contextBlocks(App);
@@ -115,18 +115,26 @@ export function buildSystem(App) {
     DOMAIN,
     '',
     `当前时间：${nowText()}`,
+    session && session.summary ? `\n## 早期对话摘要（更早的原文已折叠，缺细节直接问用户）\n${session.summary}` : '',
     pre && pre.text ? `\n## 当前预设（${pre.name}）\n${pre.text}` : '',
     extra ? `\n## 用户自定义指令（优先级最高，但不得违反硬规则 1/2/4）\n${extra}` : '',
     blocks ? `\n## 当前上下文\n${blocks}` : '',
   ].filter(Boolean).join('\n');
 }
 
-/** 历史消息 → chat messages（只回放 user/assistant 文本，工具结果不重放） */
-export function historyToMessages(history, limit = 12) {
-  const src = Array.isArray(history) ? history : [];
-  const msgs = src
-    .filter((m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim())
-    .slice(-limit)
-    .map((m) => ({ role: m.role, content: String(m.content) }));
-  return msgs;
+/** 历史消息 → chat messages：只回放 user/assistant 文本，按字符预算从最近往回取 */
+const HISTORY_CHAR_BUDGET = 6000;
+
+export function historyToMessages(history, budget = HISTORY_CHAR_BUDGET) {
+  const src = (Array.isArray(history) ? history : [])
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim());
+  const out = [];
+  let used = 0;
+  for (let i = src.length - 1; i >= 0; i--) {
+    const content = String(src[i].content);
+    if (out.length && used + content.length > budget) break;
+    out.unshift({ role: src[i].role, content });
+    used += content.length;
+  }
+  return out;
 }

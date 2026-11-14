@@ -4,8 +4,8 @@
 // 关掉模态不影响这里；UI 只订阅事件并渲染。
 // ============================================================
 import { agentCfg, ensureAgent, newSession, getSession, updateSession, addMessage, messagesOf,
-  newToolCall, finishToolCall, addApproval, decideApproval, takeUndoSnapshot, commitUndo,
-  undoRecord, prune } from './store.js';
+  compactSession, newToolCall, finishToolCall, addApproval, decideApproval, takeUndoSnapshot,
+  commitUndo, undoRecord, prune } from './store.js';
 import { buildSystem, historyToMessages } from './prompt.js';
 import { toolDefs, runTool, isWrite, previewOf, applyUndo, internalNameOf } from './tools.js';
 import { chat } from './llm.js';
@@ -111,8 +111,15 @@ async function runLoop() {
   const db = AppRef.db;
   const sid = sessionId;
   const cfg = agentCfg();
-  const convo = [{ role: 'system', content: buildSystem(AppRef) }]
-    .concat(historyToMessages(messagesOf(db, sid)));
+  // 长对话：早期消息先压成摘要，再按字符预算取最近原文
+  const ses = compactSession(db, sid) || getSession(db, sid);
+  const all = messagesOf(db, sid);
+  const lastId = ses && ses.summarizedLastId;
+  const idx = lastId ? all.findIndex((m) => m.id === lastId) : -1;
+  const since = (ses && ses.summarizedUntil) || 0;
+  const hist = idx >= 0 ? all.slice(idx + 1) : all.filter((m) => (m.createdAt || 0) > since);
+  const convo = [{ role: 'system', content: buildSystem(AppRef, ses) }]
+    .concat(historyToMessages(hist));
   let turns = 0;
   updateSession(db, sid, { status: 'thinking', lastError: '' });
   emit('state', { status: 'thinking' });

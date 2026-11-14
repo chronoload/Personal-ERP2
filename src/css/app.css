@@ -1413,6 +1413,7 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
   display: flex; flex-direction: column; gap: 8px;
 }
 .agent-empty { color: var(--muted); font-size: 12px; padding: 8px 2px; }
+.agent-more { text-align: center; padding: 2px 0 6px; }
 .agent-msg { display: flex; }
 .agent-msg.user { justify-content: flex-end; }
 .agent-msg .bubble {

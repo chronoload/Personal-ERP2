@@ -16,6 +16,9 @@ let root = null;
 let panelOpen = false;
 let approvalEl = null;
 let bound = false;
+// 长对话渲染窗口：首屏只画最近 MSG_PAGE 条，往上点「加载更早」再补
+const MSG_PAGE = 40;
+let viewState = { sid: null, visible: MSG_PAGE };
 
 function ensureRoot() {
   if (root && document.body.contains(root)) return root;
@@ -59,6 +62,7 @@ export function openAgent() {
   ensureRoot();
   bindOnce();
   panelOpen = true;
+  viewState = { sid: null, visible: MSG_PAGE };
   root.innerHTML = `
     <div class="agent-mask" data-agent-close-mask>
       <div class="agent-panel" role="dialog" aria-label="Agent">
@@ -129,6 +133,8 @@ function renderChat(scrollBottom = false) {
   const session = sid ? getSession(window.App.db, sid) : null;
   if (status) status.textContent = session ? statusText(session.status) : '';
   if (!sid) {
+    viewState = { sid: null, visible: MSG_PAGE };
+    delete body.dataset.renderKey;
     body.innerHTML = `
       <div class="agent-empty">
         <p>问点什么，或者让它帮你排今天。</p>
@@ -140,8 +146,18 @@ function renderChat(scrollBottom = false) {
       </div>`;
     return;
   }
+  if (viewState.sid !== sid) viewState = { sid, visible: MSG_PAGE };
   const msgs = messagesOf(window.App.db, sid);
-  const rows = msgs.map((m) => {
+  const start = Math.max(0, msgs.length - viewState.visible);
+  const visible = msgs.slice(start);
+  // 只画最近一屏；消息没变（状态/工具事件）就不重建 DOM
+  const key = `${sid}:${visible.map((m) => m.id).join(',')}`;
+  if (body.dataset.renderKey === key) {
+    if (scrollBottom) body.scrollTop = body.scrollHeight;
+    return;
+  }
+  const fromBottom = body.scrollHeight - body.scrollTop;
+  const rows = visible.map((m) => {
     if (m.role === 'user') return `<div class="agent-msg user"><div class="bubble">${esc(m.content)}</div></div>`;
     if (m.role === 'tool') {
       const ok = m.meta && m.meta.ok;
@@ -151,11 +167,17 @@ function renderChat(scrollBottom = false) {
     }
     return `<div class="agent-msg assistant"><div class="bubble">${esc(m.content)}</div></div>`;
   }).join('');
-  body.innerHTML = rows || '<div class="agent-empty"><p>开始说吧。</p></div>';
-  if (scrollBottom) body.scrollTop = body.scrollHeight;
+  const more = start > 0
+    ? `<div class="agent-more"><button class="btn sm" data-agent-more>加载更早（还有 ${start} 条）</button></div>` : '';
+  body.innerHTML = more + (rows || '<div class="agent-empty"><p>开始说吧。</p></div>');
+  body.dataset.renderKey = key;
+  if (scrollBottom || fromBottom < 40) body.scrollTop = body.scrollHeight;
+  else body.scrollTop = Math.max(0, body.scrollHeight - fromBottom);
 }
 
 function onBodyClick(e) {
+  const more = e.target.closest('[data-agent-more]');
+  if (more) { viewState.visible += MSG_PAGE; renderChat(); return; }
   const q = e.target.closest('[data-agent-quick]');
   if (q) { Agent.send(q.dataset.agentQuick).then(() => setTimeout(() => renderChat(true), 30)); return; }
   const u = e.target.closest('[data-agent-undo]');
