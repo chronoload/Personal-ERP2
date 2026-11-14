@@ -4,6 +4,7 @@
 // 约定：全部挂在 db.agent 下，随 saveDB 一起落盘、随备份一起导出。
 // ============================================================
 import { Prefs } from '../../store/prefs.js';
+import { encryptText, decryptText } from './secret.js';
 
 export const AGENT_DEFAULTS = {
   baseUrl: '',
@@ -26,30 +27,106 @@ function uid(prefix) {
   return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// ---------------- 多套模型配置（API Key 加密存储） ----------------
+
+function normalizeProfile(p) {
+  return {
+    id: p.id || uid('agp'),
+    name: String(p.name || '未命名').slice(0, 24),
+    baseUrl: String(p.baseUrl || '').trim(),
+    apiKeyEnc: p.apiKeyEnc || (p.apiKey ? encryptText(p.apiKey) : ''),
+    model: String(p.model || '').trim(),
+    temperature: Number.isFinite(Number(p.temperature)) ? Number(p.temperature) : AGENT_DEFAULTS.temperature,
+    maxTurns: Number(p.maxTurns) > 0 ? Number(p.maxTurns) : AGENT_DEFAULTS.maxTurns,
+  };
+}
+
+/** 从旧版明文配置迁移一次，并清掉明文 key */
+function migrateLegacy() {
+  const p = Prefs.load();
+  if (Array.isArray(p.agentProfiles) && p.agentProfiles.length) return;
+  const legacy = normalizeProfile({
+    name: '默认',
+    baseUrl: p.agentBaseUrl || '',
+    apiKey: p.agentApiKey || '',
+    model: p.agentModel || '',
+    temperature: p.agentTemperature,
+    maxTurns: p.agentMaxTurns,
+  });
+  Prefs.set({
+    agentProfiles: [legacy],
+    agentActiveProfile: legacy.id,
+    agentBaseUrl: '',
+    agentApiKey: '',
+    agentModel: '',
+  });
+}
+
+export function listProfiles() {
+  migrateLegacy();
+  const list = Prefs.load().agentProfiles;
+  return Array.isArray(list) ? list.map(normalizeProfile) : [];
+}
+
+export function activeProfile() {
+  const list = listProfiles();
+  const id = Prefs.load().agentActiveProfile;
+  return list.find((p) => p.id === id) || list[0] || normalizeProfile({ name: '默认' });
+}
+
+export function setActiveProfile(id) {
+  Prefs.set({ agentActiveProfile: id });
+}
+
+/** 新建或更新一套配置；apiKey 传明文（空字符串表示保持原 key 不变） */
+export function saveProfile(input) {
+  const list = listProfiles().map(normalizeProfile);
+  const idx = list.findIndex((p) => p.id === input.id);
+  const base = idx >= 0 ? list[idx] : normalizeProfile({});
+  const next = normalizeProfile({
+    ...base,
+    ...input,
+    id: base.id,
+    apiKeyEnc: input.apiKey ? encryptText(input.apiKey) : base.apiKeyEnc,
+  });
+  if (idx >= 0) list[idx] = next;
+  else list.push(next);
+  Prefs.set({ agentProfiles: list, agentActiveProfile: next.id });
+  return next;
+}
+
+export function deleteProfile(id) {
+  const list = listProfiles().map(normalizeProfile).filter((p) => p.id !== id);
+  if (!list.length) return { ok: false, error: '至少保留一套配置' };
+  const active = Prefs.load().agentActiveProfile;
+  Prefs.set({
+    agentProfiles: list,
+    agentActiveProfile: active === id ? list[0].id : active,
+  });
+  return { ok: true };
+}
+
+/** 解析当前生效的配置（key 在此解密，只在内存里） */
 export function agentCfg() {
   const p = Prefs.load();
+  const pr = activeProfile();
   return {
     ...AGENT_DEFAULTS,
-    baseUrl: String(p.agentBaseUrl || '').trim(),
-    apiKey: String(p.agentApiKey || '').trim(),
-    model: String(p.agentModel || '').trim(),
-    temperature: Number.isFinite(Number(p.agentTemperature)) ? Number(p.agentTemperature) : AGENT_DEFAULTS.temperature,
-    maxTurns: Number(p.agentMaxTurns) > 0 ? Number(p.agentMaxTurns) : AGENT_DEFAULTS.maxTurns,
+    baseUrl: pr.baseUrl,
+    apiKey: decryptText(pr.apiKeyEnc),
+    model: pr.model,
+    temperature: pr.temperature,
+    maxTurns: pr.maxTurns,
     rememberJournal: p.agentRememberJournal !== false,
     hidden: !!p.agentHidden,
   };
 }
 
-export function saveCfg(patch) {
-  const map = {
-    baseUrl: 'agentBaseUrl', apiKey: 'agentApiKey', model: 'agentModel',
-    temperature: 'agentTemperature', maxTurns: 'agentMaxTurns',
-    rememberJournal: 'agentRememberJournal', hidden: 'agentHidden',
-  };
+/** 非模型类的开关（日记上下文 / 隐藏入口） */
+export function saveAgentFlags(patch) {
   const out = {};
-  for (const [k, v] of Object.entries(patch || {})) {
-    if (map[k]) out[map[k]] = v;
-  }
+  if (patch.rememberJournal !== undefined) out.agentRememberJournal = !!patch.rememberJournal;
+  if (patch.hidden !== undefined) out.agentHidden = !!patch.hidden;
   Prefs.set(out);
 }
 

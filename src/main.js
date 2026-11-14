@@ -13,7 +13,7 @@ import { Widget } from './services/widget.js';
 import { LockScreen } from './services/lockScreen.js';
 import { AppLaunch } from './services/appLaunch.js';
 import * as AgentRuntime from './services/agent/runtime.js';
-import { openAgent, openHistory as openAgentHistory } from './ui/agentModal.js';
+import { openAgent, openHistory as openAgentHistory, openConfig as openAgentConfig } from './ui/agentModal.js';
 import { System } from './services/system.js';
 import { Notifications } from './services/notifications.js';
 import { Backup } from './services/backup.js';
@@ -377,6 +377,7 @@ window.App = App;
 AgentRuntime.init(App); // Agent 需要 App.db / App.refresh：在 App 装配完成后初始化
 App.openAgent = openAgent;
 App.openAgentHistory = openAgentHistory;
+App.openAgentConfig = openAgentConfig;
 App.agentRuntime = AgentRuntime;
 App.errorLogExport = () => ErrorLog.export(); // 渲染降级卡片的日志导出入口（只挂一次）
 

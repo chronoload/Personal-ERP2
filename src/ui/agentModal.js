@@ -4,10 +4,12 @@
 // 独立挂载在 #agent-root，不复用 openModal（那个是单模态，会互相顶掉）。
 // ============================================================
 import { esc, toast } from './helpers.js';
-import { Prefs } from '../store/prefs.js';
 import {
-  agentCfg, saveCfg, listSessions, messagesOf, getSession, updateSession, deleteSession,
+  listSessions, messagesOf, getSession, updateSession, deleteSession,
+  listProfiles, activeProfile, saveProfile, deleteProfile, setActiveProfile,
 } from '../services/agent/store.js';
+import { maskKey, decryptText } from '../services/agent/secret.js';
+import { testConnection } from '../services/agent/llm.js';
 import * as Agent from '../services/agent/runtime.js';
 
 let root = null;
@@ -272,40 +274,106 @@ export function openHistory() {
   });
 }
 
-// ---------------- 配置引导 ----------------
+// ---------------- 模型配置（多套 + Key 加密存储） ----------------
+
+let configEl = null;
 
 export function openConfig() {
   ensureRoot();
-  const cfg = agentCfg();
+  if (configEl && configEl.parentElement) configEl.remove();
+  const list = listProfiles();
+  const cur = activeProfile();
   const el = document.createElement('div');
   el.className = 'agent-mask';
   el.innerHTML = `
     <div class="agent-panel agent-panel-sm">
       <div class="agent-head">
-        <span class="agent-title">接入模型</span>
+        <span class="agent-title">Agent 模型配置</span>
         <button class="btn sm" data-ac-close>✕</button>
       </div>
       <div class="agent-body">
-        <p class="muted" style="font-size:12px">填 OpenAI 兼容接口。baseUrl 例：https://api.deepseek.com/v1</p>
-        <div class="field"><label>baseUrl</label><input data-ac-base value="${esc(cfg.baseUrl)}" placeholder="https://api.deepseek.com/v1"></div>
-        <div class="field"><label>API Key</label><input data-ac-key type="password" value="${esc(cfg.apiKey)}" placeholder="sk-…"></div>
-        <div class="field"><label>模型名</label><input data-ac-model value="${esc(cfg.model)}" placeholder="deepseek-chat"></div>
-        <div class="muted" style="font-size:11px;margin-top:6px">Key 存在本机偏好里（明文），仅本设备使用。</div>
+        <div class="row-gap" style="align-items:center;margin-bottom:6px">
+          <select data-ac-select style="max-width:200px">
+            ${list.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}${p.id === cur.id ? '（当前）' : ''}</option>`).join('')}
+          </select>
+          <button class="btn sm" data-ac-new>新建</button>
+          <button class="btn sm" data-ac-del>删除当前</button>
+        </div>
+        <div class="field"><label>名称</label><input data-ac-name value="${esc(cur.name)}" placeholder="例如 DeepSeek / 豆包"></div>
+        <div class="field"><label>baseUrl（OpenAI 兼容）</label><input data-ac-base value="${esc(cur.baseUrl)}" placeholder="https://api.deepseek.com/v1"></div>
+        <div class="field"><label>API Key</label><input data-ac-key type="password" value="" placeholder="${cur.apiKeyEnc ? `已保存 ${esc(maskKey(decryptText(cur.apiKeyEnc)))}，留空保持不变` : 'sk-…'}"></div>
+        <div class="field"><label>模型名</label><input data-ac-model value="${esc(cur.model)}" placeholder="deepseek-chat"></div>
+        <div class="row-gap" style="align-items:center">
+          <label class="muted">温度 <input data-ac-temp type="number" step="0.1" min="0" max="2" value="${cur.temperature}" style="width:70px"></label>
+          <label class="muted">最大轮数 <input data-ac-turns type="number" min="1" max="20" value="${cur.maxTurns}" style="width:70px"></label>
+        </div>
+        <div class="muted" style="font-size:11px;margin-top:6px">Key 以本机随机密钥混淆后存储（不落明文）；切换配置立即作用于下一轮对话。</div>
+        <div class="muted" data-ac-result style="font-size:11px;margin-top:4px"></div>
       </div>
-      <div class="agent-foot">
-        <button class="btn primary" data-ac-save>保存</button>
+      <div class="agent-foot" style="gap:8px">
+        <button class="btn" data-ac-test>测试连接</button>
+        <button class="btn primary" data-ac-save>保存并设为当前</button>
       </div>
     </div>`;
   root.appendChild(el);
-  el.querySelector('[data-ac-close]').onclick = () => el.remove();
-  el.querySelector('[data-ac-save]').onclick = () => {
-    saveCfg({
-      baseUrl: el.querySelector('[data-ac-base]').value.trim(),
-      apiKey: el.querySelector('[data-ac-key]').value.trim(),
-      model: el.querySelector('[data-ac-model]').value.trim(),
-    });
+  configEl = el;
+  const q = (s) => el.querySelector(s);
+  const result = q('[data-ac-result]');
+
+  const rebuild = () => { el.remove(); openConfig(); };
+  q('[data-ac-close]').onclick = () => { el.remove(); configEl = null; };
+
+  q('[data-ac-select]').onchange = (e) => {
+    setActiveProfile(e.target.value);
+    rebuild();
+  };
+  q('[data-ac-new]').onclick = () => {
+    const p = saveProfile({ name: '新配置', baseUrl: '', apiKey: '', model: '', temperature: 0.3, maxTurns: 8 });
+    setActiveProfile(p.id);
+    rebuild();
+  };
+  q('[data-ac-del]').onclick = () => {
+    const r = deleteProfile(cur.id);
+    if (!r.ok) { toast(r.error, 'warn'); return; }
+    rebuild();
+  };
+
+  const formValues = () => ({
+    id: cur.id,
+    name: q('[data-ac-name]').value.trim() || '未命名',
+    baseUrl: q('[data-ac-base]').value.trim(),
+    apiKey: q('[data-ac-key]').value.trim(),
+    model: q('[data-ac-model]').value.trim(),
+    temperature: Number(q('[data-ac-temp]').value),
+    maxTurns: Number(q('[data-ac-turns]').value),
+  });
+
+  q('[data-ac-test]').onclick = async () => {
+    const f = formValues();
+    const key = f.apiKey || decryptText(cur.apiKeyEnc);
+    const btn = q('[data-ac-test]');
+    btn.disabled = true;
+    btn.textContent = '测试中…';
+    if (result) result.textContent = '';
+    try {
+      const r = await testConnection({ baseUrl: f.baseUrl, apiKey: key, model: f.model, temperature: 0 });
+      if (result) result.textContent = `连接正常 · ${r.reply}`;
+      toast('连接正常', 'ok');
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      if (result) result.textContent = msg.split('\n')[0];
+      toast(msg.slice(0, 160), 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '测试连接';
+    }
+  };
+
+  q('[data-ac-save]').onclick = () => {
+    saveProfile(formValues());
     el.remove();
-    toast(Agent.isConfigured() ? '已保存，可以开始了' : '还差 baseUrl / Key / 模型名', Agent.isConfigured() ? 'ok' : 'warn');
+    configEl = null;
+    toast(Agent.isConfigured() ? '已保存并设为当前配置' : '还差 baseUrl / Key / 模型名', Agent.isConfigured() ? 'ok' : 'warn');
     renderChat();
   };
 }
