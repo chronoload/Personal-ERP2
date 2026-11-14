@@ -1382,3 +1382,87 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
 .sched-min { flex: none; font-size: 11px; }
 .tpl-view-plan-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
 .tpl-view-plan ul { margin: 2px 0 0 14px; padding: 0; font-size: 12px; }
+
+/* ============================================================
+   Agent：纯模态浮层（#agent-root，独立于 #modal-root）
+   ============================================================ */
+.agent-entry { font-size: 15px; line-height: 1; color: var(--purple); border-color: var(--border); }
+#agent-root { position: relative; z-index: 80; }
+.agent-mask {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(16, 24, 40, .38); backdrop-filter: blur(2px);
+}
+.agent-panel {
+  width: min(620px, 94vw); height: min(78vh, 760px);
+  display: flex; flex-direction: column;
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(16, 24, 40, .22); overflow: hidden;
+}
+.agent-panel-sm { height: auto; max-height: 80vh; width: min(520px, 94vw); }
+.agent-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.agent-title { font-weight: 600; }
+.agent-status { color: var(--muted); font-size: 11px; }
+.agent-head-actions { margin-left: auto; display: flex; gap: 6px; }
+.agent-body {
+  flex: 1; min-height: 0; overflow: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.agent-empty { color: var(--muted); font-size: 12px; padding: 8px 2px; }
+.agent-msg { display: flex; }
+.agent-msg.user { justify-content: flex-end; }
+.agent-msg .bubble {
+  max-width: 88%; padding: 8px 10px; border-radius: 10px;
+  white-space: pre-wrap; word-break: break-word; font-size: 13px;
+  background: rgba(124, 108, 255, .08); border: 1px solid rgba(124, 108, 255, .18);
+}
+.agent-msg.user .bubble { background: var(--primary); color: #fff; border-color: var(--primary); }
+.agent-tool {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 11px; color: var(--muted);
+  border-left: 2px solid var(--border); padding: 2px 0 2px 8px;
+}
+.agent-tool.err { color: var(--red); border-left-color: var(--red); }
+.agent-undo {
+  margin-left: auto; border: 0; background: none; padding: 0 2px;
+  color: var(--blue); font-size: 11px; text-decoration: underline;
+}
+.agent-input {
+  display: flex; gap: 8px; padding: 10px 12px;
+  border-top: 1px solid var(--border); align-items: flex-end;
+}
+.agent-input textarea {
+  flex: 1; resize: none; min-height: 40px; max-height: 120px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text);
+}
+.agent-approval-mask {
+  position: fixed; inset: 0; z-index: 95;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(16, 24, 40, .42);
+}
+.agent-approval {
+  width: min(470px, 92vw); background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-top: 3px solid var(--amber);
+  border-radius: 12px; padding: 14px; box-shadow: 0 18px 48px rgba(16, 24, 40, .25);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.agent-approval-head { font-weight: 600; }
+.agent-approval-body { font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.agent-approval-timer { font-size: 11px; color: var(--muted); }
+.agent-history { gap: 0; }
+.agent-session-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.agent-session-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.agent-session-main b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-foot { padding: 10px 12px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+@media (max-width: 520px) {
+  .agent-panel { width: 100vw; height: 82vh; border-radius: 14px 14px 0 0; align-self: flex-end; }
+  .agent-mask { align-items: flex-end; }
+}

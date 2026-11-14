@@ -11,6 +11,8 @@ import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL } from
 import { ErrorLog } from '../services/errorLog.js';
 import { buildReport, REPORT_MODULES, REPORT_MODULE_LABEL, periodRange } from '../domain/report.js';
 import { flushErpFile } from '../store/db.js';
+import { agentCfg, saveCfg } from '../services/agent/store.js';
+import { getPresets } from '../services/agent/prompt.js';
 
 // ---------- 全局外观主题（图片 / 渐变） ----------
 export function setGlobalTheme(theme) {
@@ -524,6 +526,36 @@ export function render(App, el) {
     </div>
 
     <div class="card">
+      <div class="card-head"><h3>Agent ✦</h3><span class="muted">纯模态对话 · 进程内调用 ERP 工具 · 写操作需确认</span></div>
+      <div class="row-gap" style="align-items:center;margin-bottom:8px">
+        <button class="btn sm" onclick="App.openAgent()">打开对话</button>
+        <button class="btn sm" onclick="App.openAgentHistory()">会话历史</button>
+        <span class="muted" id="ag-state"></span>
+      </div>
+      <div class="field"><label>baseUrl（OpenAI 兼容）</label><input id="ag-base" value="${esc(agentCfg().baseUrl)}" placeholder="https://api.deepseek.com/v1"></div>
+      <div class="field"><label>API Key</label><input id="ag-key" type="password" value="${esc(agentCfg().apiKey)}" placeholder="sk-…"></div>
+      <div class="field"><label>模型名</label><input id="ag-model" value="${esc(agentCfg().model)}" placeholder="deepseek-chat"></div>
+      <div class="row-gap" style="align-items:center;margin-top:4px">
+        <label class="muted">温度 <input id="ag-temp" type="number" step="0.1" min="0" max="2" value="${agentCfg().temperature}" style="width:70px"></label>
+        <label class="muted">最大轮数 <input id="ag-turns" type="number" min="1" max="20" value="${agentCfg().maxTurns}" style="width:70px"></label>
+        <label class="chk"><input type="checkbox" id="ag-journal" ${agentCfg().rememberJournal ? 'checked' : ''}> 每轮带今天/昨天日记</label>
+      </div>
+      <div class="field" style="margin-top:8px">
+        <label>场景预设</label>
+        <select id="ag-preset"></select>
+        <div class="row-gap" style="margin-top:6px">
+          <button class="btn sm" id="ag-preset-add">新建预设</button>
+          <button class="btn sm" id="ag-preset-del">删除当前</button>
+          <span class="muted">切换后作用于下一轮请求</span>
+        </div>
+      </div>
+      <div class="field"><label>预设内容</label><textarea id="ag-preset-text" rows="3"></textarea></div>
+      <div class="field"><label>自定义指令（始终生效，≤2000 字）</label><textarea id="ag-extra" rows="3">${esc(String(prefs.agentInstructions || ''))}</textarea></div>
+      <div class="muted" style="font-size:11px;margin-bottom:6px">API Key 存在本机偏好里（明文），仅本设备使用；写操作审批被拒绝时任务立即停止。</div>
+      <button class="btn primary sm" id="ag-save">保存 Agent 设置</button>
+    </div>
+
+    <div class="card">
       <div class="card-head"><h3>锁屏 · 开屏</h3><span class="muted">常驻通知 + 亮屏整页 · 每天 07:00 自动更新</span></div>
       ${App.sync.nativeAvailable() ? `
       <label class="row-gap" style="align-items:center"><input type="checkbox" id="lock-enabled" ${App.lockScreen.enabled() ? 'checked' : ''}> 常驻锁屏通知：显示今天的安排与待办数</label>
@@ -716,6 +748,66 @@ export function render(App, el) {
       App.launch.setPkg(aiSel.value);
       toast(aiSel.value ? '已设为跳转目标' : '已改为系统分享面板', 'ok');
     });
+  }
+  // Agent 设置：模型接入 / 预设 / 自定义指令
+  const agBase = el.querySelector('#ag-base');
+  if (agBase) {
+    const stateEl = el.querySelector('#ag-state');
+    const refreshState = () => {
+      if (!stateEl) return;
+      const ok = agBase.value.trim() && el.querySelector('#ag-key').value.trim() && el.querySelector('#ag-model').value.trim();
+      stateEl.textContent = ok ? '已接入模型' : '未接入模型';
+    };
+    refreshState();
+    const presetSel = el.querySelector('#ag-preset');
+    const presetText = el.querySelector('#ag-preset-text');
+    const drawPresets = () => {
+      const list = getPresets();
+      const active = Prefs.load().agentActivePreset || (list[0] && list[0].id);
+      presetSel.innerHTML = list.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+      presetSel.value = active;
+      const cur = list.find((p) => p.id === active) || list[0];
+      presetText.value = cur ? cur.text : '';
+    };
+    drawPresets();
+    presetSel.addEventListener('change', () => {
+      Prefs.set({ agentActivePreset: presetSel.value });
+      const cur = getPresets().find((p) => p.id === presetSel.value);
+      presetText.value = cur ? cur.text : '';
+    });
+    el.querySelector('#ag-preset-add').onclick = () => {
+      const name = window.prompt('新预设名称', '新预设');
+      if (name == null) return;
+      const id = `p${Date.now().toString(36)}`;
+      const list = getPresets().slice();
+      list.push({ id, name: String(name).slice(0, 20) || '新预设', text: '' });
+      Prefs.set({ agentPresets: list, agentActivePreset: id });
+      drawPresets();
+    };
+    el.querySelector('#ag-preset-del').onclick = () => {
+      const list = getPresets().slice();
+      if (list.length <= 1) return toast('至少保留一套预设', 'warn');
+      Prefs.set({ agentPresets: list.filter((p) => p.id !== presetSel.value), agentActivePreset: '' });
+      drawPresets();
+    };
+    el.querySelector('#ag-save').onclick = () => {
+      const list = getPresets().map((p) => (p.id === presetSel.value ? { ...p, text: presetText.value.slice(0, 2000) } : p));
+      Prefs.set({
+        agentPresets: list,
+        agentActivePreset: presetSel.value,
+        agentInstructions: el.querySelector('#ag-extra').value.slice(0, 2000),
+      });
+      saveCfg({
+        baseUrl: agBase.value.trim(),
+        apiKey: el.querySelector('#ag-key').value.trim(),
+        model: el.querySelector('#ag-model').value.trim(),
+        temperature: Number(el.querySelector('#ag-temp').value),
+        maxTurns: Number(el.querySelector('#ag-turns').value),
+        rememberJournal: el.querySelector('#ag-journal').checked,
+      });
+      refreshState();
+      toast('Agent 设置已保存', 'ok');
+    };
   }
   refreshLocalBackups(); // 异步加载本地备份清单（native 读目录 / web 读历史）
 
