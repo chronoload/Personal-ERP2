@@ -153,7 +153,7 @@ export function newSession(db, title = '新对话') {
   const now = Date.now();
   const s = {
     id: uid('ag'), title, status: 'idle', createdAt: now, updatedAt: now,
-    turns: 0, model: agentCfg().model || '', summary: '', summarizedLastId: '', summarizedUntil: 0, lastError: '',
+    turns: 0, model: agentCfg().model || '', lastError: '',
   };
   a.sessions.push(s);
   prune(db);
@@ -177,44 +177,6 @@ export function deleteSession(db, id) {
 
 export function messagesOf(db, sessionId) {
   return ensureAgent(db).messages.filter((m) => m.sessionId === sessionId);
-}
-
-// ---------------- 长对话：早期消息压缩 ----------------
-// 最近 KEEP_RECENT 条原样进模型；更早的攒够 COMPACT_TRIGGER 条压成一段摘要。
-// 压缩会改写 system 内摘要、破坏前缀缓存，所以宁可晚压、一次压一大批。
-const KEEP_RECENT = 60;
-const COMPACT_TRIGGER = 60;
-const SUMMARY_LIMIT = 8000;
-
-export function compactSession(db, sessionId) {
-  const s = getSession(db, sessionId);
-  if (!s) return null;
-  const all = messagesOf(db, sessionId);
-  const lastId = s.summarizedLastId;
-  const idx = lastId ? all.findIndex((m) => m.id === lastId) : -1;
-  const coveredAt = Number(s.summarizedUntil) || 0;
-  const old = all.slice(0, Math.max(0, all.length - KEEP_RECENT));
-  // 优先按「上次压缩到的消息」定位；被 trim 掉时退回时间戳
-  const candidates = idx >= 0 ? old.slice(idx + 1) : old.filter((m) => (m.createdAt || 0) > coveredAt);
-  if (candidates.length < COMPACT_TRIGGER) return s;
-  const digest = candidates.map((m) => {
-    const who = m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '动作';
-    const text = String(m.content || '').replace(/\s+/g, ' ').trim();
-    return text ? `- ${who}：${text.length > 60 ? `${text.slice(0, 60)}…` : text}` : '';
-  }).filter(Boolean).join('\n');
-  if (!digest) return s;
-  const last = candidates[candidates.length - 1];
-  let summary = `${s.summary ? `${s.summary}\n` : ''}${digest}`;
-  if (summary.length > SUMMARY_LIMIT) {
-    summary = summary.slice(-SUMMARY_LIMIT);
-    const nl = summary.indexOf('\n');
-    if (nl > 0) summary = summary.slice(nl + 1); // 丢掉被截断的半行
-  }
-  return updateSession(db, sessionId, {
-    summary,
-    summarizedLastId: last.id,
-    summarizedUntil: last.createdAt || coveredAt,
-  });
 }
 
 export function addMessage(db, sessionId, msg) {
