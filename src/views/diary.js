@@ -72,7 +72,7 @@ export function render(App, el) {
       <div class="card-head">
         <h3>${icon('book')} 日记</h3>
         <div class="row-gap">
-          <button class="btn sm" data-diary-prompt title="先问我需要什么：对齐目标/计划/今天，聊清楚再把命令块粘回来">?</button>
+          <button class="btn sm" data-diary-prompt title="点一下：复制提示词并打开所选应用；长按：查看提示词 / 粘贴命令块">?</button>
           <button class="btn sm" data-diary-full title="全屏编辑（Esc 退出）">${icon('expand')} 全屏</button>
           <button class="btn sm" data-diary-today title="回到今天">今天</button>
           <button class="btn sm" data-diary-cal title="选择日期">${icon('calendar')} 月历</button>
@@ -100,7 +100,29 @@ export function render(App, el) {
   el.querySelector('[data-diary-today]').onclick = () => switchDay(App, el, todayJournalKey());
   el.querySelector('[data-diary-cal]').onclick = () => openMonthPicker(App, el);
   el.querySelector('[data-diary-parse]').onclick = () => openParseModal(App, el);
-  el.querySelector('[data-diary-prompt]').onclick = () => openPlanPromptModal(App, el);
+  // 「?」：点一下 = 复制提示词并直接打开设置里选中的应用（无需再按按钮）；
+  // 长按仍可打开提示词弹窗（查看全文 / 粘贴模型输出后注入）。
+  {
+    const promptBtn = el.querySelector('[data-diary-prompt]');
+    let pressTimer = null;
+    let longPressed = false;
+    promptBtn.addEventListener('pointerdown', () => {
+      longPressed = false;
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        longPressed = true;
+        openPlanPromptModal(App, el);
+      }, 550);
+    });
+    const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+    promptBtn.addEventListener('pointerup', cancelPress);
+    promptBtn.addEventListener('pointerleave', cancelPress);
+    promptBtn.addEventListener('pointercancel', cancelPress);
+    promptBtn.addEventListener('click', (e) => {
+      if (longPressed) { longPressed = false; e.preventDefault(); return; }
+      shareToAi(diaryPrompt(curKey));
+    });
+  }
   // 一键插入命令块：移动端手打 ``` 很麻烦，这里直接补好一对围栏
   el.querySelector('[data-diary-block]').onclick = () => {
     if (!vd) return toast('编辑器还没就绪', 'warn');
