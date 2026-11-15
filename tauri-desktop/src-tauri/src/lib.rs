@@ -94,6 +94,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_http::init())
         // 只允许一个实例：重复启动唤出已有窗口
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             let _ = app;

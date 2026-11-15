@@ -59,6 +59,19 @@ function normToolCalls(list) {
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+let nativeFetch = null;
+/** Tauri 桌面壳走插件原生 HTTP（绕 CORS）；浏览器用 window.fetch */
+async function httpFetch() {
+  if (nativeFetch) return nativeFetch;
+  if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+    try {
+      const m = await import('@tauri-apps/plugin-http');
+      if (m && m.fetch) nativeFetch = m.fetch;
+    } catch (e) { /* 插件不可用时退回 fetch */ }
+  }
+  return nativeFetch || fetch;
+}
+
 /** 单次请求：成功返回 {content, toolCalls}，失败抛带 status 的 Error */
 async function once(url, headers, body) {
   let payload;
@@ -73,7 +86,8 @@ async function once(url, headers, body) {
     }
     payload = r.data;
   } else {
-    const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    const f = await httpFetch();
+    const r = await f(url, { method: 'POST', headers, body: JSON.stringify(body) });
     if (!r.ok) {
       const e = new Error(errText(await r.text(), r.status, url));
       e.status = r.status;

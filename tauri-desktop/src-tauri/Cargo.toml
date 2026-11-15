@@ -19,6 +19,8 @@ tauri = { version = "2", features = [] }
 tauri-plugin-notification = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
+# 模型接口走原生 HTTP，绕开 WebView 的 CORS 限制（OpenCode 网关不回 CORS 头）
+tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 
 [profile.release]
 codegen-units = 1
