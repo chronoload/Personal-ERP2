@@ -77,6 +77,14 @@ export const Widget = {
       const hasNativeTx = Array.isArray(db.native_txs) && db.native_txs.length > 0;
       if (nativeRev <= known && !hasNativeTx) return { changed: false };
       delete db.native_txs; // 合并机制产物，JS 库不需要
+      // 原生存的是上一次 push 的副本，可能不含最近的 Agent 会话；
+      // 本地 agent 更新时保留本地，避免「关掉应用再回来对话全丢」。
+      const latestMsg = (a) => (a && Array.isArray(a.messages)
+        ? a.messages.reduce((m, x) => Math.max(m, (x && x.createdAt) || 0), 0) : 0);
+      try {
+        const local = JSON.parse(localStorage.getItem('personal_erp_db_v1') || 'null');
+        if (local && local.agent && latestMsg(local.agent) > latestMsg(db.agent)) db.agent = local.agent;
+      } catch (e) { /* 本地库损坏则用原生库 */ }
       const { ensureSeq } = await import('../store/db.js');
       ensureSeq(db);
       localStorage.setItem('personal_erp_db_v1', JSON.stringify(db));

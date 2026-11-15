@@ -3,7 +3,7 @@
 // Agent 循环：组装上下文 → 请求模型 → 执行工具（含审批）→ 回到模型。
 // 关掉模态不影响这里；UI 只订阅事件并渲染。
 // ============================================================
-import { agentCfg, ensureAgent, newSession, getSession, updateSession, addMessage, messagesOf,
+import { agentCfg, ensureAgent, newSession, getSession, listSessions, updateSession, addMessage, messagesOf,
   newToolCall, finishToolCall, addApproval, decideApproval, takeUndoSnapshot,
   commitUndo, undoRecord, prune } from './store.js';
 import { buildSystem, historyToMessages } from './prompt.js';
@@ -11,6 +11,7 @@ import { toolDefs, runTool, isWrite, previewOf, applyUndo, internalNameOf } from
 import { chat } from './llm.js';
 import { Notifications } from '../notifications.js';
 import { saveDB } from '../../store/db.js';
+import { Prefs } from '../../store/prefs.js';
 
 let AppRef = null;
 let sessionId = null;
@@ -34,6 +35,13 @@ function emit(type, payload) {
 export function init(App) {
   AppRef = App;
   ensureAgent(App.db);
+  // 页面重载 / 应用重启后接着上次的会话，否则重开模态会显示空对话
+  const last = Prefs.load().agentLastSession;
+  if (last && getSession(App.db, last)) sessionId = last;
+  else {
+    const recent = listSessions(App.db)[0];
+    if (recent) sessionId = recent.id;
+  }
 }
 
 export const isRunning = () => running;
@@ -48,6 +56,7 @@ export function startNewSession(title = '新对话') {
   const s = newSession(AppRef.db, title);
   sessionId = s.id;
   sessionTrust = false;
+  Prefs.set({ agentLastSession: sessionId });
   prune(AppRef.db);
   saveDB(AppRef.db);
   emit('session', { sessionId });
@@ -57,6 +66,7 @@ export function startNewSession(title = '新对话') {
 export function resumeSession(id) {
   sessionId = id;
   sessionTrust = false;
+  Prefs.set({ agentLastSession: id });
   emit('session', { sessionId });
 }
 
