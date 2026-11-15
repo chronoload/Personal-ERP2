@@ -6,20 +6,48 @@
 // ============================================================
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 
+/**
+ * OpenCode 网关归一到根：兼容现行 /inference 与旧的 /zen 写法，
+ * 也接受后面多写的 /v1、/openai/v1、/chat/completions 等尾巴。
+ */
+function opencodeRoot(baseUrl) {
+  const m = /^https?:\/\/(?:www\.)?opencode\.ai\/(inference|zen)(\/go)?(?:\/.*)?$/i.exec(String(baseUrl || '').trim());
+  if (!m) return '';
+  return `https://opencode.ai/${m[1]}${m[2] || ''}`;
+}
+
 export function endpointOf(baseUrl) {
   let b = String(baseUrl || '').trim().replace(/\/+$/, '');
   if (!b) throw new Error('未配置 baseUrl');
+  // OpenCode 网关：实际路径是 /openai/v1/chat/completions
+  const oc = opencodeRoot(b);
+  if (oc) return `${oc}/openai/v1/chat/completions`;
   if (/\/chat\/completions$/.test(b)) return b;
-  // OpenCode 网关：base 是 /inference 或 /inference/go，实际路径是 /openai/v1/chat/completions
-  if (/\/inference(\/go)?$/.test(b)) return `${b}/openai/v1/chat/completions`;
   if (/\/openai\/v1$/.test(b)) return `${b}/chat/completions`;
   if (!/\/v\d+$/.test(b)) b += '/v1';
   return `${b}/chat/completions`;
 }
 
-/** 是否 OpenCode Console 网关（Go / 按量） */
+/** 是否 OpenCode Console 网关（Go / 按量 / 旧 zen 写法），决定要不要加会话头 */
 export function isOpencode(baseUrl) {
-  return /opencode\.ai\/inference(\/go)?\/?$/.test(String(baseUrl || '').trim());
+  return !!opencodeRoot(baseUrl);
+}
+
+/** 配置页的服务商预设 */
+export const PROVIDER_PRESETS = [
+  { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com' },
+  { label: 'OpenCode Go', baseUrl: 'https://opencode.ai/inference/go' },
+  { label: 'OpenCode Zen（按量）', baseUrl: 'https://opencode.ai/inference' },
+];
+
+/** 当前 baseUrl 命中哪个预设（含旧写法归一），未命中返回空串 */
+export function presetOf(baseUrl) {
+  const b = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!b) return '';
+  const oc = opencodeRoot(b);
+  if (oc) return /\/go$/.test(oc) ? 'https://opencode.ai/inference/go' : 'https://opencode.ai/inference';
+  if (/^https?:\/\/api\.deepseek\.com(\/|$)/i.test(b)) return 'https://api.deepseek.com';
+  return '';
 }
 
 function errText(payload, status, url) {
