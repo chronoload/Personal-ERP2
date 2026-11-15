@@ -121,7 +121,7 @@ async function runLoop() {
   try {
     while (!abortFlag && turns < cfg.maxTurns) {
       turns += 1;
-      const res = await chat(cfg, convo, toolDefs());
+      const res = await chat(cfg, convo, toolDefs(), { sessionId: sid });
       if (abortFlag) break;
 
       if (res.content) {

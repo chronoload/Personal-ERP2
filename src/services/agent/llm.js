@@ -10,8 +10,16 @@ export function endpointOf(baseUrl) {
   let b = String(baseUrl || '').trim().replace(/\/+$/, '');
   if (!b) throw new Error('未配置 baseUrl');
   if (/\/chat\/completions$/.test(b)) return b;
+  // OpenCode 网关：base 是 /inference 或 /inference/go，实际路径是 /openai/v1/chat/completions
+  if (/\/inference(\/go)?$/.test(b)) return `${b}/openai/v1/chat/completions`;
+  if (/\/openai\/v1$/.test(b)) return `${b}/chat/completions`;
   if (!/\/v\d+$/.test(b)) b += '/v1';
   return `${b}/chat/completions`;
+}
+
+/** 是否 OpenCode Console 网关（Go / 按量） */
+export function isOpencode(baseUrl) {
+  return /opencode\.ai\/inference(\/go)?\/?$/.test(String(baseUrl || '').trim());
 }
 
 function errText(payload, status, url) {
@@ -85,7 +93,7 @@ async function once(url, headers, body) {
   return { content: String(msg.content || ''), toolCalls: normToolCalls(msg.tool_calls) };
 }
 
-export async function chat(cfg, messages, tools, { retries = 2 } = {}) {
+export async function chat(cfg, messages, tools, { retries = 2, sessionId = '' } = {}) {
   if (!cfg || !cfg.apiKey) throw new Error('未配置 API Key');
   if (!cfg.model) throw new Error('未配置模型名');
   const url = endpointOf(cfg.baseUrl);
@@ -97,6 +105,11 @@ export async function chat(cfg, messages, tools, { retries = 2 } = {}) {
   };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` };
+  if (isOpencode(cfg.baseUrl)) {
+    // Go 要求标识客户端身份，并带上稳定的会话 ID 做路由与提示词缓存
+    headers['User-Agent'] = 'personal-erp/1.0';
+    if (sessionId) headers['x-opencode-session'] = sessionId;
+  }
 
   for (let attempt = 0; ; attempt++) {
     try {
@@ -112,6 +125,6 @@ export async function chat(cfg, messages, tools, { retries = 2 } = {}) {
 export async function testConnection(cfg) {
   const r = await chat({ ...cfg, temperature: 0 }, [
     { role: 'user', content: 'ping（收到请只回复 pong）' },
-  ], null, { retries: 0 });
+  ], null, { retries: 0, sessionId: `test_${Date.now().toString(36)}` });
   return { ok: true, reply: (r.content || '（空回复）').slice(0, 40) };
 }

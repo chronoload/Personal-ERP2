@@ -9,7 +9,7 @@ import {
   listProfiles, activeProfile, saveProfile, deleteProfile, setActiveProfile,
 } from '../services/agent/store.js';
 import { maskKey, decryptText } from '../services/agent/secret.js';
-import { testConnection } from '../services/agent/llm.js';
+import { testConnection, isOpencode } from '../services/agent/llm.js';
 import * as Agent from '../services/agent/runtime.js';
 
 let root = null;
@@ -321,8 +321,16 @@ export function openConfig() {
           <button class="btn sm" data-ac-new>新建</button>
           <button class="btn sm" data-ac-del>删除当前</button>
         </div>
+        <div class="field"><label>服务商预设</label>
+          <select data-ac-provider>
+            <option value="">自定义（任意 OpenAI 兼容）</option>
+            <option value="https://opencode.ai/inference/go">OpenCode Go</option>
+            <option value="https://opencode.ai/inference">OpenCode Zen（按量）</option>
+          </select>
+        </div>
         <div class="field"><label>名称</label><input data-ac-name value="${esc(cur.name)}" placeholder="例如 DeepSeek / 豆包"></div>
         <div class="field"><label>baseUrl（OpenAI 兼容）</label><input data-ac-base value="${esc(cur.baseUrl)}" placeholder="https://api.deepseek.com/v1"></div>
+        <div class="muted" data-ac-hint style="font-size:11px;margin:-2px 0 6px"></div>
         <div class="field"><label>API Key</label><input data-ac-key type="password" value="" placeholder="${cur.apiKeyEnc ? `已保存 ${esc(maskKey(decryptText(cur.apiKeyEnc)))}，留空保持不变` : 'sk-…'}"></div>
         <div class="field"><label>模型名</label><input data-ac-model value="${esc(cur.model)}" placeholder="deepseek-chat"></div>
         <div class="row-gap" style="align-items:center">
@@ -341,6 +349,27 @@ export function openConfig() {
   configEl = el;
   const q = (s) => el.querySelector(s);
   const result = q('[data-ac-result]');
+
+  // 服务商预设：选中后直接填 baseUrl，OpenCode 网关会显示兼容说明
+  const providerSel = q('[data-ac-provider]');
+  const hint = q('[data-ac-hint]');
+  const syncHint = () => {
+    if (isOpencode(q('[data-ac-base]').value)) {
+      hint.textContent = 'OpenCode 网关：自动走 /openai/v1/chat/completions，并带 x-opencode-session 做会话路由与缓存；模型名示例 glm-5.3 / kimi-k3 / minimax-m3。';
+    } else {
+      hint.textContent = '';
+    }
+  };
+  const curBase = String(cur.baseUrl || '').trim();
+  providerSel.value = isOpencode(curBase)
+    ? (/\/inference\/go$/.test(curBase) ? 'https://opencode.ai/inference/go' : 'https://opencode.ai/inference')
+    : '';
+  providerSel.onchange = () => {
+    if (providerSel.value) q('[data-ac-base]').value = providerSel.value;
+    syncHint();
+  };
+  q('[data-ac-base]').addEventListener('input', syncHint);
+  syncHint();
 
   const rebuild = () => { el.remove(); openConfig(); };
   q('[data-ac-close]').onclick = () => { el.remove(); configEl = null; };
