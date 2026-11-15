@@ -3,7 +3,7 @@
 // Agent 的全部界面：对话模态 / 审批模态 / 历史管理 / 配置引导。
 // 独立挂载在 #agent-root，不复用 openModal（那个是单模态，会互相顶掉）。
 // ============================================================
-import { esc, toast } from './helpers.js';
+import { esc, toast, renderMarkdown } from './helpers.js';
 import {
   listSessions, messagesOf, getSession, updateSession, deleteSession,
   listProfiles, activeProfile, saveProfile, deleteProfile, setActiveProfile,
@@ -165,7 +165,7 @@ function renderChat(scrollBottom = false) {
         ? `<button class="agent-undo" data-agent-undo="${esc(m.toolCallId)}">撤销</button>` : '';
       return `<div class="agent-tool ${ok ? '' : 'err'}">${esc(m.content)}${undo}</div>`;
     }
-    return `<div class="agent-msg assistant"><div class="bubble">${esc(m.content)}</div></div>`;
+    return `<div class="agent-msg assistant"><div class="bubble md">${renderMarkdown(m.content)}</div></div>`;
   }).join('');
   const more = start > 0
     ? `<div class="agent-more"><button class="btn sm" data-agent-more>加载更早（还有 ${start} 条）</button></div>` : '';

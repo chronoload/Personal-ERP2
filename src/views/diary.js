@@ -120,7 +120,7 @@ export function render(App, el) {
     promptBtn.addEventListener('pointercancel', cancelPress);
     promptBtn.addEventListener('click', (e) => {
       if (longPressed) { longPressed = false; e.preventDefault(); return; }
-      shareToAi(diaryPrompt(curKey));
+      shareToAi(jumpPayload(App, curKey));
     });
   }
   // 一键插入命令块：移动端手打 ``` 很麻烦，这里直接补好一对围栏
@@ -350,6 +350,52 @@ function diaryPrompt(dateKey) {
   ].join('\n');
 }
 
+const STATUS_ZH = {
+  Incubating: '孵化中', Active: '进行中', Paused: '已暂停', Completed: '已完成', Archived: '已归档',
+  Planned: '计划中', Started: '进行中', Reviewed: '已复核',
+};
+
+function clipText(text, limit) {
+  const s = String(text || '').trim();
+  return s.length > limit ? `${s.slice(0, limit)}…` : s;
+}
+
+// 跳转外部 AI 时一并带上的「大局」：当前目标/计划 + 最近两天日记
+function bigPictureBlock(App, dateKey) {
+  const db = (App && App.db) || {};
+  const out = ['## 我的当前大局（应用自动附带，不用复述给我）', ''];
+  const goals = (db.goals || []).filter((g) => (g.status || 'Active') !== 'Archived');
+  if (!goals.length) {
+    out.push('### 目标与计划', '（还没有目标）');
+  } else {
+    out.push('### 目标与计划');
+    goals.forEach((g) => {
+      const st = STATUS_ZH[g.status] || g.status || '进行中';
+      out.push(`- 🎯 ${g.title}${g.desc ? ` — ${g.desc}` : ''}（${st}）`);
+      const plans = (db.plans || []).filter((p) => p.goal_id === g.id && p.status !== 'Archived');
+      if (!plans.length) out.push('  - （暂无计划）');
+      plans.forEach((p) => {
+        const pst = STATUS_ZH[p.status] || p.status || '进行中';
+        const budget = Number.isFinite(p.budget) ? `预算 ${p.budget} 价值元` : '预算 ∞';
+        out.push(`  - ${p.title}（${pst}）· ${budget}`);
+      });
+    });
+  }
+  out.push('', '### 最近两天日记');
+  const today = todayJournalKey();
+  [shiftJournalKey(dateKey, -1), dateKey].forEach((k) => {
+    const j = getJournal(db, k);
+    const label = k === today ? '今天' : k === shiftJournalKey(today, -1) ? '昨天' : '';
+    out.push('', `#### ${k}${label ? `（${label}）` : ''}`, clipText((j && j.md) || '', 1200) || '（空）');
+  });
+  return out.join('\n');
+}
+
+/** ? 按钮的剪贴板全文：提问方式 + 目标计划 + 两天日记 */
+function jumpPayload(App, dateKey) {
+  return `${diaryPrompt(dateKey)}\n\n---\n\n${bigPictureBlock(App, dateKey)}`;
+}
+
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* 回退 execCommand */ }
   try {
@@ -383,7 +429,7 @@ async function shareToAi(text) {
   const copied = await copyText(text);
   const r = await AppLaunch.openTarget();
   if (r && r.ok) {
-    toast('已打开目标应用 · 提示词在剪贴板，粘贴即可', 'ok');
+    toast('已打开目标应用 · 目标/计划与两天日记都在剪贴板，粘贴即可', 'ok');
     return;
   }
   try {
@@ -395,13 +441,13 @@ async function shareToAi(text) {
 }
 
 function openPlanPromptModal(App, el) {
-  const prompt = diaryPrompt(curKey);
+  const prompt = jumpPayload(App, curKey);
   const m = openModal({
     title: '🧠 先问我需要什么 · 再把大局落到今天',
     width: 720,
     bodyHTML: `
-      <p class="muted" style="font-size:12px">打开时已自动复制。把它发给模型：它会反过来问你想要什么、目标和计划现在是什么状态，聊清楚之后才给今天这一个代码块。粘到下面就能直接加进「${esc(curKey)}」这一天。</p>
-      <div class="field"><label>提示词</label><textarea id="dp-prompt" class="ledger-cmd" rows="10" readonly spellcheck="false"></textarea></div>
+      <p class="muted" style="font-size:12px">打开时已自动复制（含目标/计划与两天日记）。把它发给模型：它会反过来问你想要什么、目标和计划现在是什么状态，聊清楚之后才给今天这一个代码块。粘到下面就能直接加进「${esc(curKey)}」这一天。</p>
+      <div class="field"><label>提示词（已附带目标/计划与两天日记）</label><textarea id="dp-prompt" class="ledger-cmd" rows="12" readonly spellcheck="false"></textarea></div>
       <div class="field" style="margin-top:8px"><label>模型输出的命令块</label><textarea id="dp-paste" class="ledger-cmd" rows="6" spellcheck="false" placeholder="- [ ] 写周报 @ 09:00 45分钟 (运营)"></textarea></div>
       <p class="muted" style="font-size:11px">语法与「🔍 解析并注入」完全一致：<code>- [ ] 活动</code>、<code>@ 09:00 60分钟</code> 排时间、<code>(计划名)</code> 归属、<code>+100 工资</code> 记流水。</p>`,
     footerHTML: `<button class="btn" data-copy>复制提示词</button><button class="btn" data-share>复制并打开应用</button><button class="btn" data-cancel>取消</button><button class="btn primary" data-ok>解析并注入</button>`,

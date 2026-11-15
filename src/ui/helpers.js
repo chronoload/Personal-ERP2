@@ -50,6 +50,56 @@ export function badge(state, label) {
   return `<span class="badge ${badgeClass(state)}">${esc(label || state)}</span>`;
 }
 
+// ---------- 轻量 Markdown 渲染（对话气泡等只读场景） ----------
+// 先整体转义再做结构/行内替换，因此不会引入原始 HTML 注入。
+function mdInline(s) {
+  return s
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+/** 把 Markdown 子集渲染成安全 HTML：标题/列表/引用/代码块/行内样式 */
+export function renderMarkdown(src) {
+  const text = esc(String(src || ''));
+  const codes = [];
+  // 围栏代码块先摘出来占位，避免块内内容被当成结构
+  const body = text.replace(/```[^\n]*\n([\s\S]*?)```/g, (m, code) => {
+    codes.push(`<pre class="md-pre"><code>${code.replace(/\n$/, '')}</code></pre>`);
+    return `\u0000${codes.length - 1}\u0000`;
+  });
+  const out = [];
+  let list = null;
+  let para = [];
+  const flushPara = () => {
+    if (para.length) { out.push(`<p>${mdInline(para.join('<br>'))}</p>`); para = []; }
+  };
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  const addItem = (tag, html) => {
+    if (list !== tag) { closeList(); flushPara(); out.push(`<${tag}>`); list = tag; }
+    out.push(`<li>${mdInline(html)}</li>`);
+  };
+  for (const raw of body.split('\n')) {
+    const line = raw.replace(/\s+$/, '');
+    if (!line.trim()) { flushPara(); closeList(); continue; }
+    const ph = /^\u0000(\d+)\u0000$/.exec(line.trim());
+    if (ph) { closeList(); flushPara(); out.push(codes[Number(ph[1])]); continue; }
+    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (h) { closeList(); flushPara(); const lv = h[1].length; out.push(`<h${lv}>${mdInline(h[2])}</h${lv}>`); continue; }
+    if (/^(---|\*\*\*|___)$/.test(line.trim())) { closeList(); flushPara(); out.push('<hr>'); continue; }
+    if (/^&gt;\s?/.test(line)) { closeList(); flushPara(); out.push(`<blockquote>${mdInline(line.replace(/^&gt;\s?/, ''))}</blockquote>`); continue; }
+    const ul = /^\s*[-*+]\s+(.*)$/.exec(line);
+    if (ul) { addItem('ul', ul[1]); continue; }
+    const ol = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+    if (ol) { addItem('ol', ol[1]); continue; }
+    para.push(line);
+  }
+  flushPara();
+  closeList();
+  return out.join('');
+}
+
 // ---------- Toast ----------
 let toastTimer = null;
 export function toast(msg, type = 'info') {

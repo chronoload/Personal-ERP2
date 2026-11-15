@@ -1422,6 +1422,30 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
   background: rgba(124, 108, 255, .08); border: 1px solid rgba(124, 108, 255, .18);
 }
 .agent-msg.user .bubble { background: var(--primary); color: #fff; border-color: var(--primary); }
+/* 模型回答走 Markdown 渲染：气泡内改为正常排版，块级间距收敛 */
+.agent-msg .bubble.md { white-space: normal; }
+.agent-msg .bubble.md > :first-child { margin-top: 0; }
+.agent-msg .bubble.md > :last-child { margin-bottom: 0; }
+.agent-msg .bubble.md p { margin: 0 0 6px; }
+.agent-msg .bubble.md h1, .agent-msg .bubble.md h2, .agent-msg .bubble.md h3,
+.agent-msg .bubble.md h4, .agent-msg .bubble.md h5, .agent-msg .bubble.md h6 {
+  font-size: 13px; line-height: 1.4; margin: 8px 0 4px;
+}
+.agent-msg .bubble.md ul, .agent-msg .bubble.md ol { margin: 4px 0 6px; padding-left: 18px; }
+.agent-msg .bubble.md li { margin: 2px 0; }
+.agent-msg .bubble.md code {
+  background: rgba(0, 0, 0, .06); padding: 1px 4px; border-radius: 4px; font-size: 12px;
+}
+.agent-msg .bubble.md .md-pre {
+  background: rgba(0, 0, 0, .05); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px; margin: 6px 0; overflow: auto;
+}
+.agent-msg .bubble.md .md-pre code { background: none; padding: 0; font-size: 12px; }
+.agent-msg .bubble.md blockquote {
+  margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--border); color: var(--muted);
+}
+.agent-msg .bubble.md hr { border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
+.agent-msg .bubble.md a { color: var(--blue); }
 .agent-tool {
   display: flex; align-items: flex-start; gap: 8px;
   font-size: 11px; color: var(--muted);
