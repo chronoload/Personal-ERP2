@@ -1,6 +1,6 @@
 // ============================================================
 // views/demands.js
-// 需求档案：把「来源用户」当顾客，像点菜一样逐条手写记录他们要什么。
+// 需求档案：按来源用户分组，逐条手写记录他们要什么。
 // 展示成一条连续清单：来源用户是分组标题，需求是下面的清单项。
 // 记录时只存原文、来源和备注，不预设时间与层级；
 // 之后由我决定这条需求入列成目标 / 计划 / 活动（弹既有表单预填）。
@@ -113,7 +113,6 @@ export function render(AppRef, el) {
     <div class="card">
       <div class="card-head">
         <h3>需求档案</h3>
-        <span class="muted">像顾客点菜：先手写记下来源要什么，之后再决定入列成目标 / 计划 / 活动</span>
       </div>
       <div class="demand-toolbar">
         <button class="btn sm primary" data-new-user>＋ 新增来源</button>

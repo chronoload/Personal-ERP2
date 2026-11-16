@@ -19,7 +19,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="像顾客点菜：写下他要什么，之后在应用里入列。"
+        android:text="写下他要什么，之后在应用里入列。"
         android:textColor="#8A93A3"
         android:textSize="11sp" />
 
