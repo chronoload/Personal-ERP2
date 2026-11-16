@@ -98,7 +98,8 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
     try {
       AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
       Class<?>[] providers = { TodayWidgetProvider.class, ResourcesWidgetProvider.class,
-          GoalsWidgetProvider.class, GoodsWidgetProvider.class, LedgerWidgetProvider.class };
+          GoalsWidgetProvider.class, GoodsWidgetProvider.class, LedgerWidgetProvider.class,
+          FlowWidgetProvider.class };
       for (Class<?> cls : providers) {
         int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, cls));
         for (int id : ids) {
@@ -108,6 +109,7 @@ public class GoodsWidgetProvider extends AppWidgetProvider {
             else if (cls == GoalsWidgetProvider.class) GoalsWidgetProvider.updateOne(ctx, mgr, id);
             else if (cls == GoodsWidgetProvider.class) GoodsWidgetProvider.updateOne(ctx, mgr, id);
             else if (cls == LedgerWidgetProvider.class) LedgerWidgetProvider.updateOne(ctx, mgr, id);
+            else if (cls == FlowWidgetProvider.class) FlowWidgetProvider.updateOne(ctx, mgr, id);
           } catch (Exception ignored) {}
         }
       }
