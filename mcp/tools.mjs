@@ -81,6 +81,16 @@ function todayJournal(db, key) {
   return (db.journals || []).find((j) => normDay(j.date) === key) || null;
 }
 
+/** 来源用户：接受 id 或名称 */
+function resolveRequesterId(db, nameOrId) {
+  const key = String(nameOrId || '').trim();
+  if (!key) return null;
+  const byId = (db.requesters || []).find((r) => r.id === key);
+  if (byId) return byId.id;
+  const byName = (db.requesters || []).find((r) => r.name === key);
+  return byName ? byName.id : null;
+}
+
 // ---------------- 工具定义 ----------------
 
 export const TOOLS = [
@@ -401,6 +411,138 @@ export const TOOLS = [
         const prev = String(j.md || '');
         j.md = prev.trim() ? `${prev.replace(/\n+$/, '')}\n\n${text.trim()}\n` : `${text.trim()}\n`;
         return { data: { date: key, added: text.trim().length, total: j.md.length } };
+      });
+    },
+  },
+
+  // ---- 需求档案：来源用户 + 他们要什么（只追加；状态流转在 App 里做）----
+  {
+    name: 'erp.requesters',
+    description: '列出需求档案的来源用户，以及每人待处理/全部需求条数。',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    handler: (args, ctx) => {
+      const db = ctx.read();
+      if (!db) return { error: { code: 'ERR_NO_DATA', message: '未找到数据文件' } };
+      const demands = db.demands || [];
+      const data = (db.requesters || [])
+        .slice()
+        .sort((x, y) => (Number(x.created) || 0) - (Number(y.created) || 0))
+        .map((u) => {
+          const mine = demands.filter((d) => d.requesterId === u.id);
+          return {
+            id: u.id, name: u.name || '', role: u.role || '', note: u.note || '',
+            open: mine.filter((d) => d.status === 'open').length,
+            total: mine.length,
+          };
+        });
+      return { data };
+    },
+  },
+  {
+    name: 'erp.demands',
+    description: '读取需求档案里的记录（默认只看待处理），可按来源用户过滤。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requester: { type: 'string', description: '来源用户 id 或名称（可选，默认全部）' },
+        status: { type: 'string', description: 'open / admitted / dropped / all，默认 open' },
+        limit: { type: 'integer', description: '最多返回条数，默认 100，最大 200' },
+      },
+      additionalProperties: false,
+    },
+    handler: (args, ctx) => {
+      const db = ctx.read();
+      if (!db) return { error: { code: 'ERR_NO_DATA', message: '未找到数据文件' } };
+      const rid = args.requester ? resolveRequesterId(db, args.requester) : null;
+      if (args.requester && !rid) return { error: { code: 'ERR_VALIDATION', message: `来源用户不存在：${args.requester}` } };
+      const status = typeof args.status === 'string' && args.status.trim() ? args.status.trim() : 'open';
+      if (!['open', 'admitted', 'dropped', 'all'].includes(status)) {
+        return { error: { code: 'ERR_VALIDATION', message: 'status 只支持 open / admitted / dropped / all' } };
+      }
+      const limit = Math.min(200, Math.max(1, Math.round(Number(args.limit) || 100)));
+      const names = new Map((db.requesters || []).map((u) => [u.id, u.name || '']));
+      const rows = (db.demands || []).filter((d) => {
+        if (rid && d.requesterId !== rid) return false;
+        if (status !== 'all' && d.status !== status) return false;
+        return true;
+      });
+      const data = rows
+        .slice()
+        .sort((x, y) => (Number(y.createdAt) || 0) - (Number(x.createdAt) || 0))
+        .slice(0, limit)
+        .map((d) => ({
+          id: d.id, requester: names.get(d.requesterId) || d.requesterId,
+          requesterId: d.requesterId, text: d.text || '', note: d.note || '',
+          status: d.status, kind: d.kind || '', targetId: d.targetId || '',
+          createdAt: d.createdAt || null,
+        }));
+      return { data, warnings: rows.length > data.length ? [`仅返回前 ${limit} 条（共 ${rows.length} 条）`] : [] };
+    },
+  },
+  {
+    name: 'erp.add_requester',
+    description: '新增一份来源用户档案（谁在提要求）。重名会被拒绝。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '来源用户名称' },
+        role: { type: 'string', description: '关系 / 角色（可选）' },
+        note: { type: 'string', description: '备注（可选）' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    handler: (args, ctx) => {
+      const name = String(args.name || '').trim();
+      if (!name) return { error: { code: 'ERR_VALIDATION', message: 'name 必填' } };
+      return ctx.append((db) => {
+        if (!Array.isArray(db.requesters)) db.requesters = [];
+        if (!db.seq || typeof db.seq !== 'object') db.seq = {};
+        if (db.requesters.some((u) => String(u.name || '').trim() === name)) {
+          return { error: { code: 'ERR_VALIDATION', message: `来源用户已存在：${name}` } };
+        }
+        db.seq.rq = (Number(db.seq.rq) || 0) + 1;
+        const u = {
+          id: `rq${db.seq.rq}`, name,
+          role: String(args.role || '').trim(),
+          note: String(args.note || '').trim(),
+          theme: null, created: Date.now(),
+        };
+        db.requesters.push(u);
+        return { data: { id: u.id, name: u.name, role: u.role, note: u.note } };
+      });
+    },
+  },
+  {
+    name: 'erp.add_demand',
+    description: '给某个来源用户记一条需求（只追加，原文保存，不预设时间与层级）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requester: { type: 'string', description: '来源用户 id 或名称' },
+        text: { type: 'string', description: 'ta 要什么（原文）' },
+        note: { type: 'string', description: '备注（可选）' },
+      },
+      required: ['requester', 'text'],
+      additionalProperties: false,
+    },
+    handler: (args, ctx) => {
+      const text = String(args.text || '').trim();
+      if (!text) return { error: { code: 'ERR_VALIDATION', message: 'text 必填' } };
+      if (!String(args.requester || '').trim()) return { error: { code: 'ERR_VALIDATION', message: 'requester 必填' } };
+      return ctx.append((db) => {
+        if (!Array.isArray(db.demands)) db.demands = [];
+        if (!db.seq || typeof db.seq !== 'object') db.seq = {};
+        const rid = resolveRequesterId(db, args.requester);
+        if (!rid) return { error: { code: 'ERR_VALIDATION', message: `来源用户不存在：${args.requester}（先用 erp.requesters 查，或用 erp.add_requester 新建）` } };
+        db.seq.dm = (Number(db.seq.dm) || 0) + 1;
+        const d = {
+          id: `dm${db.seq.dm}`, requesterId: rid, text,
+          note: String(args.note || '').trim(),
+          status: 'open', kind: '', targetId: '', createdAt: Date.now(),
+        };
+        db.demands.push(d);
+        return { data: { id: d.id, requesterId: d.requesterId, text: d.text, status: d.status } };
       });
     },
   },

@@ -292,6 +292,8 @@ export function takeUndoSnapshot(db) {
     txIds: new Set((db.txs || []).map((t) => t.id)),
     goalIds: new Set((db.goals || []).map((g) => g.id)),
     planIds: new Set((db.plans || []).map((p) => p.id)),
+    demandIds: new Set((db.demands || []).map((d) => d.id)),
+    requesterIds: new Set((db.requesters || []).map((u) => u.id)),
     journals,
     seq: JSON.stringify(db.seq || {}),
   };
@@ -306,6 +308,8 @@ export function commitUndo(db, sessionId, toolCallId, snap) {
   const addedTxs = (db.txs || []).filter((t) => !snap.txIds.has(t.id)).map((t) => t.id);
   const addedGoals = (db.goals || []).filter((g) => !snap.goalIds.has(g.id)).map((g) => g.id);
   const addedPlans = (db.plans || []).filter((p) => !snap.planIds.has(p.id)).map((p) => p.id);
+  const addedDemands = (db.demands || []).filter((d) => !snap.demandIds.has(d.id)).map((d) => d.id);
+  const addedRequesters = (db.requesters || []).filter((u) => !snap.requesterIds.has(u.id)).map((u) => u.id);
   const changedJournals = [];
   for (const j of db.journals || []) {
     if (snap.journals.has(j.id) && snap.journals.get(j.id) !== String(j.md || '')) {
@@ -316,6 +320,7 @@ export function commitUndo(db, sessionId, toolCallId, snap) {
     id: uid('ud'), sessionId, toolCallId,
     createdAt: Date.now(), expiresAt: Date.now() + UNDO_TTL, undone: false,
     addedActivities, changedActivities, addedTxs, addedGoals, addedPlans,
+    addedDemands, addedRequesters,
     changedJournals, prevSeq: snap.seq,
   };
   const list = readUndo();

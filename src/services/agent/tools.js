@@ -6,8 +6,8 @@
 import { TOOLS, TOOL_BY_NAME, callTool } from '../../../mcp/tools.mjs';
 import { saveDB } from '../../store/db.js';
 
-export const READ_TOOLS = new Set(['erp.status', 'erp.goals', 'erp.activities', 'erp.transactions', 'erp.journal']);
-export const WRITE_TOOLS = new Set(['erp.add_goal', 'erp.add_plan', 'erp.add_activity', 'erp.add_tx', 'erp.append_journal']);
+export const READ_TOOLS = new Set(['erp.status', 'erp.goals', 'erp.activities', 'erp.transactions', 'erp.journal', 'erp.requesters', 'erp.demands']);
+export const WRITE_TOOLS = new Set(['erp.add_goal', 'erp.add_plan', 'erp.add_activity', 'erp.add_tx', 'erp.append_journal', 'erp.add_requester', 'erp.add_demand']);
 
 export const isWrite = (name) => WRITE_TOOLS.has(name);
 
@@ -34,6 +34,10 @@ const HINTS = {
   'erp.add_activity': '把计划落成可排程的一件具体事时用；date 为 YYYY-M-D，start 为 HH:MM；没有确定钟点就只给 date。不要一次塞超过 6 条。',
   'erp.add_tx': '用户口述一笔收入/支出时用；debit=收入、credit=支出，金额必须为正。',
   'erp.append_journal': '往某天日记末尾追加叙述或命令块时用；不要用它改写已有内容。',
+  'erp.requesters': '用户提到某个人/来源的要求、记需求前先调它，拿来源用户的真实 id 或确认还没建档。',
+  'erp.demands': '查需求档案里的待办要求时用；可先按来源用户过滤，status=all 看全部。',
+  'erp.add_requester': '出现新的需求来源且档案里没有时用；name 重复会被拒绝，重名前先查 erp.requesters。',
+  'erp.add_demand': '用户说「谁要什么」「帮 ta 记一条」时用；requester 给名称或 id，text 保留原话，不要自行加时间或拆层级。',
 };
 
 /** OpenAI tools 数组（schema 原样复用，仅补强描述） */
@@ -109,6 +113,15 @@ export function previewOf(name, args, db) {
     const text = String(a.text || '');
     return `追加到 ${a.date || '今天'} 的日记 · ${text.length} 字\n${text.slice(0, 120)}${text.length > 120 ? '…' : ''}`;
   }
+  if (name === 'erp.add_requester') {
+    const bits = [a.role, a.note].filter(Boolean).join(' · ');
+    return `新增来源档案：「${a.name || ''}」${bits ? `\n${bits}` : ''}`;
+  }
+  if (name === 'erp.add_demand') {
+    const key = String(a.requester || '');
+    const u = (db.requesters || []).find((x) => x.id === key) || (db.requesters || []).find((x) => x.name === key);
+    return `给「${u ? u.name : key || '?'}」记一条需求：\n${String(a.text || '').slice(0, 120)}${a.note ? `\n备注：${a.note}` : ''}`;
+  }
   return `${name}`;
 }
 
@@ -127,6 +140,10 @@ export function applyUndo(App, rec) {
   db.goals = (db.goals || []).filter((x) => !dropGoals.has(x.id));
   const dropPlans = new Set(rec.addedPlans || []);
   db.plans = (db.plans || []).filter((x) => !dropPlans.has(x.id));
+  const dropDemands = new Set(rec.addedDemands || []);
+  db.demands = (db.demands || []).filter((x) => !dropDemands.has(x.id));
+  const dropRequesters = new Set(rec.addedRequesters || []);
+  db.requesters = (db.requesters || []).filter((x) => !dropRequesters.has(x.id));
   for (const item of rec.changedJournals || []) {
     const j = (db.journals || []).find((x) => x.id === item.id);
     if (j) j.md = item.prev;
