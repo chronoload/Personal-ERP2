@@ -1,6 +1,7 @@
 // ============================================================
 // views/demands.js
-// 需求档案：把「来源用户」当顾客，像点菜一样手写记录他们要什么。
+// 需求档案：把「来源用户」当顾客，像点菜一样逐条手写记录他们要什么。
+// 展示成一条连续清单：来源用户是分组标题，需求是下面的清单项。
 // 记录时只存原文、来源和备注，不预设时间与层级；
 // 之后由我决定这条需求入列成目标 / 计划 / 活动（弹既有表单预填）。
 // ============================================================
@@ -9,10 +10,11 @@ import { openGoalModal, openPlanModal } from './goals.js';
 import { openActModal } from './overview.js';
 
 let App = null;
-let selId = null;
+const collapsed = new Set(); // 收起的来源分组（会话内记忆）
 
 const STATUS_LABEL = { open: '待处理', admitted: '已入列', dropped: '已搁置' };
 const STATUS_CLASS = { open: 'b-amber', admitted: 'b-green', dropped: 'b-gray' };
+const STATUS_MARK = { open: '○', admitted: '✓', dropped: '—' };
 const KIND_LABEL = { goal: '目标', plan: '计划', activity: '活动' };
 
 // 旧库可能没有这两个集合 / seq，读写前补齐
@@ -30,14 +32,17 @@ function nextId(db, seqKey, prefix) {
 
 function demandRow(d) {
   return `
-    <div class="demand-item">
-      <div class="demand-text">${esc(d.text)}</div>
-      <div class="demand-meta">
-        <span class="badge ${STATUS_CLASS[d.status] || 'b-gray'}">${STATUS_LABEL[d.status] || d.status}</span>
-        ${d.status === 'admitted' && d.kind ? ` · ${KIND_LABEL[d.kind] || d.kind}` : ''}
-        · ${fmtDateTime(d.createdAt)}${d.note ? ` · ${esc(d.note)}` : ''}
+    <div class="demand-row ${esc(d.status)}">
+      <span class="demand-mark" title="${STATUS_LABEL[d.status] || ''}">${STATUS_MARK[d.status] || '○'}</span>
+      <div class="demand-body">
+        <div class="demand-text">${esc(d.text)}</div>
+        <div class="demand-meta">
+          <span class="badge ${STATUS_CLASS[d.status] || 'b-gray'}">${STATUS_LABEL[d.status] || d.status}</span>
+          ${d.status === 'admitted' && d.kind ? ` · ${KIND_LABEL[d.kind] || d.kind}` : ''}
+          · ${fmtDateTime(d.createdAt)}${d.note ? ` · ${esc(d.note)}` : ''}
+        </div>
       </div>
-      <div class="row-gap">
+      <div class="demand-actions">
         ${d.status === 'open' ? `<button class="btn sm primary" data-admit="${esc(d.id)}">入列…</button>` : ''}
         ${d.status === 'admitted' && d.targetId ? `<button class="btn sm" data-open-target="${esc(d.id)}">打开</button>` : ''}
         ${d.status === 'dropped'
@@ -48,110 +53,114 @@ function demandRow(d) {
     </div>`;
 }
 
-function detailHTML(cur, list) {
+function sectionHTML(u, list) {
+  const open = list.filter((d) => d.status === 'open').length;
+  const isCollapsed = collapsed.has(u.id);
   const sorted = list.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return `
-    <div class="card-head">
-      <h3>${esc(cur.name || '未命名')}</h3>
-      <span class="muted">${esc(cur.role || '未填关系')}</span>
-    </div>
-    ${cur.note ? `<p class="muted" style="font-size:12px;margin:0 0 6px">${esc(cur.note)}</p>` : ''}
-    <div class="row-gap" style="margin-bottom:10px">
-      <button class="btn sm" data-edit-user="${esc(cur.id)}">编辑档案</button>
-      <button class="btn sm danger" data-del-user="${esc(cur.id)}">删除档案</button>
-    </div>
-    <div class="field">
-      <label>他要什么（原话即可，暂不设时间与层级）</label>
-      <textarea id="dm-text" rows="2" placeholder="例：下周帮我把实验数据整理成图"></textarea>
-    </div>
-    <div class="field"><input id="dm-note" placeholder="备注 / 我的判断（可空）"></div>
-    <button class="btn primary sm" data-add-demand>记下这条需求</button>
-    <div style="margin-top:12px">
-      ${sorted.map(demandRow).join('') || '<div class="muted" style="font-size:12px">还没有记录。像点菜一样先手写下来。</div>'}
+    <div class="demand-section">
+      <div class="demand-section-head">
+        <button class="demand-toggle" data-toggle="${esc(u.id)}" title="${isCollapsed ? '展开' : '收起'}">${isCollapsed ? '▸' : '▾'}</button>
+        <b>${esc(u.name || '未命名')}</b>
+        <span class="muted">${esc(u.role || '未填关系')}</span>
+        ${u.note ? `<span class="muted demand-section-note">${esc(u.note)}</span>` : ''}
+        <span class="demand-section-count">待处理 ${open} / 共 ${list.length}</span>
+        <button class="btn sm" data-edit-user="${esc(u.id)}">编辑</button>
+        <button class="btn sm danger" data-del-user="${esc(u.id)}">删除</button>
+      </div>
+      ${isCollapsed ? '' : `
+      <div class="demand-items">
+        ${sorted.map(demandRow).join('') || '<div class="muted demand-empty">还没有记录。下面写第一条。</div>'}
+        <div class="demand-add">
+          <textarea data-add-text="${esc(u.id)}" rows="1" placeholder="记一条他要什么（原话即可，暂不设时间与层级）"></textarea>
+          <input data-add-note="${esc(u.id)}" placeholder="备注 / 我的判断（可空）">
+          <button class="btn sm primary" data-add="${esc(u.id)}">记下</button>
+        </div>
+      </div>`}
     </div>`;
 }
 
 export function render(AppRef, el) {
   App = AppRef;
   const db = pools(App.db);
-  if (selId && !db.requesters.some((r) => r.id === selId)) selId = null;
-  if (!selId && db.requesters.length) selId = db.requesters[0].id;
-
   const users = db.requesters.slice().sort((a, b) => (a.created || 0) - (b.created || 0));
-  const cur = users.find((u) => u.id === selId) || null;
   const of = (uid) => db.demands.filter((d) => d.requesterId === uid);
 
   el.innerHTML = `
-    <div class="demand-grid">
-      <div class="card">
-        <div class="card-head"><h3>需求档案</h3><span class="muted">来源用户 ${users.length} 位</span></div>
-        <div class="row-gap" style="margin-bottom:8px">
-          <button class="btn sm primary" data-new-user>＋ 新增来源</button>
-        </div>
-        <div class="demand-user-list">
-          ${users.map((u) => {
-            const list = of(u.id);
-            const open = list.filter((d) => d.status === 'open').length;
-            return `<button class="demand-user ${u.id === selId ? 'on' : ''}" data-user="${esc(u.id)}">
-              <b>${esc(u.name || '未命名')}</b>
-              <span>${esc(u.role || '未填关系')} · 待处理 ${open}${list.length ? ` / 共 ${list.length}` : ''}</span>
-            </button>`;
-          }).join('') || '<div class="muted" style="font-size:12px">还没有来源用户。上面新增：把「谁提的要求」立成一份档案。</div>'}
-        </div>
+    <div class="card">
+      <div class="card-head">
+        <h3>需求档案</h3>
+        <span class="muted">像顾客点菜：先手写记下来源要什么，之后再决定入列成目标 / 计划 / 活动</span>
       </div>
-
-      <div class="card">
-        ${cur ? detailHTML(cur, of(cur.id)) : '<div class="muted">先在左边选一位来源用户。</div>'}
+      <div class="demand-toolbar">
+        <button class="btn sm primary" data-new-user>＋ 新增来源</button>
+        <span class="muted">来源 ${users.length} 位 · 待处理 ${db.demands.filter((d) => d.status === 'open').length} 条</span>
+      </div>
+      <div class="demand-list">
+        ${users.map((u) => sectionHTML(u, of(u.id))).join('')
+          || '<div class="muted demand-empty">还没有来源用户。点「＋ 新增来源」把「谁提的要求」立成一份档案。</div>'}
       </div>
     </div>`;
 
-  bind(el, cur);
+  bind(el);
 }
 
-function bind(el, cur) {
+function bind(el) {
   const db = App.db;
 
   el.querySelector('[data-new-user]').onclick = () => userModal(null);
 
-  el.querySelectorAll('[data-user]').forEach((b) => {
-    b.onclick = () => { selId = b.dataset.user; App.refresh(); };
+  el.querySelectorAll('[data-toggle]').forEach((b) => {
+    b.onclick = () => {
+      const id = b.dataset.toggle;
+      if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
+      App.refresh();
+    };
   });
 
-  if (!cur) return;
+  el.querySelectorAll('[data-edit-user]').forEach((b) => {
+    b.onclick = () => userModal(db.requesters.find((r) => r.id === b.dataset.editUser));
+  });
 
-  el.querySelector('[data-edit-user]').onclick = () => userModal(cur);
+  el.querySelectorAll('[data-del-user]').forEach((b) => {
+    b.onclick = async () => {
+      const u = db.requesters.find((r) => r.id === b.dataset.delUser);
+      if (!u) return;
+      const n = db.demands.filter((d) => d.requesterId === u.id).length;
+      const ok = await App.system.confirm({
+        title: '删除来源档案',
+        message: `删除「${u.name || '未命名'}」${n ? `会一并删掉他的 ${n} 条需求记录` : ''}。确定？`,
+      });
+      if (!ok) return;
+      db.demands = db.demands.filter((d) => d.requesterId !== u.id);
+      db.requesters = db.requesters.filter((r) => r.id !== u.id);
+      collapsed.delete(u.id);
+      App.refresh();
+      toast('档案已删除');
+    };
+  });
 
-  el.querySelector('[data-del-user]').onclick = async () => {
-    const n = db.demands.filter((d) => d.requesterId === cur.id).length;
-    const ok = await App.system.confirm({
-      title: '删除来源档案',
-      message: `删除「${cur.name || '未命名'}」${n ? `会一并删掉他的 ${n} 条需求记录` : ''}。确定？`,
-    });
-    if (!ok) return;
-    db.demands = db.demands.filter((d) => d.requesterId !== cur.id);
-    db.requesters = db.requesters.filter((r) => r.id !== cur.id);
-    selId = null;
-    App.refresh();
-    toast('档案已删除');
-  };
-
-  el.querySelector('[data-add-demand]').onclick = () => {
-    const text = el.querySelector('#dm-text').value.trim();
-    if (!text) return toast('先写下他要什么', 'warn');
-    const note = el.querySelector('#dm-note').value.trim();
-    db.demands.push({
-      id: nextId(db, 'dm', 'dm'),
-      requesterId: cur.id,
-      text,
-      note,
-      status: 'open',
-      kind: '',
-      targetId: '',
-      createdAt: Date.now(),
-    });
-    App.refresh();
-    toast('已记下', 'ok');
-  };
+  el.querySelectorAll('[data-add]').forEach((b) => {
+    b.onclick = () => {
+      const uid = b.dataset.add;
+      const ta = el.querySelector(`[data-add-text="${uid}"]`);
+      const noteEl = el.querySelector(`[data-add-note="${uid}"]`);
+      const text = ta ? ta.value.trim() : '';
+      if (!text) return toast('先写下他要什么', 'warn');
+      db.demands.push({
+        id: nextId(db, 'dm', 'dm'),
+        requesterId: uid,
+        text,
+        note: noteEl ? noteEl.value.trim() : '',
+        status: 'open',
+        kind: '',
+        targetId: '',
+        createdAt: Date.now(),
+      });
+      App.refresh();
+      toast('已记下', 'ok');
+    };
+  });
 
   el.querySelectorAll('[data-admit]').forEach((b) => {
     b.onclick = () => admit(db.demands.find((d) => d.id === b.dataset.admit));
@@ -214,9 +223,7 @@ function userModal(u) {
     if (u) {
       Object.assign(u, { name, role, note });
     } else {
-      const r = { id: nextId(db, 'rq', 'rq'), name, role, note, created: Date.now() };
-      db.requesters.push(r);
-      selId = r.id;
+      db.requesters.push({ id: nextId(db, 'rq', 'rq'), name, role, note, created: Date.now() });
     }
     m.close();
     App.refresh();
