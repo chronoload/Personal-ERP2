@@ -1491,3 +1491,23 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
   .agent-panel { width: 100vw; height: 82vh; border-radius: 14px 14px 0 0; align-self: flex-end; }
   .agent-mask { align-items: flex-end; }
 }
+
+/* ---------- 需求档案：来源用户 + 手写需求 ---------- */
+.demand-grid {
+  display: grid; grid-template-columns: 280px minmax(0, 1fr);
+  gap: 12px; align-items: start;
+}
+@media (max-width: 760px) { .demand-grid { grid-template-columns: 1fr; } }
+.demand-user-list { max-height: 460px; overflow: auto; }
+.demand-user {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 8px 10px; margin-bottom: 6px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: inherit;
+}
+.demand-user.on { border-color: var(--primary); background: rgba(124, 108, 255, .08); }
+.demand-user b { display: block; font-size: 13px; }
+.demand-user span { font-size: 11px; color: var(--muted); }
+.demand-item { border-left: 2px solid var(--border); padding: 2px 0 8px 10px; margin-bottom: 8px; }
+.demand-text { font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.demand-meta { font-size: 11px; color: var(--muted); margin: 3px 0 6px; }

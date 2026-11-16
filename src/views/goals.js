@@ -108,15 +108,15 @@ export function openGoalMenu(gid) {
     setGoalStatus(gid, next);
   };
 }
-export function openGoalModal(editId) {
+export function openGoalModal(editId, opts = {}) {
   const g = editId ? App.db.goals.find((x) => x.id === editId) : null;
   let chosenColor = safeColor(g?.color) || null;
   let chosenTheme = g && g.theme ? safeTheme(g.theme) : null;
   const m = openModal({
     title: g ? '编辑目标' : '新建目标',
     bodyHTML: `
-      <div class="field"><label>目标名称 *</label><input id="f-gname" value="${esc(g?.title || '')}" placeholder="例：写一本书"></div>
-      <div class="field"><label>描述</label><input id="f-gdesc" value="${esc(g?.desc || '')}"></div>
+      <div class="field"><label>目标名称 *</label><input id="f-gname" value="${esc(g ? g.title : (opts.title || ''))}" placeholder="例：写一本书"></div>
+      <div class="field"><label>描述</label><input id="f-gdesc" value="${esc(g ? g.desc : (opts.desc || ''))}"></div>
       <div class="field"><label>目标颜色（左侧色条 · 新建计划时继承为默认色）</label>
         <div class="color-row" id="f-gcolors">
           <button type="button" class="swatch ${chosenColor ? '' : 'on'}" data-c="" title="不染色" style="background:#fff"></button>
@@ -151,7 +151,9 @@ export function openGoalModal(editId) {
       ? App.engine.updateGoal(App.db, g.id, payload)
       : App.engine.createGoal(App.db, payload);
     if (!r.ok) return toast(r.error, 'err');
+    const saved = g || App.db.goals[App.db.goals.length - 1];
     m.close(); App.refresh();
+    if (opts.onSaved) opts.onSaved(saved);
   };
 }
 
@@ -169,7 +171,7 @@ export async function delGoal(id) {
   App.refresh(); toast('目标已删除');
 }
 
-export function openPlanModal(goalId, editId) {
+export function openPlanModal(goalId, editId, opts = {}) {
   const p = editId ? App.db.plans.find((x) => x.id === editId) : null;
   const goalOpts = App.db.goals.map((g) =>
     `<option value="${g.id}" ${g.id === (p ? p.goal_id : goalId) ? 'selected' : ''}>${esc(g.title)}</option>`).join('');
@@ -193,7 +195,7 @@ export function openPlanModal(goalId, editId) {
     title: p ? '编辑计划' : '新建计划（挂在目标下）',
     bodyHTML: `
       <div class="field"><label>所属目标</label><select id="f-pgoal">${goalOpts}</select></div>
-      <div class="field"><label>计划名称 *</label><input id="f-pname" value="${esc(p?.title || '')}" placeholder="例：每天写 2000 字"></div>
+      <div class="field"><label>计划名称 *</label><input id="f-pname" value="${esc(p ? p.title : (opts.title || ''))}" placeholder="例：每天写 2000 字"></div>
       <div class="field"><label>计划颜色（按计划染色任务卡片）</label>
         <div class="color-row">${PLAN_COLORS.map((c) => `<button type="button" class="swatch ${c === defColor ? 'on' : ''}" data-c="${c}" style="background:${c}"></button>`).join('')}</div>
       </div>
@@ -236,7 +238,9 @@ export function openPlanModal(goalId, editId) {
       ? App.engine.updatePlan(App.db, p.id, payload)
       : App.engine.createPlan(App.db, payload);
     if (!r.ok) return toast(r.error, 'err');
+    const saved = p || App.db.plans[App.db.plans.length - 1];
     m.close(); App.refresh();
+    if (opts.onSaved) opts.onSaved(saved);
   };
 }
 

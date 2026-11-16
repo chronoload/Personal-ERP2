@@ -69,6 +69,7 @@ export function renderTabs(App) {
     { id: 'finance', label: '资源' },
     { id: 'diary', label: '日记' },
     { id: 'goals', label: '目标与计划' },
+    { id: 'demands', label: '需求档案' },
     { id: 'stats', label: '统计' },
   ];
   el.innerHTML = items.map((t) =>

@@ -79,7 +79,7 @@ function safeColor(c) {
 
 // ---------------- 活动：新建 / 编辑 / 完成弹窗 ----------------
 // prePlanId：从「目标与计划」Tab 进来时预选该计划；presetStart：日历快捷新建预填该日
-export function openActModal(editId, prePlanId, presetStart, presetMinutes, presetTitle) {
+export function openActModal(editId, prePlanId, presetStart, presetMinutes, presetTitle, opts = {}) {
   const { db, engine } = App;
   const a = editId ? db.activities.find((x) => x.id === editId) : null;
   const selected = new Set(a ? a.plan_ids : (prePlanId ? [prePlanId] : []));
@@ -341,13 +341,15 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
       ? (a.repeat && seriesScope !== 'all' ? engine.updateSeries(db, a.id, seriesScope, payload) : engine.updateActivity(db, a.id, payload))
       : engine.createActivity(db, payload);
     if (!r.ok) return toast(r.error, 'err');
+    const saved = a || db.activities[db.activities.length - 1];
     // 记住输入习惯，下次按语境预填
     Prefs.set({
       lastMinutes: Number(payload.planned_minutes) || 0,
       lastRepeat: payload.repeat || '',
     });
     m.close(); App.refresh();
-    if (r.split) toast('仅此期：已拆为独立活动，系列保留其余期次', 'ok');
+    if (opts.onSaved) opts.onSaved(saved);
+    else if (r.split) toast('仅此期：已拆为独立活动，系列保留其余期次', 'ok');
     else if (r.shifted_dates !== undefined) toast(r.shifted_dates !== 0 ? `此期及后续：后续期次已平移 ${r.shifted_dates} 天` : '已保存（仅时间调整）', 'ok');
     else if (r.spawned) toast(`已按循环生成 ${r.spawned} 期后续活动（各期独立管理）`, 'ok');
     else if (r.shifted) toast(`⏩ 时段冲突，已自动顺延至 ${(r.to || '').replace('T', ' ')}`, 'ok');

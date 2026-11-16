@@ -30,6 +30,7 @@ import { renderTopbar, renderTabs } from './views/topbar.js';
 import * as overview from './views/overview.js';
 import * as finance from './views/finance.js';
 import * as goals from './views/goals.js';
+import * as demands from './views/demands.js';
 import * as stats from './views/stats.js';
 import * as calendar from './views/calendar.js';
 import * as timer from './views/timer.js';
@@ -90,9 +91,9 @@ const diaryLazy = {
   refresh() { if (diaryMod && diaryMod.refresh) diaryMod.refresh(); },
 };
 
-const TAB_VIEWS = { overview, diary: diaryLazy, finance, goals, stats };
-// 日记放在「资源」之后：先看账户，再用叙述记录当天（资源 → 日记 → 目标）
-const TAB_ORDER = ['overview', 'finance', 'diary', 'goals', 'stats'];
+const TAB_VIEWS = { overview, diary: diaryLazy, finance, goals, demands, stats };
+// 日记放在「资源」之后：先看账户，再用叙述记录当天（资源 → 日记 → 目标 → 需求 → 统计）
+const TAB_ORDER = ['overview', 'finance', 'diary', 'goals', 'demands', 'stats'];
 
 // ---- Tab 视图缓存（初次懒加载 + 持久容器）----
 // 每个 tab 一个永久容器：首次进入才渲染（懒加载），切回只切换显隐、不重建。
@@ -170,7 +171,7 @@ const App = {
   // 系统服务接口（预留：小组件 / 系统提示 / 系统通知 / 备份）
   widget: Widget, system: System, notifications: Notifications, backup: Backup, sync: Sync, ics: ICS, geo: Geo, lockScreen: LockScreen, launch: AppLaunch,
   // 视图扁平暴露给内联 handler（App.calendar.open() 等）
-  overview, diary: diaryLazy, finance, goals, stats, calendar, timer, dayGuide, hud, reportSlides,
+  overview, diary: diaryLazy, finance, goals, demands, stats, calendar, timer, dayGuide, hud, reportSlides,
   setTab(id) { this.tab = id; this.render(true); window.scrollTo({ top: 0 }); },
   // 统一启动入口：撞上捆绑冲突时弹三选一仲裁（先做这个 / 让对方先 / 取消）
   startAct(id) {

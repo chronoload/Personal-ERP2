@@ -75,7 +75,7 @@ function tauriInvoke(cmd, args) {
 const ERP_CORE_ARRAYS = [
   'resources', 'rules', 'goals', 'plans', 'activities',
   'txs', 'outputs', 'valueflows', 'goods', 'journals',
-  'places', 'commutes', 'templates',
+  'places', 'commutes', 'templates', 'requesters', 'demands',
 ];
 function parseErpFile(content) {
   let obj;
@@ -352,6 +352,25 @@ export function normalizeDB(db) {
   if (typeof db.currentPlaceId !== 'string' || !db.currentPlaceId) db.currentPlaceId = null;
   // 幂等补齐：自定义模板池（v6）。
   if (!Array.isArray(db.templates)) db.templates = [];
+  // 幂等补齐：需求档案（来源用户 + 需求池）。缺席时给空数组，元素结构归一。
+  if (!Array.isArray(db.requesters)) db.requesters = [];
+  for (const r of db.requesters) {
+    if (!r || typeof r !== 'object') continue;
+    if (typeof r.name !== 'string') r.name = '';
+    if (typeof r.role !== 'string') r.role = '';
+    if (typeof r.note !== 'string') r.note = '';
+    if (!Number.isFinite(Number(r.created))) r.created = Date.now();
+  }
+  if (!Array.isArray(db.demands)) db.demands = [];
+  for (const d of db.demands) {
+    if (!d || typeof d !== 'object') continue;
+    if (typeof d.text !== 'string') d.text = '';
+    if (typeof d.note !== 'string') d.note = '';
+    if (!['open', 'admitted', 'dropped'].includes(d.status)) d.status = 'open';
+    if (typeof d.kind !== 'string') d.kind = '';
+    if (typeof d.targetId !== 'string') d.targetId = '';
+    if (!Number.isFinite(Number(d.createdAt))) d.createdAt = Date.now();
+  }
   // 幂等补齐：计划的资本准入轴（v6）。status 状态机不被冻结污染。
   for (const p of db.plans) {
     if (!p || typeof p !== 'object') continue;
@@ -434,6 +453,8 @@ export function ensureSeq(db) {
   db.seq.pl = Math.max(db.seq.pl || 0, maxOf(db.places || [], 'pl'));
   db.seq.cm = Math.max(db.seq.cm || 0, maxOf(db.commutes || [], 'cm'));
   db.seq.tpl = Math.max(db.seq.tpl || 0, maxOf(db.templates || [], 'tpl'));
+  db.seq.rq = Math.max(db.seq.rq || 0, maxOf(db.requesters || [], 'rq'));
+  db.seq.dm = Math.max(db.seq.dm || 0, maxOf(db.demands || [], 'dm'));
 }
 
 // 全新初始化：资源不预设，首次启动进入「初始化资源」流程由用户自行配置
@@ -454,7 +475,9 @@ export function seedDB() {
     commutes: [],
     currentPlaceId: null,
     templates: [],
+    requesters: [],
+    demands: [],
     capitalLock: false,
-    seq: { r: 0, ru: 0, g: 0, p: 0, a: 0, t: 0, o: 0, v: 0, gd: 0, j: 0, pl: 0, cm: 0, tpl: 0 },
+    seq: { r: 0, ru: 0, g: 0, p: 0, a: 0, t: 0, o: 0, v: 0, gd: 0, j: 0, pl: 0, cm: 0, tpl: 0, rq: 0, dm: 0 },
   };
 }
