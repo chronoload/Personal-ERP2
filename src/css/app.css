@@ -1508,8 +1508,9 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
 .demand-section-head {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 0 2px 9px; position: relative;
-  font-size: 13px;
+  font-size: 13px; cursor: pointer;
 }
+.demand-section-head:hover b { text-decoration: underline; text-underline-offset: 3px; }
 /* 来源身份色只出现在标题下沿这条细线，避免和状态色打架 */
 .demand-section-head::after {
   content: ''; position: absolute; left: 2px; right: 2px; bottom: 0;

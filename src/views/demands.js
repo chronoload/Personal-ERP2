@@ -132,9 +132,13 @@ function bind(el) {
 
   el.querySelector('[data-new-user]').onclick = () => userModal(null);
 
-  el.querySelectorAll('[data-toggle]').forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.toggle;
+  // 整条需求头都可点：点空白/名称/箭头都折叠展开；编辑、删除按钮除外
+  el.querySelectorAll('.demand-section-head').forEach((head) => {
+    head.onclick = (e) => {
+      if (e.target.closest('[data-edit-user]') || e.target.closest('[data-del-user]')) return;
+      const btn = head.querySelector('[data-toggle]');
+      if (!btn) return;
+      const id = btn.dataset.toggle;
       if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
       App.refresh();
     };
