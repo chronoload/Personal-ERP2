@@ -25,6 +25,7 @@ public class WidgetPlugin extends Plugin {
       boolean hasNativeTx = false;
       if (db != null) {
         db = mergeNativeTxs(db);
+        db = mergeNativeDemands(db);
         try {
           org.json.JSONArray ids = new org.json.JSONObject(db).optJSONArray("native_txs");
           hasNativeTx = ids != null && ids.length() > 0;
@@ -92,6 +93,49 @@ public class WidgetPlugin extends Plugin {
 
   private static int seqNum(String id) {
     try { return Integer.parseInt(String.valueOf(id).replaceAll("\\D", "")); } catch (Exception e) { return 0; }
+  }
+
+  /** 把桌面弹窗新增的需求（native_demands）合并进 JS 推来的 db，防止旧数据覆盖 */
+  private String mergeNativeDemands(String jsDbStr) throws Exception {
+    org.json.JSONObject cur = WidgetStore.readDB(getContext());
+    if (cur == null) return jsDbStr;
+    org.json.JSONArray nativeIds = cur.optJSONArray("native_demands");
+    if (nativeIds == null || nativeIds.length() == 0) return jsDbStr;
+    org.json.JSONArray curList = cur.optJSONArray("demands");
+    if (curList == null) return jsDbStr;
+    org.json.JSONObject js = new org.json.JSONObject(jsDbStr);
+    org.json.JSONArray jsList = js.optJSONArray("demands");
+    if (jsList == null) { jsList = new org.json.JSONArray(); js.put("demands", jsList); }
+    java.util.HashSet<String> have = new java.util.HashSet<>();
+    int maxSeq = 0;
+    for (int i = 0; i < jsList.length(); i++) {
+      org.json.JSONObject d = jsList.optJSONObject(i);
+      if (d == null) continue;
+      have.add(d.optString("id"));
+      maxSeq = Math.max(maxSeq, seqNum(d.optString("id")));
+    }
+    int added = 0;
+    for (int i = 0; i < nativeIds.length(); i++) {
+      String id = nativeIds.optString(i);
+      if (id.isEmpty() || have.contains(id)) continue;
+      for (int j = 0; j < curList.length(); j++) {
+        org.json.JSONObject d = curList.optJSONObject(j);
+        if (d != null && id.equals(d.optString("id"))) {
+          jsList.put(new org.json.JSONObject(d.toString()));
+          have.add(id);
+          maxSeq = Math.max(maxSeq, seqNum(id));
+          added++;
+          break;
+        }
+      }
+    }
+    if (added > 0) {
+      org.json.JSONObject seq = js.optJSONObject("seq");
+      if (seq == null) { seq = new org.json.JSONObject(); js.put("seq", seq); }
+      seq.put("dm", Math.max(seq.optInt("dm", 0), maxSeq));
+    }
+    js.put("native_demands", nativeIds);
+    return js.toString();
   }
 
   /** JS 侧回读：桌面独立操作后（rev 变大），JS 拉取原生 db 覆盖本地，实现双向同步 */
@@ -257,6 +301,7 @@ public class WidgetPlugin extends Plugin {
     refreshOne(mgr, LedgerWidgetProvider.class);    // 快速记账：资源/主题变化即时同步
     refreshOne(mgr, DiaryWidgetProvider.class);     // 日记：正文/日期跟随 db 推送
     refreshOne(mgr, FlowWidgetProvider.class);      // 流水：最近账目与今日小计
+    refreshOne(mgr, DemandWidgetProvider.class);    // 需求：来源维度与队列
     // 锁屏常驻通知跟随同一份数据刷新（未开启时内部直接跳过）
     try { com.personal.erp.lockscreen.LockScreenNotifier.post(getContext(), false); } catch (Exception ignored) {}
   }
@@ -280,6 +325,8 @@ public class WidgetPlugin extends Plugin {
         for (int id : ids) DiaryWidgetProvider.updateOne(getContext(), mgr, id);
       } else if (cls == FlowWidgetProvider.class) {
         for (int id : ids) FlowWidgetProvider.updateOne(getContext(), mgr, id);
+      } else if (cls == DemandWidgetProvider.class) {
+        for (int id : ids) DemandWidgetProvider.updateOne(getContext(), mgr, id);
       } else if (cls == ResourcesWidgetProvider.class) {
         for (int id : ids) ResourcesWidgetProvider.updateOne(getContext(), mgr, id);
       } else if (cls == GoalsWidgetProvider.class) {

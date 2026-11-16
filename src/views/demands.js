@@ -6,6 +6,7 @@
 // 之后由我决定这条需求入列成目标 / 计划 / 活动（弹既有表单预填）。
 // ============================================================
 import { esc, toast, openModal, fmtDateTime } from '../ui/helpers.js';
+import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, safeTheme } from '../ui/themes.js';
 import { openGoalModal, openPlanModal } from './goals.js';
 import { openActModal } from './overview.js';
 
@@ -16,6 +17,19 @@ const STATUS_LABEL = { open: '待处理', admitted: '已入列', dropped: '已�
 const STATUS_CLASS = { open: 'b-amber', admitted: 'b-green', dropped: 'b-gray' };
 const STATUS_MARK = { open: '○', admitted: '✓', dropped: '—' };
 const KIND_LABEL = { goal: '目标', plan: '计划', activity: '活动' };
+
+// 来源用户区分色：按 id 哈希取稳定色，新增用户不会让别人的颜色乱跳
+const USER_COLORS = ['#6b5bf0', '#3da06a', '#d97706', '#2f7fd0', '#c0454f', '#7c3aed', '#0e7490', '#be185d'];
+function userColor(u) {
+  const s = String((u && (u.id || u.name)) || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return USER_COLORS[h % USER_COLORS.length];
+}
+function tint(hex, alpha) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
 
 // 旧库可能没有这两个集合 / seq，读写前补齐
 function pools(db) {
@@ -57,10 +71,18 @@ function sectionHTML(u, list) {
   const open = list.filter((d) => d.status === 'open').length;
   const isCollapsed = collapsed.has(u.id);
   const sorted = list.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const color = userColor(u);
+  const style = `--uc:${color};--uc-soft:${tint(color, 0.10)};--uc-line:${tint(color, 0.45)}`;
+  const initial = esc((u.name || '?').slice(0, 1));
+  // 来源可以像活动一样设置背景（渐变 / 图片）；标题条上加深色或浅色遮罩保证文字可读
+  const th = u.theme ? themeStyle(safeTheme(u.theme)) : null;
+  const tone = th ? (themeTone(safeTheme(u.theme)) || 'dark') : '';
+  const headStyle = `${style};${th ? `background:${th};background-size:cover;background-position:center;` : ''}`;
   return `
-    <div class="demand-section">
-      <div class="demand-section-head">
+    <div class="demand-section" style="${style}">
+      <div class="demand-section-head ${th ? `themed tone-${tone}` : ''}" style="${headStyle}">
         <button class="demand-toggle" data-toggle="${esc(u.id)}" title="${isCollapsed ? '展开' : '收起'}">${isCollapsed ? '▸' : '▾'}</button>
+        <span class="demand-avatar">${initial}</span>
         <b>${esc(u.name || '未命名')}</b>
         <span class="muted">${esc(u.role || '未填关系')}</span>
         ${u.note ? `<span class="muted demand-section-note">${esc(u.note)}</span>` : ''}
@@ -72,6 +94,7 @@ function sectionHTML(u, list) {
       <div class="demand-items">
         ${sorted.map(demandRow).join('') || '<div class="muted demand-empty">还没有记录。下面写第一条。</div>'}
         <div class="demand-add">
+          <div class="demand-add-head">＋ 记一条</div>
           <textarea data-add-text="${esc(u.id)}" rows="1" placeholder="记一条他要什么（原话即可，暂不设时间与层级）"></textarea>
           <input data-add-note="${esc(u.id)}" placeholder="备注 / 我的判断（可空）">
           <button class="btn sm primary" data-add="${esc(u.id)}">记下</button>
@@ -205,13 +228,21 @@ function bind(el) {
 }
 
 function userModal(u) {
+  let chosenTheme = u && u.theme ? safeTheme(u.theme) : null;
   const m = openModal({
     title: u ? '编辑来源档案' : '新增来源',
     bodyHTML: `
       <div class="field"><label>名称 *</label><input id="rq-name" value="${esc(u ? u.name : '')}" placeholder="例：导师 / 妈妈 / 自己"></div>
       <div class="field"><label>关系 / 角色</label><input id="rq-role" value="${esc(u ? u.role : '')}" placeholder="例：导师 / 家人 / 客户 / 我"></div>
-      <div class="field"><label>备注</label><input id="rq-note" value="${esc(u ? u.note : '')}" placeholder="他通常怎么提要求、看重什么"></div>`,
+      <div class="field"><label>备注</label><input id="rq-note" value="${esc(u ? u.note : '')}" placeholder="他通常怎么提要求、看重什么"></div>
+      <div class="field"><label>分组背景（渐变 / 图片，可留空）</label><div id="rq-theme"></div></div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>保存</button>`,
+  });
+  const tp = m.q('#rq-theme');
+  tp.innerHTML = themePickerHTML({ chosen: chosenTheme });
+  bindThemePicker(tp, {
+    onPick: (t) => { chosenTheme = t; },
+    onUpload: (f) => readImageAsDataURL(f, (url) => { if (url) chosenTheme = { type: 'image', url }; }),
   });
   m.q('[data-cancel]').onclick = () => m.close();
   m.q('[data-save]').onclick = () => {
@@ -221,9 +252,9 @@ function userModal(u) {
     const role = m.q('#rq-role').value.trim();
     const note = m.q('#rq-note').value.trim();
     if (u) {
-      Object.assign(u, { name, role, note });
+      Object.assign(u, { name, role, note, theme: chosenTheme });
     } else {
-      db.requesters.push({ id: nextId(db, 'rq', 'rq'), name, role, note, created: Date.now() });
+      db.requesters.push({ id: nextId(db, 'rq', 'rq'), name, role, note, theme: chosenTheme, created: Date.now() });
     }
     m.close();
     App.refresh();

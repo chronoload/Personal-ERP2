@@ -517,6 +517,7 @@ export function render(App, el) {
         ERP · 任务倒计时（盯时间点）· ERP · 专注停表（25/45 分一键开跑）<br>
         ERP · 快速记账（点金额入账）· ERP · 流水（点标题切换资源维度）<br>
         ERP · 资源余额 · ERP · 目标进度 · ERP · 快速消费 · ERP · 日记<br>
+        ERP · 需求（切换来源，桌面直接记一条）<br>
         添加时系统会展示每个组件的真实布局预览。
       </div>
     </div>

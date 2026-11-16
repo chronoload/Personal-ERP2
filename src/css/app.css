@@ -1498,10 +1498,45 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
   padding-bottom: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--border);
 }
 .demand-list { display: flex; flex-direction: column; gap: 2px; }
-.demand-section { border-bottom: 1px solid var(--border); padding: 8px 0 10px; }
+.demand-section {
+  border-top: 1px solid var(--border);
+  padding: 12px 0 14px;
+  margin: 0;
+  background: transparent;
+}
+.demand-list > .demand-section:first-child { border-top: 0; }
 .demand-section-head {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 0 2px 9px; position: relative;
   font-size: 13px;
+}
+/* 来源身份色只出现在标题下沿这条细线，避免和状态色打架 */
+.demand-section-head::after {
+  content: ''; position: absolute; left: 2px; right: 2px; bottom: 0;
+  height: 2px; border-radius: 2px;
+  background: var(--uc, var(--border)); opacity: .5;
+}
+.demand-section-head b { font-size: 14px; }
+/* 设置了背景的来源：标题条变成一条小横幅，遮罩保证文字可读 */
+.demand-section-head.themed {
+  border-radius: 8px; padding: 7px 9px;
+  box-shadow: inset 0 0 0 2000px rgba(20, 24, 32, .42);
+}
+.demand-section-head.themed.tone-light {
+  box-shadow: inset 0 0 0 2000px rgba(255, 255, 255, .74);
+}
+.demand-section-head.themed::after { display: none; }
+.demand-section-head.themed.tone-dark, .demand-section-head.themed.tone-dark b,
+.demand-section-head.themed.tone-dark .demand-section-count { color: #fff; }
+.demand-section-head.themed.tone-dark .muted { color: rgba(255, 255, 255, .82); }
+.demand-section-head.themed.tone-light, .demand-section-head.themed.tone-light b,
+.demand-section-head.themed.tone-light .demand-section-count { color: #1f2430; }
+.demand-section-head.themed.tone-light .muted { color: rgba(31, 36, 48, .66); }
+.demand-avatar {
+  width: 24px; height: 24px; border-radius: 8px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--uc, #6b5bf0); color: #fff;
+  font-size: 12px; font-weight: 700;
 }
 .demand-toggle {
   border: 0; background: none; color: var(--muted);
@@ -1512,25 +1547,17 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
   font-size: 11px; max-width: 40%; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap;
 }
-.demand-items { margin: 6px 0 0 18px; }
+.demand-items { margin: 8px 0 0 14px; }
+/* 状态色只走左侧细条 + 徽标；行本身保持中性卡面，不和来源色叠加 */
 .demand-row {
   display: flex; align-items: flex-start; gap: 8px;
   padding: 8px 10px; margin: 6px 0;
   border: 1px solid var(--border); border-left-width: 3px; border-radius: 8px;
   background: var(--card, #fff);
 }
-.demand-row.open {
-  border-left-color: #d97706;
-  background: rgba(217, 119, 6, .08);
-}
-.demand-row.admitted {
-  border-left-color: #3da06a;
-  background: rgba(61, 160, 106, .08);
-}
-.demand-row.dropped {
-  border-left-color: var(--border);
-  background: rgba(127, 127, 127, .08);
-}
+.demand-row.open { border-left-color: #d97706; }
+.demand-row.admitted { border-left-color: #3da06a; }
+.demand-row.dropped { border-left-color: var(--border); }
 .demand-row.admitted .demand-text { color: var(--muted); }
 .demand-row.dropped .demand-text { color: var(--muted); text-decoration: line-through; }
 .demand-mark {
@@ -1546,9 +1573,25 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
 .demand-actions { display: flex; gap: 4px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 .demand-add {
   display: grid; grid-template-columns: minmax(0, 1fr) 160px auto;
-  gap: 6px; align-items: center; margin-top: 8px;
+  gap: 8px; align-items: center;
+  margin-top: 10px; padding: 10px 12px;
+  border: 1px dashed var(--border); border-radius: 10px;
+  background: transparent;
 }
-.demand-add textarea, .demand-add input { font-size: 12px; }
+.demand-add:focus-within { border-color: var(--uc-line, var(--border)); }
+.demand-add-head {
+  grid-column: 1 / -1; font-size: 11px; font-weight: 600;
+  color: var(--uc, var(--primary, #6b5bf0)); letter-spacing: .02em;
+}
+.demand-add textarea, .demand-add input {
+  font-size: 12px; padding: 7px 9px; resize: vertical;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--card); color: inherit;
+}
+.demand-add textarea:focus, .demand-add input:focus {
+  outline: none; border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 108, 255, .16);
+}
 @media (max-width: 640px) {
   .demand-add { grid-template-columns: 1fr; }
   .demand-section-count { margin-left: 0; }
