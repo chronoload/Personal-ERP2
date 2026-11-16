@@ -6,7 +6,7 @@
 // 之后由我决定这条需求入列成目标 / 计划 / 活动（弹既有表单预填）。
 // ============================================================
 import { esc, toast, openModal, fmtDateTime } from '../ui/helpers.js';
-import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, safeTheme } from '../ui/themes.js';
+import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone, safeTheme } from '../ui/themes.js';
 import { openGoalModal, openPlanModal } from './goals.js';
 import { openActModal } from './overview.js';
 
@@ -14,12 +14,11 @@ let App = null;
 const collapsed = new Set(); // 收起的来源分组（会话内记忆）
 
 const STATUS_LABEL = { open: '待处理', admitted: '已入列', dropped: '已搁置' };
-const STATUS_CLASS = { open: 'b-amber', admitted: 'b-green', dropped: 'b-gray' };
 const STATUS_MARK = { open: '○', admitted: '✓', dropped: '—' };
 const KIND_LABEL = { goal: '目标', plan: '计划', activity: '活动' };
 
-// 来源用户区分色：按 id 哈希取稳定色，新增用户不会让别人的颜色乱跳
-const USER_COLORS = ['#6b5bf0', '#3da06a', '#d97706', '#2f7fd0', '#c0454f', '#7c3aed', '#0e7490', '#be185d'];
+// 来源用户区分色：刻意避开状态色（琥珀/绿/灰），用冷色系并与条目染色错开
+const USER_COLORS = ['#5b6ee1', '#7c5cd6', '#2f7fd0', '#0e7490', '#be185d', '#6d28d9', '#2563eb', '#0f766e'];
 function userColor(u) {
   const s = String((u && (u.id || u.name)) || '');
   let h = 0;
@@ -51,7 +50,7 @@ function demandRow(d) {
       <div class="demand-body">
         <div class="demand-text">${esc(d.text)}</div>
         <div class="demand-meta">
-          <span class="badge ${STATUS_CLASS[d.status] || 'b-gray'}">${STATUS_LABEL[d.status] || d.status}</span>
+          <span class="demand-state ${esc(d.status)}">${STATUS_LABEL[d.status] || d.status}</span>
           ${d.status === 'admitted' && d.kind ? ` · ${KIND_LABEL[d.kind] || d.kind}` : ''}
           · ${fmtDateTime(d.createdAt)}${d.note ? ` · ${esc(d.note)}` : ''}
         </div>
@@ -72,15 +71,18 @@ function sectionHTML(u, list) {
   const isCollapsed = collapsed.has(u.id);
   const sorted = list.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const color = userColor(u);
-  const style = `--uc:${color};--uc-soft:${tint(color, 0.10)};--uc-line:${tint(color, 0.45)}`;
+  const style = `--uc:${color};--uc-soft:${tint(color, 0.06)};--uc-line:${tint(color, 0.42)}`;
   const initial = esc((u.name || '?').slice(0, 1));
-  // 来源可以像活动一样设置背景（渐变 / 图片）；标题条上加深色或浅色遮罩保证文字可读
+  // 来源可以像活动一样设置背景（渐变 / 图片），整块档案都铺背景；
+  // 图片背景异步采样像素亮度，决定用白字还是深字
   const th = u.theme ? themeStyle(safeTheme(u.theme)) : null;
-  const tone = th ? (themeTone(safeTheme(u.theme)) || 'dark') : '';
-  const headStyle = `${style};${th ? `background:${th};background-size:cover;background-position:center;` : ''}`;
+  const tone = th ? themeTone(safeTheme(u.theme)) : '';
+  const bgStyle = th ? `background:${th};background-size:cover;background-position:center;` : '';
+  const secClass = th ? `themed${tone === 'light' ? ' tone-light' : ''}` : '';
+  const awaitTone = th && tone === null ? ' data-await-tone="1"' : '';
   return `
-    <div class="demand-section" style="${style}">
-      <div class="demand-section-head ${th ? `themed tone-${tone}` : ''}" style="${headStyle}">
+    <div class="demand-section ${secClass}"${awaitTone} data-rq="${esc(u.id)}" style="${style};${bgStyle}">
+      <div class="demand-section-head" style="${style}">
         <button class="demand-toggle" data-toggle="${esc(u.id)}" title="${isCollapsed ? '展开' : '收起'}">${isCollapsed ? '▸' : '▾'}</button>
         <span class="demand-avatar">${initial}</span>
         <b>${esc(u.name || '未命名')}</b>
@@ -94,9 +96,8 @@ function sectionHTML(u, list) {
       <div class="demand-items">
         ${sorted.map(demandRow).join('') || '<div class="muted demand-empty">还没有记录。下面写第一条。</div>'}
         <div class="demand-add">
-          <div class="demand-add-head">＋ 记一条</div>
-          <textarea data-add-text="${esc(u.id)}" rows="1" placeholder="记一条他要什么（原话即可，暂不设时间与层级）"></textarea>
-          <input data-add-note="${esc(u.id)}" placeholder="备注 / 我的判断（可空）">
+          <textarea data-add-text="${esc(u.id)}" rows="1" placeholder="记一条"></textarea>
+          <input data-add-note="${esc(u.id)}" placeholder="备注（可空）">
           <button class="btn sm primary" data-add="${esc(u.id)}">记下</button>
         </div>
       </div>`}
@@ -129,6 +130,16 @@ export function render(AppRef, el) {
 
 function bind(el) {
   const db = App.db;
+
+  // 图片背景：异步采样像素亮度后补 tone-light（与活动卡片同一套对比度规则）
+  el.querySelectorAll('.demand-section[data-await-tone="1"]').forEach((sec) => {
+    const u = db.requesters.find((r) => r.id === sec.dataset.rq);
+    if (!u) return;
+    sampleImageTone(safeTheme(u.theme), (tone) => {
+      if (tone === 'light') sec.classList.add('tone-light');
+      sec.removeAttribute('data-await-tone');
+    });
+  });
 
   el.querySelector('[data-new-user]').onclick = () => userModal(null);
 
