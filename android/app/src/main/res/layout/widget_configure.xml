@@ -117,11 +117,18 @@
             android:layout_marginTop="8dp">
 
             <RadioButton
-                android:id="@+id/cfg_theme_light"
+                android:id="@+id/cfg_theme_auto"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:checked="true"
-                android:text="浅色（默认）"
+                android:text="跟随系统（默认）"
+                android:textColor="#1F2430" />
+
+            <RadioButton
+                android:id="@+id/cfg_theme_light"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="浅色"
                 android:textColor="#1F2430" />
 
             <RadioButton

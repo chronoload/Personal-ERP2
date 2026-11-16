@@ -27,18 +27,23 @@ public class FlowWidgetService extends RemoteViewsService {
 
   @Override
   public RemoteViewsFactory onGetViewFactory(Intent intent) {
-    return new FlowFactory(getApplicationContext());
+    int widgetId = intent.getIntExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+    return new FlowFactory(getApplicationContext(), widgetId);
   }
 
   static class FlowFactory implements RemoteViewsFactory {
     private static final int LIMIT = 60;
     private final Context ctx;
+    private final int widgetId;
     private final List<JSONObject> items = new ArrayList<>();
     private final Map<String, String> resNames = new HashMap<>();
     private final SimpleDateFormat df = new SimpleDateFormat("M-d HH:mm", Locale.CHINA);
     private boolean dark = false;
 
-    FlowFactory(Context ctx) { this.ctx = ctx; }
+    FlowFactory(Context ctx, int widgetId) {
+      this.ctx = ctx;
+      this.widgetId = widgetId;
+    }
 
     @Override public void onCreate() {}
 
@@ -64,11 +69,13 @@ public class FlowWidgetService extends RemoteViewsService {
 
       JSONArray txs = db.optJSONArray("txs");
       if (txs == null) return;
+      String dim = FlowWidgetProvider.dimensionOf(ctx, widgetId);
       List<JSONObject> list = new ArrayList<>();
       for (int i = 0; i < txs.length(); i++) {
         JSONObject t = txs.optJSONObject(i);
         if (t == null) continue;
         if (t.optDouble("credit", 0) == 0 && t.optDouble("debit", 0) == 0) continue;
+        if (!dim.isEmpty() && !dim.equals(t.optString("resource_id", ""))) continue;
         list.add(t);
       }
       Collections.sort(list, new java.util.Comparator<JSONObject>() {

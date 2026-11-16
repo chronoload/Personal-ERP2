@@ -67,8 +67,23 @@ public class WidgetStore {
     return new JSONObject();
   }
 
+  /** 小组件主题：auto（跟随系统）/ light / dark；旧配置只有 dark 布尔时兼容读取 */
+  static String themeMode(Context ctx) {
+    JSONObject cfg = readConfig(ctx);
+    String m = cfg.optString("theme", "");
+    if ("auto".equals(m) || "light".equals(m) || "dark".equals(m)) return m;
+    return cfg.optBoolean("dark", false) ? "dark" : "light";
+  }
+
   static boolean isDarkTheme(Context ctx) {
-    return readConfig(ctx).optBoolean("dark", false);
+    String m = themeMode(ctx);
+    if ("dark".equals(m)) return true;
+    if ("light".equals(m)) return false;
+    try {
+      return (ctx.getResources().getConfiguration().uiMode
+          & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+          == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+    } catch (Exception e) { return false; }
   }
 
   /** 原生写回 db（小组件独立操作的持久层）：每次写自动递增修订号，供 JS 侧检测并回读 */

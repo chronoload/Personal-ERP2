@@ -42,13 +42,23 @@ export const Widget = {
     } catch (e) {}
   },
 
-  // 小组件深色主题（安卓端写入原生配置并立即刷新；web 端仅记忆偏好）
-  async setDarkTheme(dark) {
-    Prefs.set({ widgetDark: !!dark });
+  // 小组件主题：auto 跟随系统 / light / dark（安卓端写入原生配置并立即刷新；web 端仅记忆偏好）
+  theme() {
+    const p = Prefs.load();
+    const m = p.widgetTheme;
+    if (m === 'light' || m === 'dark') return m;
+    // 旧版本只存过布尔值，迁移成明确模式
+    if (p.widgetDark !== undefined) return p.widgetDark ? 'dark' : 'light';
+    return 'auto';
+  },
+
+  async setTheme(mode) {
+    const m = mode === 'light' || mode === 'dark' ? mode : 'auto';
+    Prefs.set({ widgetTheme: m });
     try {
       if (!Capacitor.isNativePlatform()) return;
       const P = Capacitor.registerPlugin('Widget');
-      await P.setDarkTheme({ dark: !!dark });
+      await P.setTheme({ mode: m });
     } catch (e) {}
   },
 

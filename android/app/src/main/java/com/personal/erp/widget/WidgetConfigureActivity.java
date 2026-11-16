@@ -45,10 +45,11 @@ public class WidgetConfigureActivity extends AppCompatActivity {
 
     setContentView(R.layout.widget_configure);
 
-    // 主题预填
-    boolean dark = WidgetStore.isDarkTheme(this);
+    // 主题预填：跟随系统 / 浅色 / 深色
+    String mode = WidgetStore.themeMode(this);
     RadioGroup theme = findViewById(R.id.cfg_theme);
-    if (dark) theme.check(R.id.cfg_theme_dark);
+    if ("auto".equals(mode)) theme.check(R.id.cfg_theme_auto);
+    else if ("dark".equals(mode)) theme.check(R.id.cfg_theme_dark);
     else theme.check(R.id.cfg_theme_light);
 
     Class<?> owner = owningProvider();
@@ -61,10 +62,14 @@ public class WidgetConfigureActivity extends AppCompatActivity {
 
     Button save = findViewById(R.id.cfg_save);
     save.setOnClickListener(v -> {
-      boolean isDark = theme.getCheckedRadioButtonId() == R.id.cfg_theme_dark;
+      int picked = theme.getCheckedRadioButtonId();
+      String nextMode = picked == R.id.cfg_theme_dark ? "dark"
+          : picked == R.id.cfg_theme_auto ? "auto" : "light";
       try {
-        JSONObject o = new JSONObject();
-        o.put("dark", isDark);
+        // 保留配置里的其它键（如倒计时以外的将来字段），只改主题
+        JSONObject o = WidgetStore.readConfig(this);
+        o.put("theme", nextMode);
+        o.put("dark", "dark".equals(nextMode)); // 兼容旧读取路径
         SharedPreferences sp = getSharedPreferences(WidgetKeys.PREFS_FILE, Context.MODE_PRIVATE);
         sp.edit().putString(WidgetKeys.KEY_CONFIG, o.toString()).apply();
       } catch (Exception ignored) {}

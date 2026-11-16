@@ -220,21 +220,29 @@ public class WidgetPlugin extends Plugin {
     call.resolve(ret);
   }
 
-  // 小组件主题：深色/浅色（App 设置里切换，立即刷新已添加的小组件）
+  // 小组件主题：auto（跟随系统）/ light / dark（App 设置里切换，立即刷新已添加的小组件）
   @PluginMethod
-  public void setDarkTheme(PluginCall call) {
+  public void setTheme(PluginCall call) {
     try {
-      Boolean v = call.getBoolean("dark");
-      boolean dark = v != null && v;
+      String mode = call.getString("mode", "auto");
+      if (!"auto".equals(mode) && !"light".equals(mode) && !"dark".equals(mode)) mode = "auto";
       android.content.SharedPreferences sp = getContext().getSharedPreferences(WidgetKeys.PREFS_FILE, android.content.Context.MODE_PRIVATE);
       org.json.JSONObject o = WidgetStore.readConfig(getContext());
-      o.put("dark", dark);
+      o.put("theme", mode);
+      o.put("dark", "dark".equals(mode)); // 兼容旧读取路径
       sp.edit().putString(WidgetKeys.KEY_CONFIG, o.toString()).apply();
       refreshAll();
       JSObject ret = new JSObject();
-      ret.put("dark", dark);
+      ret.put("mode", mode);
       call.resolve(ret);
     } catch (Exception e) { call.reject(e.getMessage()); }
+  }
+
+  @PluginMethod
+  public void getTheme(PluginCall call) {
+    JSObject ret = new JSObject();
+    ret.put("mode", WidgetStore.themeMode(getContext()));
+    call.resolve(ret);
   }
 
   private void refreshAll() {

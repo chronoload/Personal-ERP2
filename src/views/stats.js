@@ -502,13 +502,20 @@ export function render(App, el) {
       <div class="card-head"><h3>桌面小组件</h3><span class="muted">安卓 AppWidget · 当日日程 / 资源状态 / 目标与计划（需在安卓桌面添加）</span></div>
       <label class="row-gap" style="align-items:center"><input type="checkbox" id="w-enabled" ${App.widget.enabled() ? 'checked' : ''}> 启用桌面小组件（关闭可恢复未改前的稳态）</label>
       <label class="row-gap" style="align-items:center;margin-top:6px"><input type="checkbox" id="w-home" ${App.widget.homeEnabled() ? 'checked' : ''}> 开屏首页 · 今日日程大片（显示今日安排，点「＋ 添加今日日程」直达新建）</label>
-      <label class="row-gap" style="align-items:center;margin-top:6px"><input type="checkbox" id="w-dark" ${prefs.widgetDark ? 'checked' : ''}> 深色主题（添加小组件时也可在配置页选择）</label>
+      <label class="row-gap" style="align-items:center;margin-top:6px">小组件主题
+        <select id="w-theme" style="margin-left:6px">
+          <option value="auto" ${App.widget.theme() === 'auto' ? 'selected' : ''}>跟随系统</option>
+          <option value="light" ${App.widget.theme() === 'light' ? 'selected' : ''}>浅色</option>
+          <option value="dark" ${App.widget.theme() === 'dark' ? 'selected' : ''}>深色</option>
+        </select>
+        <span class="muted">（添加小组件时也可在配置页选择）</span>
+      </label>
       <div class="muted" style="margin-top:6px">点击小组件任意行可直接跳转 App 对应页面；当日日程显示每项已计时长。</div>
       <div class="muted" style="margin-top:10px;line-height:1.7">
         <b>可添加的组件</b>（长按桌面 → 小组件 → 本应用，按名字排序）：<br>
         ERP · 当日日程（紧凑 4×1）· ERP · 今日开屏（大卡 4×4）<br>
         ERP · 任务倒计时（盯时间点）· ERP · 专注停表（25/45 分一键开跑）<br>
-        ERP · 快速记账（点金额入账）· ERP · 流水（最近账目 + 今日小计）<br>
+        ERP · 快速记账（点金额入账）· ERP · 流水（点标题切换资源维度）<br>
         ERP · 资源余额 · ERP · 目标进度 · ERP · 快速消费 · ERP · 日记<br>
         添加时系统会展示每个组件的真实布局预览。
       </div>
@@ -679,9 +686,13 @@ export function render(App, el) {
     }
   });
 
-  // 小组件深色主题
-  const wdark = el.querySelector('#w-dark');
-  if (wdark) wdark.addEventListener('change', () => { App.widget.setDarkTheme(wdark.checked); toast(wdark.checked ? '小组件已切换为深色' : '小组件已切换为浅色', 'ok'); });
+  // 小组件主题：跟随系统 / 浅色 / 深色
+  const wtheme = el.querySelector('#w-theme');
+  if (wtheme) wtheme.addEventListener('change', () => {
+    const m = wtheme.value;
+    App.widget.setTheme(m);
+    toast(m === 'auto' ? '小组件主题跟随系统' : (m === 'dark' ? '小组件已切换为深色' : '小组件已切换为浅色'), 'ok');
+  });
 
   // 开屏首页 · 今日日程大片：开关即刷新原生卡片（关闭后只显示提示，不读数据）
   const whome = el.querySelector('#w-home');
