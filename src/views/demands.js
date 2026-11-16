@@ -96,7 +96,7 @@ function sectionHTML(u, list) {
       <div class="demand-items">
         ${sorted.map(demandRow).join('') || '<div class="muted demand-empty">还没有记录。下面写第一条。</div>'}
         <div class="demand-add">
-          <textarea data-add-text="${esc(u.id)}" rows="1" placeholder="记一条"></textarea>
+          <textarea data-add-text="${esc(u.id)}" rows="1" placeholder="记录ta的需求"></textarea>
           <input data-add-note="${esc(u.id)}" placeholder="备注（可空）">
           <button class="btn sm primary" data-add="${esc(u.id)}">记下</button>
         </div>
@@ -246,9 +246,9 @@ function userModal(u) {
   const m = openModal({
     title: u ? '编辑来源档案' : '新增来源',
     bodyHTML: `
-      <div class="field"><label>名称 *</label><input id="rq-name" value="${esc(u ? u.name : '')}" placeholder="例：导师 / 妈妈 / 自己"></div>
-      <div class="field"><label>关系 / 角色</label><input id="rq-role" value="${esc(u ? u.role : '')}" placeholder="例：导师 / 家人 / 客户 / 我"></div>
-      <div class="field"><label>备注</label><input id="rq-note" value="${esc(u ? u.note : '')}" placeholder="他通常怎么提要求、看重什么"></div>
+      <div class="field"><label>名称 *</label><input id="rq-name" value="${esc(u ? u.name : '')}"></div>
+      <div class="field"><label>关系 / 角色</label><input id="rq-role" value="${esc(u ? u.role : '')}"></div>
+      <div class="field"><label>备注</label><input id="rq-note" value="${esc(u ? u.note : '')}"></div>
       <div class="field"><label>分组背景（渐变 / 图片，可留空）</label><div id="rq-theme"></div></div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>保存</button>`,
   });
