@@ -169,6 +169,12 @@
             android:name=".widget.DemandQuickAddActivity"
             android:exported="false"
             android:theme="@style/AppTheme.Config" />
+        <!-- 桌面直接编辑日记：Dialog 弹窗，不启动主界面 -->
+        <activity
+            android:name=".widget.DiaryQuickEditActivity"
+            android:exported="false"
+            android:windowSoftInputMode="stateVisible|adjustResize"
+            android:theme="@style/AppTheme.Config" />
         <activity
             android:name=".widget.WidgetConfigureActivity"
             android:exported="true"

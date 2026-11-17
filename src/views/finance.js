@@ -496,7 +496,7 @@ export function openConsumeModal(goodId) {
     accent: 'warn',
     bodyHTML: `
       <div class="callout warn">${esc(g.emoji)} ${esc(g.name)} 消耗：</div>
-      <ul style="margin:8px 0 12px;padding-left:20px;font-size:13px;line-height:1.9">${costLines}</ul>
+      <ul style="margin:8px 0 12px;padding-left:20px;font-size: calc(13px * var(--fs));line-height:1.9">${costLines}</ul>
       ${anyLack ? `<div class="callout">${icon('lightbulb')} 部分资源不足，允许借贷扣为负数，后续充值自动回补。</div>` : ''}
       <div class="grid2">
         <div class="field"><label>数量</label><input id="f-gqty" type="number" min="1" step="1" value="1"></div>
@@ -959,7 +959,7 @@ function templatesCard(App) {
       <div class="card-body">
         <div class="tag-suggest" id="tpl-cats">${chips}</div>
         <div class="tpl-list">${all.map((t) => templateCard(t, a.recommended, unit)).join('')}</div>
-        <div class="muted" style="font-size:11px;margin-top:8px">内置/MD 模板按建议预算的比例分配；目标级与计划级模板保留保存时的绝对预算。导入支持多文件、一个文件多模板；「${icon('download')} MD」可导出单个模板。</div>
+        <div class="muted" style="font-size: calc(11px * var(--fs));margin-top:8px">内置/MD 模板按建议预算的比例分配；目标级与计划级模板保留保存时的绝对预算。导入支持多文件、一个文件多模板；「${icon('download')} MD」可导出单个模板。</div>
       </div>
     </section>`;
 }
@@ -1073,7 +1073,7 @@ export function openTemplateSave() {
         <div class="field"><label>选择对象</label><select id="f-tpltarget"></select></div>
       </div>
       <div class="field"><label>模板名称</label><input id="f-tplname" placeholder="不填则用对象名称" maxlength="40"></div>
-      <p class="muted" style="font-size:12px">只保存所选对象及其下级，不会打包整个结构；预算按现值保存。</p>`,
+      <p class="muted" style="font-size: calc(12px * var(--fs))">只保存所选对象及其下级，不会打包整个结构；预算按现值保存。</p>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>保存</button>`,
   });
   const fill = () => {
@@ -1130,7 +1130,7 @@ export async function openTemplatePrompt() {
     title: '模板提示词（打开即自动复制）',
     width: 720,
     bodyHTML: `
-      <p class="muted" style="font-size:12px;margin-bottom:8px">把它发给模型，多轮问答后让它输出 Markdown 模板；再回到「${icon('upload')} 导入 MD」粘贴。</p>
+      <p class="muted" style="font-size: calc(12px * var(--fs));margin-bottom:8px">把它发给模型，多轮问答后让它输出 Markdown 模板；再回到「${icon('upload')} 导入 MD」粘贴。</p>
       <textarea id="tpl-prompt" class="ledger-cmd" rows="16" readonly>${esc(TEMPLATE_PROMPT)}</textarea>`,
     footerHTML: `<button class="btn" data-copy>再复制</button><button class="btn primary" data-close>知道了</button>`,
   });
@@ -1152,16 +1152,16 @@ export function openTemplateImport() {
     title: '导入 MD 模板（多文件 / 多模板）',
     width: 720,
     bodyHTML: `
-      <p class="muted" style="font-size:12px;margin-bottom:8px">每个模板以一级标题 <code># 模板名</code> 开始；每个文件独立解析，一个文件可含多个模板。可多选文件，也可粘贴。点「?」复制提示词。</p>
+      <p class="muted" style="font-size: calc(12px * var(--fs));margin-bottom:8px">每个模板以一级标题 <code># 模板名</code> 开始；每个文件独立解析，一个文件可含多个模板。可多选文件，也可粘贴。点「?」复制提示词。</p>
       <div class="row-gap" style="margin-bottom:6px">
         <label class="btn sm">${icon('file')} 选择 .md 文件（可多选）
           <input id="tpl-md-file" type="file" accept=".md,.markdown,text/markdown" multiple hidden>
         </label>
-        <span id="tpl-md-fileinfo" class="muted" style="font-size:11px"></span>
+        <span id="tpl-md-fileinfo" class="muted" style="font-size: calc(11px * var(--fs))"></span>
       </div>
       <div id="tpl-filelist" class="tpl-filelist"></div>
       <textarea id="tpl-md" class="ledger-cmd" rows="12" placeholder="${esc(TEMPLATE_MD_SCHEMA)}" spellcheck="false"></textarea>
-      <div id="tpl-md-preview" class="muted" style="font-size:12px;margin-top:6px"></div>`,
+      <div id="tpl-md-preview" class="muted" style="font-size: calc(12px * var(--fs));margin-top:6px"></div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn" data-save>仅保存</button><button class="btn primary" data-apply>保存并应用阶段 1</button>`,
   });
   const ta = m.q('#tpl-md');
@@ -1292,7 +1292,7 @@ function openTemplateExport(title, md, filename) {
     title,
     width: 720,
     bodyHTML: `
-      <p class="muted" style="font-size:12px;margin-bottom:8px">可直接复制，或下载为 .md 文件（Android WebView 若无法下载，用复制）。</p>
+      <p class="muted" style="font-size: calc(12px * var(--fs));margin-bottom:8px">可直接复制，或下载为 .md 文件（Android WebView 若无法下载，用复制）。</p>
       <textarea id="tpl-export" class="ledger-cmd" rows="16" readonly>${esc(md)}</textarea>`,
     footerHTML: `<button class="btn" data-copy>复制</button><button class="btn primary" data-download>下载 .md</button>`,
   });
@@ -1374,12 +1374,12 @@ export function openTemplateView(tplId) {
     title: `模板：${tpl.name}`,
     width: 760,
     bodyHTML: `
-      <div class="muted" style="font-size:11px;margin-bottom:6px">点击卡片进入这里；改 MD 会实时重算上方结构。${isBuiltin ? '内置模板保存时会另存为自定义副本。' : ''}</div>
+      <div class="muted" style="font-size: calc(11px * var(--fs));margin-bottom:6px">点击卡片进入这里；改 MD 会实时重算上方结构。${isBuiltin ? '内置模板保存时会另存为自定义副本。' : ''}</div>
       <div id="tpl-view-structure" class="tpl-view-structure"></div>
       <div class="field" style="margin-top:10px"><label>MD 编辑（遵循同一 schema）</label>
         <textarea id="tpl-view-md" class="ledger-cmd" rows="14" spellcheck="false">${esc(serializeTemplateMD(tpl))}</textarea>
       </div>
-      <div id="tpl-view-hint" class="muted" style="font-size:12px"></div>`,
+      <div id="tpl-view-hint" class="muted" style="font-size: calc(12px * var(--fs))"></div>`,
     footerHTML: `<button class="btn" data-copy>复制 MD</button>
       ${isBuiltin ? '<button class="btn" data-fork>另存为副本</button>' : '<button class="btn primary" data-save>保存修改</button>'}
       <button class="btn primary" data-apply ${full ? 'disabled' : ''}>${applyLabel}</button>
@@ -1458,7 +1458,7 @@ function renderCards(App) {
             <textarea id="ledger-cmd" class="ledger-cmd" rows="1" placeholder="记账命令，每行一笔：-8 早餐 / +100 工资 / -5.5 咖啡 @灵感（Enter 入账，Shift+Enter 换行）" spellcheck="false"></textarea>
             <button class="btn primary" onclick="App.finance.runLedgerCommand()">入账</button>
           </div>
-          <div class="muted" style="font-size:11px;margin-bottom:8px">语法：- 金额 备注 @资源名；- 支出、+ 收入；缺省资源 = 价值元/首个启用。</div>
+          <div class="muted" style="font-size: calc(11px * var(--fs));margin-bottom:8px">语法：- 金额 备注 @资源名；- 支出、+ 收入；缺省资源 = 价值元/首个启用。</div>
           <div id="ledger-host">
             <button class="btn sm" onclick="App.finance.openLedger()">${icon('book')} 打开文本账单（Vditor 镜像）</button>
           </div>

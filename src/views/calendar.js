@@ -319,7 +319,7 @@ function renderWeek(App, host, byDay, todayK, resync) {
             </div>`).join('')}
         </div>
       </div>
-      <div class="muted" style="margin:6px 0 10px;font-size:11px">点击时间格 = 该日该钟点新建；点击色块 = 编辑；上方为全天/弹性活动</div>
+      <div class="muted" style="margin:6px 0 10px;font-size: calc(11px * var(--fs))">点击时间格 = 该日该钟点新建；点击色块 = 编辑；上方为全天/弹性活动</div>
       ${agendaHTML(App, byDay, calSelected || todayK)}
     </div>
   `;

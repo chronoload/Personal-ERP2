@@ -446,10 +446,10 @@ function openPlanPromptModal(App, el) {
     title: '🧠 先问我需要什么 · 再把大局落到今天',
     width: 720,
     bodyHTML: `
-      <p class="muted" style="font-size:12px">打开时已自动复制（含目标/计划与两天日记）。把它发给模型：它会反过来问你想要什么、目标和计划现在是什么状态，聊清楚之后才给今天这一个代码块。粘到下面就能直接加进「${esc(curKey)}」这一天。</p>
+      <p class="muted" style="font-size: calc(12px * var(--fs))">打开时已自动复制（含目标/计划与两天日记）。把它发给模型：它会反过来问你想要什么、目标和计划现在是什么状态，聊清楚之后才给今天这一个代码块。粘到下面就能直接加进「${esc(curKey)}」这一天。</p>
       <div class="field"><label>提示词（已附带目标/计划与两天日记）</label><textarea id="dp-prompt" class="ledger-cmd" rows="12" readonly spellcheck="false"></textarea></div>
       <div class="field" style="margin-top:8px"><label>模型输出的命令块</label><textarea id="dp-paste" class="ledger-cmd" rows="6" spellcheck="false" placeholder="- [ ] 写周报 @ 09:00 45分钟 (运营)"></textarea></div>
-      <p class="muted" style="font-size:11px">语法与「🔍 解析并注入」完全一致：<code>- [ ] 活动</code>、<code>@ 09:00 60分钟</code> 排时间、<code>(计划名)</code> 归属、<code>+100 工资</code> 记流水。</p>`,
+      <p class="muted" style="font-size: calc(11px * var(--fs))">语法与「🔍 解析并注入」完全一致：<code>- [ ] 活动</code>、<code>@ 09:00 60分钟</code> 排时间、<code>(计划名)</code> 归属、<code>+100 工资</code> 记流水。</p>`,
     footerHTML: `<button class="btn" data-copy>复制提示词</button><button class="btn" data-share>复制并打开应用</button><button class="btn" data-cancel>取消</button><button class="btn primary" data-ok>解析并注入</button>`,
   });
   m.q('#dp-prompt').value = prompt;

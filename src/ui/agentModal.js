@@ -427,7 +427,7 @@ export function openConfig() {
         </div>
         <div class="field"><label>名称</label><input data-ac-name value="${esc(cur.name)}" placeholder="例如 DeepSeek / 豆包"></div>
         <div class="field"><label>baseUrl（OpenAI 兼容）</label><input data-ac-base value="${esc(cur.baseUrl)}" placeholder="https://api.deepseek.com/v1"></div>
-        <div class="muted" data-ac-hint style="font-size:11px;margin:-2px 0 6px"></div>
+        <div class="muted" data-ac-hint style="font-size: calc(11px * var(--fs));margin:-2px 0 6px"></div>
         <div class="field"><label>API Key</label><input data-ac-key type="password" value="" placeholder="${cur.apiKeyEnc ? `已保存 ${esc(maskKey(decryptText(cur.apiKeyEnc)))}，留空保持不变` : 'sk-…'}"></div>
         <div class="field"><label>模型名</label>
           <input data-ac-model value="${esc(cur.model)}" placeholder="deepseek-flash">
@@ -455,8 +455,8 @@ export function openConfig() {
           <label class="muted">温度 <input data-ac-temp type="number" step="0.1" min="0" max="2" value="${cur.temperature}" style="width:70px"></label>
           <label class="muted">最大轮数 <input data-ac-turns type="number" min="1" max="20" value="${cur.maxTurns}" style="width:70px"></label>
         </div>
-        <div class="muted" style="font-size:11px;margin-top:6px">Key 以本机随机密钥混淆后存储（不落明文）；切换配置立即作用于下一轮对话。</div>
-        <div class="muted" data-ac-result style="font-size:11px;margin-top:4px"></div>
+        <div class="muted" style="font-size: calc(11px * var(--fs));margin-top:6px">Key 以本机随机密钥混淆后存储（不落明文）；切换配置立即作用于下一轮对话。</div>
+        <div class="muted" data-ac-result style="font-size: calc(11px * var(--fs));margin-top:4px"></div>
       </div>
       <div class="agent-foot" style="gap:8px">
         <button class="btn" data-ac-test>测试连接</button>

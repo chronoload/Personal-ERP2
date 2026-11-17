@@ -26,9 +26,12 @@ public class WidgetPlugin extends Plugin {
       if (db != null) {
         db = mergeNativeTxs(db);
         db = mergeNativeDemands(db);
+        db = mergeNativeJournals(db);
         try {
-          org.json.JSONArray ids = new org.json.JSONObject(db).optJSONArray("native_txs");
-          hasNativeTx = ids != null && ids.length() > 0;
+          org.json.JSONObject o = new org.json.JSONObject(db);
+          org.json.JSONArray ids = o.optJSONArray("native_txs");
+          org.json.JSONArray jids = o.optJSONArray("native_journals");
+          hasNativeTx = (ids != null && ids.length() > 0) || (jids != null && jids.length() > 0);
         } catch (Exception ignored) {}
       }
       SharedPreferences sp = getContext().getSharedPreferences(WidgetKeys.PREFS_FILE, Context.MODE_PRIVATE);
@@ -135,6 +138,52 @@ public class WidgetPlugin extends Plugin {
       seq.put("dm", Math.max(seq.optInt("dm", 0), maxSeq));
     }
     js.put("native_demands", nativeIds);
+    return js.toString();
+  }
+
+  /**
+   * 把桌面弹窗改过的日记（native_journals）合并进 JS 推来的 db：
+   * 同 id 用原生版本覆盖（可能是改正文），缺失则补进去，并抬高 seq.j。
+   */
+  private String mergeNativeJournals(String jsDbStr) throws Exception {
+    org.json.JSONObject cur = WidgetStore.readDB(getContext());
+    if (cur == null) return jsDbStr;
+    org.json.JSONArray nativeIds = cur.optJSONArray("native_journals");
+    if (nativeIds == null || nativeIds.length() == 0) return jsDbStr;
+    org.json.JSONArray curList = cur.optJSONArray("journals");
+    if (curList == null) return jsDbStr;
+    org.json.JSONObject js = new org.json.JSONObject(jsDbStr);
+    org.json.JSONArray jsList = js.optJSONArray("journals");
+    if (jsList == null) { jsList = new org.json.JSONArray(); js.put("journals", jsList); }
+    int maxSeq = 0;
+    for (int i = 0; i < jsList.length(); i++) {
+      org.json.JSONObject j = jsList.optJSONObject(i);
+      if (j != null) maxSeq = Math.max(maxSeq, seqNum(j.optString("id")));
+    }
+    for (int i = 0; i < nativeIds.length(); i++) {
+      String id = nativeIds.optString(i);
+      if (id.isEmpty()) continue;
+      maxSeq = Math.max(maxSeq, seqNum(id));
+      org.json.JSONObject src = null;
+      for (int k = 0; k < curList.length(); k++) {
+        org.json.JSONObject j = curList.optJSONObject(k);
+        if (j != null && id.equals(j.optString("id"))) { src = j; break; }
+      }
+      if (src == null) continue;
+      int at = -1;
+      for (int k = 0; k < jsList.length(); k++) {
+        org.json.JSONObject j = jsList.optJSONObject(k);
+        if (j != null && id.equals(j.optString("id"))) { at = k; break; }
+      }
+      org.json.JSONObject copy = new org.json.JSONObject(src.toString());
+      if (at >= 0) jsList.put(at, copy);
+      else jsList.put(copy);
+    }
+    org.json.JSONObject seq = js.optJSONObject("seq");
+    if (seq == null) { seq = new org.json.JSONObject(); js.put("seq", seq); }
+    seq.put("j", Math.max(seq.optInt("j", 0), maxSeq));
+    // 保留标记：直到 JS 回读确认（pullFromNative 会删掉），否则任一次推送都会覆盖桌面改动
+    js.put("native_journals", nativeIds);
     return js.toString();
   }
 

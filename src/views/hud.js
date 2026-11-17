@@ -214,7 +214,7 @@ function openPlaceModal(existing) {
       </div>
       <div class="row-gap" style="margin-bottom:6px;align-items:center">
         <button type="button" class="btn sm" id="pl-locate">${icon('target')} 用当前位置</button>
-        <span id="pl-loc-hint" class="muted" style="font-size:12px"></span>
+        <span id="pl-loc-hint" class="muted" style="font-size: calc(12px * var(--fs))"></span>
       </div>
       <div class="field"><label>半径（米）</label><input id="pl-radius" inputmode="numeric" value="${esc(String(p.radius || 120))}"></div>
       <p class="muted">没有坐标的地点只能手动切换，不注册原生围栏。</p>`,

@@ -83,11 +83,13 @@ export const Widget = {
       const known = Number(localStorage.getItem(REV_KEY)) || 0;
       if (!r.db) return { changed: false };
       const db = JSON.parse(r.db);
-      // 原生还挂着未回读的流水时，即使 rev 没变也要拉：避免被本地旧库覆盖
+      // 原生还挂着未回读的流水 / 日记时，即使 rev 没变也要拉：避免被本地旧库覆盖
       const hasNativeTx = Array.isArray(db.native_txs) && db.native_txs.length > 0;
-      if (nativeRev <= known && !hasNativeTx) return { changed: false };
+      const hasNativeJournal = Array.isArray(db.native_journals) && db.native_journals.length > 0;
+      if (nativeRev <= known && !hasNativeTx && !hasNativeJournal) return { changed: false };
       delete db.native_txs; // 合并机制产物，JS 库不需要
       delete db.native_demands; // 同上：需求由桌面弹窗新增，回读后标记作废
+      delete db.native_journals; // 同上：日记由桌面弹窗编辑，回读后标记作废
       // 原生存的是上一次 push 的副本，可能不含最近的 Agent 会话；
       // 本地 agent 更新时保留本地，避免「关掉应用再回来对话全丢」。
       const latestMsg = (a) => (a && Array.isArray(a.messages)

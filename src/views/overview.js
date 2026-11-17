@@ -168,8 +168,8 @@ export function openActModal(editId, prePlanId, presetStart, presetMinutes, pres
         <div class="field"><label>地点约束（用于排班寻路与提醒门控）</label><select id="f-aplace">${placeOptsHTML()}</select></div>
         <div class="field"><label>专注类型（注意力预算）</label><select id="f-adepth">${depthOptsHTML()}</select></div>
       </div>
-      ${places.length ? '' : `<div class="muted" style="font-size:12px;margin:-2px 0 6px">尚无地点：可在「${icon('menu')} → ${icon('pin')} 地点」添加后再指定</div>`}
-      <div id="atomic-preview" class="muted" style="display:none;font-size:12px;margin:2px 0 4px"></div>
+      ${places.length ? '' : `<div class="muted" style="font-size: calc(12px * var(--fs));margin:-2px 0 6px">尚无地点：可在「${icon('menu')} → ${icon('pin')} 地点」添加后再指定</div>`}
+      <div id="atomic-preview" class="muted" style="display:none;font-size: calc(12px * var(--fs));margin:2px 0 4px"></div>
       <label class="chk" id="keep-conflict-row" style="display:none;margin:0 0 8px"><input type="checkbox" id="f-keepconflict"> 坚持此时间（与冲突活动捆绑，开始时仲裁先后）</label>
       <div class="grid2">
         <div class="field"><label>循环</label><select id="f-arepeat">
@@ -629,11 +629,11 @@ function activityCard(App, a) {
       </div>
       ${pendingFuture.length ? `
       <div class="kc-occ" style="margin:6px 0 0;padding-top:6px;border-top:1px dashed var(--border)">
-        <div class="kc-occ-head" onclick="event.stopPropagation();App.overview.toggleSeriesOccs('${jsStr(a.id)}')" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer;margin-bottom:4px">${icon('calendar')} 未来 ${pendingFuture.length} 期 <span class="collapse-btn">${occOpen ? icon('chevron-down') : icon('chevron-right')}</span></div>
+        <div class="kc-occ-head" onclick="event.stopPropagation();App.overview.toggleSeriesOccs('${jsStr(a.id)}')" style="display:flex;align-items:center;gap:6px;font-size: calc(11px * var(--fs));color:var(--muted);cursor:pointer;margin-bottom:4px">${icon('calendar')} 未来 ${pendingFuture.length} 期 <span class="collapse-btn">${occOpen ? icon('chevron-down') : icon('chevron-right')}</span></div>
         <div class="kc-occ-body" style="${occOpen ? '' : 'display:none'}">
           ${pendingFuture.map((o) => `
           <div class="kc-occ-row" style="display:flex;gap:6px;align-items:center;margin:2px 0">
-            <span class="grow" style="flex:1;font-size:11px">${icon('calendar')} ${esc(o.date)}</span>
+            <span class="grow" style="flex:1;font-size: calc(11px * var(--fs))">${icon('calendar')} ${esc(o.date)}</span>
             <button class="btn sm primary" title="完成该期并入账" onclick="event.stopPropagation();App.overview.completeOccurrence('${jsStr(a.id)}','${jsStr(o.date)}')">完成</button>
             <button class="btn sm" title="跳过该期" onclick="event.stopPropagation();App.overview.skipOccurrence('${jsStr(a.id)}','${jsStr(o.date)}')">跳过</button>
           </div>`).join('')}
@@ -1266,7 +1266,7 @@ export function openSchedulerBoard() {
       </details>` : '';
 
     return `
-      <div class="muted" style="font-size:12px;margin-bottom:8px">
+      <div class="muted" style="font-size: calc(12px * var(--fs));margin-bottom:8px">
         ${list.length} 条未指派时间${overdue.length ? ` · ${overdue.length} 条延期` : ''}${total ? ` · 未指派合计 ${total} 分钟` : ''}。
         这些都是已经规划、但还没落到具体时间上的活动。
       </div>

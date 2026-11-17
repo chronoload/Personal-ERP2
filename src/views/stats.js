@@ -72,8 +72,8 @@ export async function refreshLocalBackups() {
   box.innerHTML = list.slice(0, 12).map((b) => `
     <div class="tx-row" style="align-items:center">
       <div class="grow">
-        <div class="muted" style="font-size:12px">${icon('file')} ${esc(b.filename)}</div>
-        <div class="muted" style="font-size:11px">${b.exportedAt ? `${fmtDateTime(new Date(b.exportedAt).getTime())} · 网页端` : '安卓端 Documents/backups'}</div>
+        <div class="muted" style="font-size: calc(12px * var(--fs))">${icon('file')} ${esc(b.filename)}</div>
+        <div class="muted" style="font-size: calc(11px * var(--fs))">${b.exportedAt ? `${fmtDateTime(new Date(b.exportedAt).getTime())} · 网页端` : '安卓端 Documents/backups'}</div>
       </div>
       <button class="btn sm" onclick="App.stats.restoreLocalBackup('${jsStr(b.filename)}')">恢复</button>
     </div>`).join('');
@@ -217,7 +217,7 @@ function reportLabelText() {
 // 小指标块
 function statChips(items) {
   return `<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 8px">${items.map(([k, v]) =>
-    `<span><b style="font-size:16px">${v}</b> <span class="muted" style="font-size:11px">${k}</span></span>`).join('')}</div>`;
+    `<span><b style="font-size: calc(16px * var(--fs))">${v}</b> <span class="muted" style="font-size: calc(11px * var(--fs))">${k}</span></span>`).join('')}</div>`;
 }
 
 // 查看报告弹窗：按 Prefs.reportModules 决定展示哪些模块
@@ -231,7 +231,7 @@ export function openReport() {
       .map(([k, n]) => `${String(k).slice(5)}:${n}`).join(' ');
     body += `<div class="step-divider">${icon('note')} 活动汇总</div>
       ${statChips([['完成', r.activity.completed], ['开始', r.activity.started], ['失败', r.activity.failed], ['新增', r.activity.created]])}
-      ${dailies ? `<div class="muted" style="font-size:11px">每日完成：${esc(dailies)}</div>` : ''}`;
+      ${dailies ? `<div class="muted" style="font-size: calc(11px * var(--fs))">每日完成：${esc(dailies)}</div>` : ''}`;
   }
   if (enabled('ledger')) {
     const rows = r.ledger.rows.map((e) => `
@@ -239,7 +239,7 @@ export function openReport() {
         <span class="amount ${e.net < 0 ? 'neg' : 'pos'}">${e.net >= 0 ? '+' : ''}${fmtNum(e.net)}</span><span class="muted"> ${esc(e.unit)}</span></div>
         <div class="muted">流入 ${fmtNum(e.debit)} · 流出 ${fmtNum(e.credit)} · ${e.n} 笔</div></div></div>`).join('');
     body += `<div class="step-divider">${icon('chart')} 收支流水（${r.ledger.n} 笔）</div>
-      <div class="muted" style="font-size:11px;margin-bottom:6px">收入 ${fmtNum(r.ledger.incomeTotal)} · 支出 ${fmtNum(r.ledger.expenseTotal)}${r.ledger.revCount ? ` · 冲正 ${r.ledger.revCount}` : ''}</div>
+      <div class="muted" style="font-size: calc(11px * var(--fs));margin-bottom:6px">收入 ${fmtNum(r.ledger.incomeTotal)} · 支出 ${fmtNum(r.ledger.expenseTotal)}${r.ledger.revCount ? ` · 冲正 ${r.ledger.revCount}` : ''}</div>
       ${rows || '<div class="muted">本期无流水</div>'}`;
   }
   if (enabled('plan')) {
@@ -353,6 +353,7 @@ export function render(App, el) {
   const { db, engine } = App;
   const prefs = Prefs.load();
   const nightMode = prefs.nightTheme || 'auto';
+  const fontMode = prefs.uiFont || 'normal';
   const mods = prefs.reportModules || {};
   const lastBackupTs = Number(prefs.lastAutoBackup) || 0;
   const lastBackupLabel = lastBackupTs ? fmtDateTime(lastBackupTs) : '从未';
@@ -397,7 +398,7 @@ export function render(App, el) {
       <div class="trend-card">
         <div class="trend-head"><b>${esc(r.name)}</b><span class="amount ${b < 0 ? 'neg' : ''}">${fmtNum(b)} ${esc(r.unit)}</span></div>
         <div class="spark-wrap">${sparkline(series)}</div>
-        <div class="muted" style="font-size:11px">近 14 天余额趋势 · 初始 ${fmtNum(r.initial)}</div>
+        <div class="muted" style="font-size: calc(11px * var(--fs))">近 14 天余额趋势 · 初始 ${fmtNum(r.initial)}</div>
       </div>`;
   }).join('');
 
@@ -493,6 +494,16 @@ export function render(App, el) {
           <span class="muted">跟随系统时自动匹配设备深浅色</span>
         </div>
       </div>
+      <div style="margin-top:14px">
+        <div class="muted" style="margin-bottom:6px">界面字号</div>
+        <div class="row-gap" id="font-row">
+          <button class="btn sm ${fontMode === 'small' ? 'primary' : ''}" data-font="small">小</button>
+          <button class="btn sm ${fontMode === 'normal' ? 'primary' : ''}" data-font="normal">标准</button>
+          <button class="btn sm ${fontMode === 'large' ? 'primary' : ''}" data-font="large">大</button>
+          <button class="btn sm ${fontMode === 'xlarge' ? 'primary' : ''}" data-font="xlarge">特大</button>
+          <span class="muted">只放大文字，不改布局</span>
+        </div>
+      </div>
       <div style="margin-top:12px">
         <label class="chk"><input type="checkbox" id="rec-enable" ${prefs.smartRecommend !== false ? 'checked' : ''}> 智能推荐（按完成时间顺序与历史关联，推荐「一键新建」下一个活动，可随时关闭）</label>
       </div>
@@ -555,7 +566,7 @@ export function render(App, el) {
       </div>
       <div class="field"><label>预设内容</label><textarea id="ag-preset-text" rows="3"></textarea></div>
       <div class="field"><label>自定义指令（始终生效，≤2000 字）</label><textarea id="ag-extra" rows="3">${esc(String(prefs.agentInstructions || ''))}</textarea></div>
-      <div class="muted" style="font-size:11px;margin-bottom:6px">模型与 Key 在「模型配置」模态里管理，Key 以本机随机密钥混淆后存储，不落明文。</div>
+      <div class="muted" style="font-size: calc(11px * var(--fs));margin-bottom:6px">模型与 Key 在「模型配置」模态里管理，Key 以本机随机密钥混淆后存储，不落明文。</div>
       <button class="btn primary sm" id="ag-save">保存预设与指令</button>
     </div>
 
@@ -846,6 +857,19 @@ export function render(App, el) {
         App.applyNightTheme();
         nightRow.querySelectorAll('[data-night]').forEach((x) => x.classList.toggle('primary', x === b));
         toast(b.dataset.night === 'dark' ? '已切换为深色主题' : b.dataset.night === 'light' ? '已切换为浅色主题' : '已跟随系统深浅色', 'ok');
+      };
+    });
+  }
+
+  // 界面字号：四档倍率，立即作用于全应用（只改文字大小）
+  const fontRow = el.querySelector('#font-row');
+  if (fontRow) {
+    fontRow.querySelectorAll('[data-font]').forEach((b) => {
+      b.onclick = () => {
+        Prefs.set({ uiFont: b.dataset.font });
+        App.applyUiFont();
+        fontRow.querySelectorAll('[data-font]').forEach((x) => x.classList.toggle('primary', x === b));
+        toast(`${b.textContent}字号已生效`, 'ok');
       };
     });
   }

@@ -14,6 +14,7 @@ import { LockScreen } from './services/lockScreen.js';
 import { AppLaunch } from './services/appLaunch.js';
 import * as AgentRuntime from './services/agent/runtime.js';
 import { openAgent, openHistory as openAgentHistory, openConfig as openAgentConfig } from './ui/agentModal.js';
+import { mount as mountQuickCreate, sync as syncQuickCreate } from './ui/quickCreate.js';
 import { System } from './services/system.js';
 import { Notifications } from './services/notifications.js';
 import { Backup } from './services/backup.js';
@@ -251,6 +252,11 @@ const App = {
     if (window.__wsApplyTheme) { try { window.__wsApplyTheme(dark); } catch (e) { /* 忽略 */ } }
     if (window.__diaryApplyTheme) { try { window.__diaryApplyTheme(dark); } catch (e) { /* 忽略 */ } }
   },
+  // 界面字号：写入 <html data-ui-font>，由 app.css 的 --fs 倍率放大全部文字
+  applyUiFont() {
+    const mode = Prefs.load().uiFont || 'normal';
+    document.documentElement.dataset.uiFont = ['small', 'normal', 'large', 'xlarge'].includes(mode) ? mode : 'normal';
+  },
   // 刷新保留滚动位置，避免点击后页面跳顶/脱离焦点；不重放入场动画。
   // 置 forceRenderId：本次渲染强制重建当前 tab（数据刷新），其余 tab 容器保持不变缓存。
   refresh() {
@@ -295,8 +301,10 @@ const App = {
   },
   render(animate) {
     saveDB(this.db); // 每次变更后持久化（单机自包含）
+    syncQuickCreate(this); // 悬浮新建钮：引导页（无资源）时隐藏
     this.applyGlobalTheme();
     this.applyNightTheme();
+    this.applyUiFont();
     renderTopbar(this);
     const content = document.getElementById('content');
     content.classList.toggle('anim-in', !!animate);
@@ -375,6 +383,7 @@ function syncTopbarDock() {
 })();
 
 window.App = App;
+mountQuickCreate(App); // 右下角黄色悬浮钮：目标 / 计划 / 活动 / 需求
 AgentRuntime.init(App); // Agent 需要 App.db / App.refresh：在 App 装配完成后初始化
 App.openAgent = openAgent;
 App.openAgentHistory = openAgentHistory;

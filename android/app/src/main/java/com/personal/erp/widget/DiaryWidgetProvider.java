@@ -8,7 +8,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.widget.RemoteViews;
 
-import com.personal.erp.MainActivity;
 import com.personal.erp.R;
 
 import org.json.JSONArray;
@@ -74,11 +73,11 @@ public class DiaryWidgetProvider extends AppWidgetProvider {
     } else {
       String md = journalMd(db, key);
       if (md.trim().isEmpty()) {
-        rv.setTextViewText(R.id.widget_diary_body, offset == 0 ? "今天还没写，点一下开始 →" : "这天没有日记");
-        rv.setTextViewText(R.id.widget_diary_hint, "点按进入日记编辑");
+        rv.setTextViewText(R.id.widget_diary_body, offset == 0 ? "今天还没写，点一下写 →" : "这天没有日记");
+        rv.setTextViewText(R.id.widget_diary_hint, "点按直接编辑");
       } else {
         rv.setTextViewText(R.id.widget_diary_body, excerpt(md));
-        rv.setTextViewText(R.id.widget_diary_hint, "点按进入日记编辑");
+        rv.setTextViewText(R.id.widget_diary_hint, "点按直接编辑");
       }
     }
 
@@ -94,18 +93,25 @@ public class DiaryWidgetProvider extends AppWidgetProvider {
     rv.setOnClickPendingIntent(R.id.widget_diary_next, PendingIntent.getBroadcast(ctx, 7100 + widgetId, next,
         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 
-    // 点正文 → 打开 App 日记页，定位到这一天并聚焦编辑器
-    Intent open = new Intent(ctx, MainActivity.class);
-    open.putExtra("erp_tab", "diary");
-    open.putExtra("erp_diary_date", key);
-    open.putExtra("erp_diary_edit", true);
-    PendingIntent po = PendingIntent.getActivity(ctx, 7200 + widgetId, open,
+    // 点正文 → 桌面弹窗直接编辑这一天（不启动主界面）；写完由 App 回前台回读
+    Intent edit = new Intent(ctx, DiaryQuickEditActivity.class);
+    edit.putExtra("erp_diary_date", key);
+    PendingIntent pe = PendingIntent.getActivity(ctx, 7300 + widgetId, edit,
         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-    rv.setOnClickPendingIntent(R.id.widget_diary_body, po);
-    rv.setOnClickPendingIntent(R.id.widget_diary_hint, po);
-    rv.setOnClickPendingIntent(R.id.widget_diary_root, po);
+    rv.setOnClickPendingIntent(R.id.widget_diary_body, pe);
+    rv.setOnClickPendingIntent(R.id.widget_diary_hint, pe);
+    rv.setOnClickPendingIntent(R.id.widget_diary_root, pe);
 
     mgr.updateAppWidget(widgetId, rv);
+  }
+
+  /** 全部日记实例刷新（桌面编辑保存后立即回显） */
+  static void refreshAll(Context ctx) {
+    AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
+    int[] ids = mgr.getAppWidgetIds(new android.content.ComponentName(ctx, DiaryWidgetProvider.class));
+    for (int id : ids) {
+      try { updateOne(ctx, mgr, id); } catch (Exception ignored) {}
+    }
   }
 
   /** 这一天的日记正文（journals[].date 是不补零的 Y-M-D） */

@@ -241,6 +241,41 @@ function bind(el) {
   });
 }
 
+// 悬浮钮入口：弹窗直接记一条需求（先选来源），不跳页
+export function openAddDemand() {
+  const app = App || window.App;
+  if (!app) return;
+  const db = pools(app.db);
+  const users = db.requesters.slice().sort((a, b) => (a.created || 0) - (b.created || 0));
+  if (!users.length) { toast('还没有来源用户：先在「需求档案」新增一位', 'warn'); return; }
+  const m = openModal({
+    title: '记一条需求',
+    bodyHTML: `
+      <div class="field"><label>来源</label><select id="qd-user">
+        ${users.map((u) => `<option value="${esc(u.id)}">${esc(u.name || '未命名')}${u.role ? ` · ${esc(u.role)}` : ''}</option>`).join('')}
+      </select></div>
+      <div class="field"><label>他要什么</label><textarea id="qd-text" rows="3" placeholder="原话即可"></textarea></div>
+      <div class="field"><label>备注（可空）</label><input id="qd-note"></div>`,
+    footerHTML: '<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>记下</button>',
+  });
+  m.q('[data-cancel]').onclick = () => m.close();
+  m.q('[data-save]').onclick = () => {
+    const text = m.q('#qd-text').value.trim();
+    if (!text) return toast('先写下他要什么', 'warn');
+    db.demands.push({
+      id: nextId(db, 'dm', 'dm'),
+      requesterId: m.q('#qd-user').value,
+      text,
+      note: m.q('#qd-note').value.trim(),
+      status: 'open', kind: '', targetId: '', createdAt: Date.now(),
+    });
+    m.close();
+    app.refresh();
+    toast('已记下', 'ok');
+  };
+  setTimeout(() => { const t = m.q('#qd-text'); if (t) t.focus(); }, 40);
+}
+
 function userModal(u) {
   let chosenTheme = u && u.theme ? safeTheme(u.theme) : null;
   const m = openModal({
@@ -281,8 +316,8 @@ function admit(d) {
   const m = openModal({
     title: '这条需求入列成什么？',
     bodyHTML: `
-      <p class="muted" style="font-size:12px">原文：${esc(d.text)}</p>
-      <p class="muted" style="font-size:12px">只把标题和备注带过去；时间和层级在各自表单里再定。</p>`,
+      <p class="muted" style="font-size: calc(12px * var(--fs))">原文：${esc(d.text)}</p>
+      <p class="muted" style="font-size: calc(12px * var(--fs))">只把标题和备注带过去；时间和层级在各自表单里再定。</p>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn" data-goal>目标</button><button class="btn" data-plan>计划</button><button class="btn primary" data-act>活动</button>`,
   });
   m.q('[data-cancel]').onclick = () => m.close();

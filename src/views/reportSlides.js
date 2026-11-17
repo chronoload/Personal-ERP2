@@ -106,7 +106,7 @@ function slideOverview(r) {
     <div class="step-divider" style="margin-top:10px">排程健康</div>
     ${statChips([['冲突活动', sh.actsWithConflict, sh.actsWithConflict > 0], ['守约', sh.adheredActs],
       ['定时', sh.timedActs], ['弹性', sh.flexibleActs]])}
-    <div class="muted" style="font-size:12px;margin-top:6px">L1 智能简报 · 基于近一周/一期活动、流水与产出聚合。滑动或点按切换页签；桌面端纵向堆叠。</div>
+    <div class="muted" style="font-size: calc(12px * var(--fs));margin-top:6px">L1 智能简报 · 基于近一周/一期活动、流水与产出聚合。滑动或点按切换页签；桌面端纵向堆叠。</div>
   `;
 }
 function slideActDetail(r) {
@@ -117,7 +117,7 @@ function slideActDetail(r) {
         ${a.conflictCount > 0 ? '<span class="badge b-red">冲突' + a.conflictCount + '</span>' : ''}
         ${a.failed ? `<span class="badge b-red">重试 ${a.retryCount}</span>` : ''}
       </div>
-      <div class="muted" style="font-size:11px">
+      <div class="muted" style="font-size: calc(11px * var(--fs))">
         计划 ${dur(a.planned_minutes)} · 实际 ${dur(a.actual_minutes)} · ${biasText(a.biasRatio)}${a.biasRatio != null ? `（${pct(a.biasRatio)}）` : ''}
         ${a.goal_count ? ` · 目标 ${a.goal_count}` : ''} · 产出 ${a.outputCount} · 价值流 ${a.vfYield}
       </div>
@@ -147,7 +147,7 @@ function slideValueYield(r) {
     <div class="step-divider">④ 价值产出</div>
     ${statChips([['目标数', r.valueYield.byGoal.length], ['总产出', r.valueYield.byGoal.reduce((s, g) => s + g.outputCount, 0)],
       ['总价值流', r.valueYield.byGoal.reduce((s, g) => s + g.vfCount, 0)], ['平均密度', over.toFixed(3)]])}
-    <div class="muted" style="font-size:12px;margin-bottom:4px">按目标聚合（产出 / 价值流 / 投入）</div>
+    <div class="muted" style="font-size: calc(12px * var(--fs));margin-bottom:4px">按目标聚合（产出 / 价值流 / 投入）</div>
     ${gRows || empty('本期无可结束投入的目标')}
   `;
 }
@@ -160,7 +160,7 @@ function slideSchedHealth(r) {
       ['守约活动', sh.adheredActs], ['定时', sh.timedActs], ['弹性', sh.flexibleActs]])}
     ${hbarRow('定时占比', `${sh.timedActs}/${total}`, sh.timedActs / total)}
     ${hbarRow('守约占比', `${sh.adheredActs}/${sh.timedActs || 1}`, sh.timedActs ? sh.adheredActs / sh.timedActs : 0, { danger: sh.timedActs > 0 && sh.adheredActs / sh.timedActs < 0.6 })}
-    <div class="muted" style="font-size:12px;margin-top:6px">冲突越多、守约占比越低 → L3 排程引擎的学习信号越强。</div>
+    <div class="muted" style="font-size: calc(12px * var(--fs));margin-top:6px">冲突越多、守约占比越低 → L3 排程引擎的学习信号越强。</div>
   `;
 }
 function slideBudgetTrend(r) {
@@ -173,7 +173,7 @@ function slideBudgetTrend(r) {
     p.budget ? p.spend / p.budget : 0, { danger: p.overspend })).join('');
   return `
     <div class="step-divider">⑥ 预算 / 资源趋势</div>
-    <div class="muted" style="font-size:12px;margin-bottom:4px">资源：期初 → 期末 · 净变化 · 回充占比</div>
+    <div class="muted" style="font-size: calc(12px * var(--fs));margin-bottom:4px">资源：期初 → 期末 · 净变化 · 回充占比</div>
     ${resRows || empty('本期无资源变动')}
     <div class="step-divider" style="margin-top:10px">计划预算</div>
     ${planRows || empty('本期无计划投入')}
@@ -202,7 +202,7 @@ export function openSlidesReport() {
           .join('')}
       </div>
     </div>
-    <div class="muted" style="font-size:12px;margin-top:8px">智能简报 · ${esc(label)} · 数据去身份聚合（不显示原始流水/余额数字债务人）</div>
+    <div class="muted" style="font-size: calc(12px * var(--fs));margin-top:8px">智能简报 · ${esc(label)} · 数据去身份聚合（不显示原始流水/余额数字债务人）</div>
   `;
 
   const m = openModal({

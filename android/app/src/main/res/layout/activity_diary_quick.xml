@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面直接编辑日记：Dialog 弹窗，不进入主程序 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/dqe_date"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="今天"
+        android:textColor="#1F2430"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/dqe_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="直接写 Markdown，保存后同步到应用日记页。"
+        android:textColor="#8A93A3"
+        android:textSize="11sp" />
+
+    <EditText
+        android:id="@+id/dqe_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="top"
+        android:hint="今天发生了什么"
+        android:inputType="textMultiLine|textCapSentences"
+        android:minLines="6"
+        android:maxLines="14"
+        android:lineSpacingExtra="2dp"
+        android:textColor="#1F2430" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/dqe_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="取消" />
+
+        <Button
+            android:id="@+id/dqe_save"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="保存" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -201,9 +201,9 @@ export function openPlanModal(goalId, editId, opts = {}) {
       </div>
       <div class="field"><label>预算 价值元（留空 = 无限 ∞，19BC 混合预算）</label><input id="f-pbudget" type="number" min="0" value="${Number.isFinite(p?.budget) ? p.budget : ''}" placeholder="∞"></div>
       <div class="step-divider">默认预设收支（该计划下新建活动自动继承，可空 · 多资源）</div>
-      <div style="font-size:12px;font-weight:700;color:#3f4753">默认支出<button type="button" class="btn sm" id="pd-e-add" style="float:right">${icon('plus')} 添加</button></div>
+      <div style="font-size: calc(12px * var(--fs));font-weight:700;color:#3f4753">默认支出<button type="button" class="btn sm" id="pd-e-add" style="float:right">${icon('plus')} 添加</button></div>
       <div id="pd-e-rows">${defPE.map((x) => defRowHTML(x)).join('')}</div>
-      <div style="font-size:12px;font-weight:700;color:#3f4753;margin-top:6px">默认收入<button type="button" class="btn sm" id="pd-i-add" style="float:right">${icon('plus')} 添加</button></div>
+      <div style="font-size: calc(12px * var(--fs));font-weight:700;color:#3f4753;margin-top:6px">默认收入<button type="button" class="btn sm" id="pd-i-add" style="float:right">${icon('plus')} 添加</button></div>
       <div id="pd-i-rows">${defPI.map((x) => defRowHTML(x)).join('')}</div>`,
     footerHTML: `<button class="btn" data-cancel>取消</button><button class="btn primary" data-save>保存</button>`,
   });
