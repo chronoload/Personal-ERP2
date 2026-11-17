@@ -507,6 +507,9 @@ export function render(App, el) {
       <div style="margin-top:12px">
         <label class="chk"><input type="checkbox" id="rec-enable" ${prefs.smartRecommend !== false ? 'checked' : ''}> 智能推荐（按完成时间顺序与历史关联，推荐「一键新建」下一个活动，可随时关闭）</label>
       </div>
+      <div style="margin-top:10px">
+        <label class="chk"><input type="checkbox" id="step-create" ${prefs.stepCreate ? 'checked' : ''}> 分步新建（目标 / 计划 / 活动：一次只填一个属性，逐步前进）</label>
+      </div>
     </div>
 
     <div class="card">
@@ -899,5 +902,12 @@ export function render(App, el) {
   if (recEnable) recEnable.addEventListener('change', () => {
     Prefs.set({ smartRecommend: recEnable.checked });
     toast(recEnable.checked ? '已开启智能推荐' : '已关闭智能推荐', 'ok');
+  });
+
+  // 分步新建开关：目标 / 计划 / 活动的「新建」改为一步一属性向导
+  const stepMode = el.querySelector('#step-create');
+  if (stepMode) stepMode.addEventListener('change', () => {
+    Prefs.set({ stepCreate: stepMode.checked });
+    toast(stepMode.checked ? '已开启分步新建' : '已关闭分步新建，恢复一页表单', 'ok');
   });
 }

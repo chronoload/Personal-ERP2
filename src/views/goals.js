@@ -8,6 +8,7 @@ import { icon } from '../ui/icons.js';
 import { PLAN_COLORS } from '../domain/engine.js';
 import { Prefs } from '../store/prefs.js';
 import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone, safeTheme } from '../ui/themes.js';
+import { openStepWizard } from '../ui/stepWizard.js';
 
 // 折叠状态（目标/计划可收起展开，跨会话记忆）
 const collapsedGoals = new Set(Prefs.load().collapsedGoals || []);
@@ -108,8 +109,150 @@ export function openGoalMenu(gid) {
     setGoalStatus(gid, next);
   };
 }
+/** 分步新建目标：名称 → 描述 → 颜色（设置里可开关） */
+export function openGoalWizard(opts = {}) {
+  const st = { title: opts.title || '', desc: opts.desc || '', color: null };
+  const colorHTML = () => `<div class="color-row" id="wz-gcolors">
+      <button type="button" class="swatch ${st.color ? '' : 'on'}" data-c="" title="不染色" style="background:#fff"></button>
+      ${PLAN_COLORS.map((c) => `<button type="button" class="swatch ${st.color === c ? 'on' : ''}" data-c="${c}" style="background:${c}"></button>`).join('')}
+    </div>`;
+  const bindColor = (root) => {
+    root.querySelectorAll('.swatch').forEach((s) => {
+      s.onclick = () => {
+        root.querySelectorAll('.swatch').forEach((x) => x.classList.remove('on'));
+        s.classList.add('on');
+      };
+    });
+  };
+  openStepWizard({
+    title: '新建目标',
+    kind: 'goal',
+    steps: [
+      {
+        label: '目标名称', desc: '一个长期方向，一句话说清。',
+        html: () => `<input class="wiz-input" id="wz-gname" value="${esc(st.title)}" placeholder="例：写一本书">`,
+        read: (root) => {
+          st.title = root.querySelector('#wz-gname').value.trim();
+          if (!st.title) { toast('先写下目标名称', 'warn'); return false; }
+          return true;
+        },
+      },
+      {
+        label: '描述', desc: '它具体意味着什么？可留空。',
+        html: () => `<input class="wiz-input" id="wz-gdesc" value="${esc(st.desc)}" placeholder="例：一年内完成 12 万字">`,
+        read: (root) => { st.desc = root.querySelector('#wz-gdesc').value.trim(); return true; },
+      },
+      {
+        label: '目标颜色', desc: '会作为下属计划与任务卡片的默认识别色。',
+        html: colorHTML, bind: bindColor,
+        read: (root) => {
+          const on = root.querySelector('.swatch.on');
+          st.color = on ? (on.dataset.c || null) : null;
+          return true;
+        },
+      },
+    ],
+    finishLabel: '创建目标',
+    onFinish: () => {
+      const r = App.engine.createGoal(App.db, { title: st.title, desc: st.desc, color: st.color, theme: null });
+      if (!r.ok) { toast(r.error, 'err'); return false; }
+      const saved = App.db.goals[App.db.goals.length - 1];
+      App.refresh();
+      if (opts.onSaved) opts.onSaved(saved);
+      toast(`已创建目标「${saved.title}」`, 'ok');
+      return true;
+    },
+  });
+}
+
+/** 分步新建计划：所属目标 → 名称 → 预算 → 颜色（设置里可开关） */
+export function openPlanWizard(goalId, opts = {}) {
+  const goals = App.db.goals || [];
+  if (!goals.length) {
+    toast('计划要挂在目标下：先建一个目标', 'warn');
+    openGoalWizard({ onSaved: (g) => openPlanWizard(g && g.id, opts) });
+    return;
+  }
+  const firstId = goalId || goals[0].id;
+  const st = {
+    goal_id: firstId,
+    title: opts.title || '',
+    budget: null,
+    color: safeColor((goals.find((g) => g.id === firstId) || {}).color) || PLAN_COLORS[0],
+  };
+  const colorHTML = () => `<div class="color-row" id="wz-pcolors">
+      ${PLAN_COLORS.map((c) => `<button type="button" class="swatch ${st.color === c ? 'on' : ''}" data-c="${c}" style="background:${c}"></button>`).join('')}
+    </div>`;
+  const bindColor = (root) => {
+    root.querySelectorAll('.swatch').forEach((s) => {
+      s.onclick = () => {
+        root.querySelectorAll('.swatch').forEach((x) => x.classList.remove('on'));
+        s.classList.add('on');
+      };
+    });
+  };
+  openStepWizard({
+    title: '新建计划',
+    kind: 'plan',
+    steps: [
+      {
+        label: '所属目标', desc: '计划必须挂在一个目标下。',
+        html: () => `<select class="wiz-input" id="wz-pgoal">
+          ${goals.map((g) => `<option value="${esc(g.id)}" ${g.id === st.goal_id ? 'selected' : ''}>${esc(g.title)}</option>`).join('')}
+        </select>`,
+        read: (root) => { st.goal_id = root.querySelector('#wz-pgoal').value; return true; },
+      },
+      {
+        label: '计划名称', desc: '中期抓手，比目标具体、比活动抽象。',
+        html: () => `<input class="wiz-input" id="wz-pname" value="${esc(st.title)}" placeholder="例：每天写 2000 字">`,
+        read: (root) => {
+          st.title = root.querySelector('#wz-pname').value.trim();
+          if (!st.title) { toast('先写下计划名称', 'warn'); return false; }
+          return true;
+        },
+      },
+      {
+        label: '预算', desc: '留空表示不设上限（∞）。',
+        html: () => `<input class="wiz-input" type="number" min="0" id="wz-pbudget" placeholder="∞">`,
+        read: (root) => {
+          const raw = root.querySelector('#wz-pbudget').value.trim();
+          if (raw === '') { st.budget = null; return true; }
+          const n = Number(raw);
+          if (!(n >= 0)) { toast('预算必须 ≥ 0，或留空', 'warn'); return false; }
+          st.budget = n;
+          return true;
+        },
+      },
+      {
+        label: '计划颜色', desc: '按计划染色任务卡片。',
+        html: colorHTML, bind: bindColor,
+        read: (root) => {
+          const on = root.querySelector('.swatch.on');
+          st.color = on ? (on.dataset.c || null) : null;
+          return true;
+        },
+      },
+    ],
+    finishLabel: '创建计划',
+    onFinish: () => {
+      const r = App.engine.createPlan(App.db, {
+        goal_id: st.goal_id, title: st.title, budget: st.budget, color: st.color,
+        default_expenses: [], default_incomes: [],
+      });
+      if (!r.ok) { toast(r.error, 'err'); return false; }
+      const saved = App.db.plans[App.db.plans.length - 1];
+      App.refresh();
+      if (opts.onSaved) opts.onSaved(saved);
+      toast(`已创建计划「${saved.title}」`, 'ok');
+      return true;
+    },
+  });
+}
+
 export function openGoalModal(editId, opts = {}) {
   const g = editId ? App.db.goals.find((x) => x.id === editId) : null;
+  // 分步新建：新建走向导；编辑仍用完整表单
+  if (!g && Prefs.load().stepCreate) { openGoalWizard(opts); return; }
   let chosenColor = safeColor(g?.color) || null;
   let chosenTheme = g && g.theme ? safeTheme(g.theme) : null;
   const m = openModal({
@@ -173,6 +316,8 @@ export async function delGoal(id) {
 
 export function openPlanModal(goalId, editId, opts = {}) {
   const p = editId ? App.db.plans.find((x) => x.id === editId) : null;
+  // 分步新建：新建走向导；编辑仍用完整表单
+  if (!p && Prefs.load().stepCreate) { openPlanWizard(goalId, opts); return; }
   const goalOpts = App.db.goals.map((g) =>
     `<option value="${g.id}" ${g.id === (p ? p.goal_id : goalId) ? 'selected' : ''}>${esc(g.title)}</option>`).join('');
   // 计划色优先级：已有计划色 > 所属目标色 > 默认色（目标染色即「这个目标下的活」的统一识别色）

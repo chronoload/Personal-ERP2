@@ -13,6 +13,7 @@ const DEFAULTS = {
   nightTheme: 'auto', // 界面夜间模式：auto 跟随系统 / light 浅色 / dark 深色
   uiFont: 'normal', // 界面字号倍率：small / normal / large / xlarge（只放大文字）
   smartRecommend: true, // L3 智能推荐开关：按历史习惯推荐「一键新建」新活动（可彻底关闭）
+  stepCreate: false, // 分步新建：目标 / 计划 / 活动一次只填一个属性（向导式）
   topbarMode: 'full', // 上部整体布局：full 完整顶栏 / compact 顶栏紧凑(仅图标) / left 左侧边栏 / right 右侧边栏 / hidden 完全收起
   homeTodayWidget: true, // 开屏首页 · 今日日程大片开关（安卓原生卡片读它）
   lockScreenToday: false, // 锁屏常驻通知 + 开屏页开关（默认关，需用户主动打开）

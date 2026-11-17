@@ -10,6 +10,7 @@ import * as calendar from './calendar.js';
 import { Prefs } from '../store/prefs.js';
 import { themeStyle, themePickerHTML, bindThemePicker, readImageAsDataURL, themeTone, sampleImageTone, safeTheme } from '../ui/themes.js';
 import { defaultStartPrefill } from '../domain/schedule.js';
+import { openStepWizard } from '../ui/stepWizard.js';
 
 // 批量排程入口：re-export 后自动挂到 App.overview.openBatchCreate
 export { openBatchCreate } from './batchCreate.js';
@@ -77,11 +78,137 @@ function safeColor(c) {
 
 
 
+/** 分步新建活动：一次只填一个属性（设置里可开关） */
+export function openActWizard(opts = {}) {
+  const { db, engine } = App;
+  const prefs = Prefs.load();
+  const srcPlan = opts.prePlanId ? db.plans.find((p) => p.id === opts.prePlanId) : null;
+  const st = {
+    title: opts.presetTitle || (srcPlan ? suggestTitle(srcPlan.title) : ''),
+    planIds: opts.prePlanId ? [opts.prePlanId] : [],
+    start: opts.presetStart || defaultStartPrefill(Date.now()),
+    minutes: opts.presetMinutes ?? prefs.lastMinutes ?? 60,
+    repeat: prefs.lastRepeat ?? '',
+    place_id: '',
+    depth: 'auto',
+    note: '',
+  };
+  const places = db.places || [];
+  const plans = db.plans || [];
+
+  const steps = [
+    {
+      label: '活动名称', desc: '这次要做的具体一件事。',
+      html: () => `<input class="wiz-input" id="wz-title" value="${esc(st.title)}" placeholder="例：写 2000 字章节 1">`,
+      read: (root) => {
+        st.title = root.querySelector('#wz-title').value.trim();
+        if (!st.title) { toast('先写下活动名称', 'warn'); return false; }
+        return true;
+      },
+    },
+    {
+      label: '关联计划', desc: '可多选；不选也行，活动可以独立存在。',
+      html: () => (plans.length
+        ? `<div class="chk-group">${plans.map((p) => `<label class="chk"><input type="checkbox" value="${esc(p.id)}" ${st.planIds.includes(p.id) ? 'checked' : ''}> ${esc(p.title)}</label>`).join('')}</div>`
+        : '<div class="muted">还没有计划，可跳过</div>'),
+      read: (root) => {
+        st.planIds = [...root.querySelectorAll('input[type=checkbox]:checked')].map((e) => e.value);
+        return true;
+      },
+    },
+    {
+      label: '计划开始时间', desc: '钟点级排程；不确定就留空，之后在日历里再排。',
+      html: () => `<input class="wiz-input" type="datetime-local" id="wz-start" value="${esc(st.start || '')}">`,
+      read: (root) => {
+        const v = root.querySelector('#wz-start').value;
+        st.start = v || '';
+        if (v && isNaN(new Date(v).getTime())) { toast('时间格式无法识别', 'warn'); return false; }
+        return true;
+      },
+    },
+    {
+      label: '计划投入', desc: '预计花多少分钟？',
+      html: () => `<input class="wiz-input" type="number" min="0" id="wz-min" value="${esc(st.minutes)}">`,
+      read: (root) => {
+        st.minutes = Math.max(0, Number(root.querySelector('#wz-min').value) || 0);
+        return true;
+      },
+    },
+    {
+      label: '循环', desc: '重复的事可以设成循环；一次性任务选「不循环」。',
+      html: () => `<select class="wiz-input" id="wz-repeat">
+        ${[['', '不循环'], ['daily', '每天'], ['weekday', '工作日'], ['weekly', '每周'], ['monthly', '每月']]
+    .map(([v, l]) => `<option value="${v}" ${st.repeat === v ? 'selected' : ''}>${l}</option>`).join('')}
+      </select>`,
+      read: (root) => { st.repeat = root.querySelector('#wz-repeat').value; return true; },
+    },
+    ...(places.length ? [{
+      label: '地点约束', desc: '用于排班寻路与到点提醒；不确定就选「任何地点」。',
+      html: () => `<select class="wiz-input" id="wz-place">
+        <option value="">任何地点</option>
+        ${places.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
+      </select>`,
+      read: (root) => { st.place_id = root.querySelector('#wz-place').value; return true; },
+    }] : []),
+    {
+      label: '专注类型', desc: '深度专注会占用当天的注意力预算。',
+      html: () => `<select class="wiz-input" id="wz-depth">
+        ${[['auto', '自动（≥45 分钟算深度）'], ['deep', '深度专注'], ['shallow', '浅层事务']]
+    .map(([v, l]) => `<option value="${v}" ${st.depth === v ? 'selected' : ''}>${l}</option>`).join('')}
+      </select>`,
+      read: (root) => { st.depth = root.querySelector('#wz-depth').value; return true; },
+    },
+    {
+      label: '备注', desc: '最后一项：有什么要提醒自己的？可留空直接创建。',
+      html: () => `<input class="wiz-input" id="wz-note" value="${esc(st.note)}" placeholder="例：卡在第二章，注意节奏">`,
+      read: (root) => { st.note = root.querySelector('#wz-note').value.trim(); return true; },
+    },
+  ];
+
+  openStepWizard({
+    title: '新建活动',
+    kind: 'activity',
+    steps,
+    finishLabel: '创建活动',
+    onFinish: () => {
+      const payload = {
+        title: st.title, note: st.note, plan_ids: st.planIds,
+        planned_start: st.start || null,
+        planned_minutes: st.minutes,
+        repeat: st.repeat || null,
+        repeat_until: null,
+        theme: null,
+        keep_conflict: false,
+        preset_expenses: [],
+        preset_incomes: [],
+        place_id: st.place_id || null,
+        depth: st.depth === 'deep' ? true : (st.depth === 'shallow' ? false : null),
+      };
+      const r = engine.createActivity(db, payload);
+      if (!r.ok) { toast(r.error, 'err'); return false; }
+      Prefs.set({ lastMinutes: Number(payload.planned_minutes) || 0, lastRepeat: payload.repeat || '' });
+      const saved = db.activities[db.activities.length - 1];
+      App.refresh();
+      if (opts.onSaved) opts.onSaved(saved);
+      else if (r.spawned) toast(`已按循环生成 ${r.spawned} 期后续活动（各期独立管理）`, 'ok');
+      else if (r.shifted) toast(`⏩ 时段冲突，已自动顺延至 ${(r.to || '').replace('T', ' ')}`, 'ok');
+      else if (r.bundled) toast('⚠ 已保留时间重叠并与冲突活动捆绑，开始时将仲裁先后', 'ok');
+      else toast(`已创建「${saved.title}」`, 'ok');
+      return true;
+    },
+  });
+}
+
 // ---------------- 活动：新建 / 编辑 / 完成弹窗 ----------------
 // prePlanId：从「目标与计划」Tab 进来时预选该计划；presetStart：日历快捷新建预填该日
 export function openActModal(editId, prePlanId, presetStart, presetMinutes, presetTitle, opts = {}) {
   const { db, engine } = App;
   const a = editId ? db.activities.find((x) => x.id === editId) : null;
+  // 分步新建：新建活动走向导；编辑仍用完整表单
+  if (!a && Prefs.load().stepCreate) {
+    openActWizard({ prePlanId, presetStart, presetMinutes, presetTitle, onSaved: opts.onSaved });
+    return;
+  }
   const selected = new Set(a ? a.plan_ids : (prePlanId ? [prePlanId] : []));
   // 语境预填：新建时默认今天/上次用时/上次循环；从计划进来推导标题建议
   const prefs = Prefs.load();
