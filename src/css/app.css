@@ -1457,14 +1457,55 @@ html[data-theme="dark"] .tpl-file { background: #1b2130; }
   color: var(--blue); font-size: 11px; text-decoration: underline;
 }
 .agent-input {
-  display: flex; gap: 8px; padding: 10px 12px;
-  border-top: 1px solid var(--border); align-items: flex-end;
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
+  border-top: 1px solid var(--border);
 }
+.agent-input-row { display: flex; gap: 8px; align-items: flex-end; }
 .agent-input textarea {
   flex: 1; resize: none; min-height: 40px; max-height: 120px;
   padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
   background: var(--bg); color: var(--text);
 }
+.agent-clip {
+  width: 34px; height: 34px; padding: 0; line-height: 1;
+  font-size: 16px; border-radius: 10px; flex: none;
+}
+/* 待发附件：图片缩略图 + 文件名；为空时整条隐藏 */
+.agent-atts { display: none; gap: 8px; flex-wrap: wrap; }
+.agent-atts.show { display: flex; }
+.agent-att {
+  position: relative; display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+  padding: 2px;
+}
+.agent-att img { width: 52px; height: 52px; object-fit: cover; border-radius: 6px; display: block; }
+.agent-att.file { padding: 5px 8px; max-width: 220px; }
+.agent-att.file b { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-att.file i { font-size: 10px; color: var(--muted); font-style: normal; flex: none; }
+.agent-att button {
+  position: absolute; top: -5px; right: -5px; width: 16px; height: 16px;
+  border: 0; border-radius: 50%; background: rgba(16, 24, 40, .72); color: #fff;
+  font-size: 9px; line-height: 1; cursor: pointer; padding: 0;
+}
+.agent-att.file button { position: static; margin-left: 2px; background: none; color: var(--muted); font-size: 11px; }
+/* 消息里的图片与文件 */
+.agent-shots { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.agent-shot {
+  max-width: 100%; max-height: 160px; border-radius: 8px; display: block;
+  cursor: zoom-in; border: 1px solid rgba(255, 255, 255, .25);
+}
+.agent-fchips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.agent-fchip {
+  font-size: 11px; padding: 2px 6px; border-radius: 6px;
+  background: rgba(255, 255, 255, .18); border: 1px solid rgba(255, 255, 255, .28);
+}
+.agent-fchip i { font-style: normal; opacity: .75; margin-left: 4px; }
+.agent-imgmask {
+  position: fixed; inset: 0; z-index: 96; background: rgba(0, 0, 0, .82);
+  display: flex; align-items: center; justify-content: center; cursor: zoom-out;
+}
+.agent-imgmask img { max-width: 92vw; max-height: 90vh; border-radius: 8px; }
+.agent-panel.agent-drop { outline: 2px dashed var(--primary); outline-offset: -6px; }
 .agent-approval-mask {
   position: fixed; inset: 0; z-index: 95;
   display: flex; align-items: center; justify-content: center;

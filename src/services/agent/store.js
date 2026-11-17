@@ -12,6 +12,8 @@ export const AGENT_DEFAULTS = {
   model: '',
   temperature: 0.3,
   maxTurns: 8,
+  thinking: 'auto',   // auto = 不传，交给服务端默认（DeepSeek 默认开启）；on / off 显式开关
+  effort: 'high',     // low / high / max（DeepSeek reasoning_effort）
   rememberJournal: true,
   hidden: false,
 };
@@ -38,6 +40,8 @@ function normalizeProfile(p) {
     model: String(p.model || '').trim(),
     temperature: Number.isFinite(Number(p.temperature)) ? Number(p.temperature) : AGENT_DEFAULTS.temperature,
     maxTurns: Number(p.maxTurns) > 0 ? Number(p.maxTurns) : AGENT_DEFAULTS.maxTurns,
+    thinking: ['auto', 'on', 'off'].includes(p.thinking) ? p.thinking : AGENT_DEFAULTS.thinking,
+    effort: ['low', 'high', 'max'].includes(p.effort) ? p.effort : AGENT_DEFAULTS.effort,
   };
 }
 
@@ -117,6 +121,8 @@ export function agentCfg() {
     model: pr.model,
     temperature: pr.temperature,
     maxTurns: pr.maxTurns,
+    thinking: pr.thinking,
+    effort: pr.effort,
     rememberJournal: p.agentRememberJournal !== false,
     hidden: !!p.agentHidden,
   };

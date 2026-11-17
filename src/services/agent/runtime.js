@@ -74,18 +74,20 @@ export function currentSession() {
   return sessionId ? getSession(AppRef.db, sessionId) : null;
 }
 
-/** 发一条用户消息并跑一轮 */
-export async function send(text) {
+/** 发一条用户消息并跑一轮；attachments 见 services/agent/attach.js */
+export async function send(text, attachments) {
   const content = String(text || '').trim();
-  if (!content || running) return { ok: false };
+  const atts = (Array.isArray(attachments) ? attachments : []).filter(Boolean);
+  if ((!content && !atts.length) || running) return { ok: false };
   if (!isConfigured()) {
     emit('need-config', {});
     return { ok: false, error: '未配置模型' };
   }
-  if (!sessionId || !getSession(AppRef.db, sessionId)) startNewSession(content.slice(0, 18));
+  const title = content || (atts[0] && atts[0].name) || '新对话';
+  if (!sessionId || !getSession(AppRef.db, sessionId)) startNewSession(title.slice(0, 18));
   const s = currentSession();
-  if (s && (!s.title || s.title === '新对话')) updateSession(AppRef.db, sessionId, { title: content.slice(0, 18) });
-  addMessage(AppRef.db, sessionId, { role: 'user', content });
+  if (s && (!s.title || s.title === '新对话')) updateSession(AppRef.db, sessionId, { title: title.slice(0, 18) });
+  addMessage(AppRef.db, sessionId, { role: 'user', content, meta: atts.length ? { attachments: atts } : null });
   saveDB(AppRef.db);
   emit('message', { sessionId });
   runLoop();
@@ -135,7 +137,10 @@ async function runLoop() {
       if (abortFlag) break;
 
       if (res.content) {
-        addMessage(db, sid, { role: 'assistant', content: res.content });
+        addMessage(db, sid, {
+          role: 'assistant', content: res.content,
+          meta: res.reasoning ? { reasoning: res.reasoning } : null,
+        });
         emit('message', { sessionId: sid });
         if (/已(经)?(删除|修改|改动)/.test(res.content)) {
           emit('notice', { level: 'warn', text: '模型声称已删除/修改，但本应用只支持追加，请勿相信该描述。' });
@@ -153,6 +158,8 @@ async function runLoop() {
       convo.push({
         role: 'assistant',
         content: res.content || null,
+        // 带 tools 时 DeepSeek 要求完整回传思维链，缺失会 400
+        ...(res.reasoning ? { reasoning_content: res.reasoning } : {}),
         tool_calls: res.toolCalls.map((c) => ({
           id: c.id, type: 'function',
           function: { name: c.name, arguments: JSON.stringify(c.args || {}) },

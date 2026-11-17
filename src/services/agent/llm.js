@@ -33,11 +33,22 @@ export function isOpencode(baseUrl) {
   return !!opencodeRoot(baseUrl);
 }
 
+/** 是否 DeepSeek 官方接口：思考模式 / reasoning_content 只对它启用 */
+export function isDeepSeek(baseUrl) {
+  return /^https?:\/\/api\.deepseek\.com(\/|$)/i.test(String(baseUrl || '').trim());
+}
+
 /** 配置页的服务商预设 */
 export const PROVIDER_PRESETS = [
   { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com' },
   { label: 'OpenCode Go', baseUrl: 'https://opencode.ai/inference/go' },
   { label: 'OpenCode Zen（按量）', baseUrl: 'https://opencode.ai/inference' },
+];
+
+/** DeepSeek 全家桶的模型：flash 多模态，v4-pro 纯文本 */
+export const DEEPSEEK_MODELS = [
+  { id: 'deepseek-flash', label: 'DeepSeek-V4.1-Flash（多模态 / 默认）' },
+  { id: 'deepseek-v4-pro', label: 'DeepSeek-V4-Pro（纯文本）' },
 ];
 
 /** 当前 baseUrl 命中哪个预设（含旧写法归一），未命中返回空串 */
@@ -132,7 +143,12 @@ async function once(url, headers, body) {
     e.status = 200;
     throw e;
   }
-  return { content: String(msg.content || ''), toolCalls: normToolCalls(msg.tool_calls) };
+  return {
+    content: String(msg.content || ''),
+    toolCalls: normToolCalls(msg.tool_calls),
+    // DeepSeek 思考模式：带 tools 时后续请求必须完整回传，否则 400
+    reasoning: String(msg.reasoning_content || ''),
+  };
 }
 
 export async function chat(cfg, messages, tools, { retries = 2, sessionId = '' } = {}) {
@@ -146,6 +162,13 @@ export async function chat(cfg, messages, tools, { retries = 2, sessionId = '' }
     stream: false,
   };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
+  // DeepSeek：思考模式默认开启（effort=high），显式传参才能关掉或调强度
+  if (isDeepSeek(cfg.baseUrl)) {
+    if (cfg.thinking === 'on' || cfg.thinking === 'off') {
+      body.thinking = { type: cfg.thinking === 'on' ? 'enabled' : 'disabled' };
+    }
+    if (cfg.thinking !== 'off' && cfg.effort) body.reasoning_effort = cfg.effort;
+  }
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` };
   if (isOpencode(cfg.baseUrl)) {
     // Go 要求标识客户端身份，并带上稳定的会话 ID 做路由与提示词缓存

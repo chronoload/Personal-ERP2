@@ -60,6 +60,7 @@ const DOMAIN = [
   '4. 写操作会弹给用户审批；调用前用一句话说明你要做什么，审批文案要人话。',
   '5. 查数据先用读工具（erp.status / erp.goals / erp.activities / erp.transactions / erp.journal），不要猜 id。',
   '6. 日记只作上下文；要写日记必须用 erp.append_journal。',
+  '7. 用户可能附图或文件：图直接看，文本按文件读；看不清或读不到就说出来，不要臆造内容。',
   '',
   '## 输出风格',
   '中文、短句、先结论后细节；不输出大段表格；需要用户确认时把选项写成一行。',
@@ -121,9 +122,48 @@ export function buildSystem(App) {
   ].filter(Boolean).join('\n');
 }
 
-/** 历史消息 → chat messages：只回放 user/assistant 文本，全量带上（不做压缩/截断） */
+/** 一条消息的附件 → 文本块 + 图片块 */
+function attachmentBlocks(m) {
+  const list = (m && m.meta && Array.isArray(m.meta.attachments)) ? m.meta.attachments : [];
+  const texts = [];
+  const images = [];
+  for (const a of list) {
+    if (a.kind === 'image' && a.dataUrl) {
+      images.push(a);
+    } else if (a.kind === 'text' && a.text) {
+      texts.push(`【文件 ${a.name}】${a.note ? `（${a.note}）` : ''}\n\`\`\`\n${a.text}\n\`\`\``);
+    } else {
+      texts.push(`【附件 ${a.name}】${a.mime || '未知类型'}${a.size ? ` · ${Math.round(a.size / 1024)}KB` : ''}（未读取内容）`);
+    }
+  }
+  return { texts, images };
+}
+
+/** 历史消息 → chat messages：回放 user/assistant；用户附件转成多模态 content 数组 */
 export function historyToMessages(history) {
   return (Array.isArray(history) ? history : [])
-    .filter((m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim())
-    .map((m) => ({ role: m.role, content: String(m.content) }));
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .map((m) => {
+      const body = String(m.content || '');
+      if (m.role !== 'user') {
+        if (!body.trim()) return null;
+        const reasoning = m.meta && m.meta.reasoning;
+        // DeepSeek 思考模式 + tools：历史思维链必须回传
+        return reasoning
+          ? { role: 'assistant', content: body, reasoning_content: String(reasoning) }
+          : { role: 'assistant', content: body };
+      }
+      const { texts, images } = attachmentBlocks(m);
+      if (!texts.length && !images.length) return body.trim() ? { role: 'user', content: body } : null;
+      const merged = [body.trim(), ...texts].filter(Boolean).join('\n\n');
+      if (!images.length) return { role: 'user', content: merged || '（空消息）' };
+      return {
+        role: 'user',
+        content: [
+          { type: 'text', text: merged || '请看这些图片。' },
+          ...images.map((a) => ({ type: 'image_url', image_url: { url: a.dataUrl } })),
+        ],
+      };
+    })
+    .filter(Boolean);
 }
